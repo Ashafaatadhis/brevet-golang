@@ -12,6 +12,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jinzhu/copier"
+	"gorm.io/gorm"
 )
 
 // AuthController represents the authentication controller
@@ -19,24 +20,34 @@ type AuthController struct {
 	authService         *services.AuthService
 	roleService         *services.RoleService
 	verificationService *services.VerificationService
+	db                  *gorm.DB // ← tambahkan ini
 }
 
 // NewAuthController creates a new AuthController
-func NewAuthController(authService *services.AuthService, roleService *services.RoleService, verificationService *services.VerificationService) *AuthController {
-	return &AuthController{authService: authService, roleService: roleService, verificationService: verificationService}
+func NewAuthController(authService *services.AuthService, roleService *services.RoleService, verificationService *services.VerificationService, db *gorm.DB) *AuthController {
+	return &AuthController{authService: authService, roleService: roleService, verificationService: verificationService, db: db}
 }
 
 // Register handles user registration
 func (ctrl *AuthController) Register(c *fiber.Ctx) error {
 	body := c.Locals("body").(*dto.RegisterRequest)
+	tx := ctrl.db.Begin() // Start a transaction
 
-	if !ctrl.authService.IsEmailUnique(body.Email) || !ctrl.authService.IsPhoneUnique(body.Phone) {
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if !ctrl.authService.IsEmailUnique(tx, body.Email) || !ctrl.authService.IsPhoneUnique(tx, body.Phone) {
+		tx.Rollback()
 		return utils.ErrorResponse(c, 400, "Email or phone is already registered", nil)
 	}
 
 	// Get default role
-	role, roleErr := ctrl.roleService.GetRoleByName("siswa")
+	role, roleErr := ctrl.roleService.GetRoleByName(tx, "siswa")
 	if roleErr != nil {
+		tx.Rollback()
 		return utils.ErrorResponse(c, 500, "Failed to find default role", roleErr.Error())
 	}
 
@@ -49,19 +60,21 @@ func (ctrl *AuthController) Register(c *fiber.Ctx) error {
 	// Hash password
 	hashedPassword, hashErr := utils.HashPassword(body.Password)
 	if hashErr != nil {
+		tx.Rollback()
 		return utils.ErrorResponse(c, 500, "Failed to secure password", hashErr.Error())
 	}
 
 	user.Password = hashedPassword
 	user.RoleID = role.ID
 
-	if createUserErr := ctrl.authService.CreateUser(&user); createUserErr != nil {
+	if createUserErr := ctrl.authService.CreateUser(tx, &user); createUserErr != nil {
+		tx.Rollback()
 		return utils.ErrorResponse(c, 500, "Failed to create user", createUserErr.Error())
 	}
 
 	// Generate verification code
 
-	code, err := ctrl.verificationService.GenerateVerificationCode(user.ID)
+	code, err := ctrl.verificationService.GenerateVerificationCode(tx, user.ID)
 	if err != nil {
 		return utils.ErrorResponse(c, 500, "Failed to generate verification code", err.Error())
 	}
@@ -69,6 +82,7 @@ func (ctrl *AuthController) Register(c *fiber.Ctx) error {
 	// generate JWT token
 	token, err := utils.GenerateVerificationToken(user.ID, user.Email)
 	if err != nil {
+
 		return c.Status(500).JSON(fiber.Map{"error": "failed to generate token"})
 	}
 
@@ -82,8 +96,13 @@ func (ctrl *AuthController) Register(c *fiber.Ctx) error {
 	}
 	profile.UserID = user.ID
 
-	if createProfileErr := ctrl.authService.CreateProfile(&profile); createProfileErr != nil {
+	if createProfileErr := ctrl.authService.CreateProfile(tx, &profile); createProfileErr != nil {
+		tx.Rollback()
 		return utils.ErrorResponse(c, 500, "Failed to create profile", createProfileErr.Error())
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return utils.ErrorResponse(c, 500, "Gagal commit transaksi", err.Error())
 	}
 
 	// Get user with role
@@ -247,7 +266,7 @@ func (ctrl *AuthController) ResendVerification(c *fiber.Ctx) error {
 	}
 
 	// Generate verification code dan update ke DB
-	code, err := ctrl.verificationService.GenerateVerificationCode(user.ID)
+	code, err := ctrl.verificationService.GenerateVerificationCode(nil, user.ID)
 	if err != nil {
 		return utils.ErrorResponse(c, 500, "Failed to generate verification code", err.Error())
 	}

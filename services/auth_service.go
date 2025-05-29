@@ -26,30 +26,30 @@ func NewAuthService(db *gorm.DB) *AuthService {
 }
 
 // IsEmailUnique checks if email is unique
-func (s *AuthService) IsEmailUnique(email string) bool {
+func (s *AuthService) IsEmailUnique(db *gorm.DB, email string) bool {
 	var user models.User
-	err := s.db.Where("email = ?", email).First(&user).Error
+	err := db.Where("email = ?", email).First(&user).Error
 	return errors.Is(err, gorm.ErrRecordNotFound)
 }
 
 // IsPhoneUnique checks if phone is unique
-func (s *AuthService) IsPhoneUnique(phone string) bool {
+func (s *AuthService) IsPhoneUnique(db *gorm.DB, phone string) bool {
 	var user models.User
-	err := s.db.Where("phone = ?", phone).First(&user).Error
+	err := db.Where("phone = ?", phone).First(&user).Error
 	return errors.Is(err, gorm.ErrRecordNotFound)
 }
 
 // CreateUser creates a new user in database
-func (s *AuthService) CreateUser(user *models.User) error {
-	if err := s.db.Create(user).Error; err != nil {
+func (s *AuthService) CreateUser(db *gorm.DB, user *models.User) error {
+	if err := db.Create(user).Error; err != nil {
 		return err
 	}
 	return nil
 }
 
 // CreateProfile creates a new profile in database
-func (s *AuthService) CreateProfile(profile *models.Profile) error {
-	if err := s.db.Create(profile).Error; err != nil {
+func (s *AuthService) CreateProfile(db *gorm.DB, profile *models.Profile) error {
+	if err := db.Create(profile).Error; err != nil {
 		return err
 	}
 	return nil
