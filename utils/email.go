@@ -44,7 +44,6 @@ func SendVerificationEmail(toEmail string, code string, token string) error {
 		</div>
 	`, codeHTML, verificationURL, verificationURL, verificationURL, time.Now().Year())
 
-	fmt.Println("Sending email to:", toEmail, "Verification link:", verificationURL)
 	return sendEmail(toEmail, subject, message)
 }
 
@@ -64,7 +63,7 @@ func sendEmail(emailuser string, subject string, message string) error {
 	if err != nil {
 		return fmt.Errorf("invalid SMTP_PORT: %w", err)
 	}
-	fmt.Print(smtpHost, smtpPort, smtpUser, smtpPass, " CONFIG EMAIL")
+
 	// Membuat pesan email
 	m := gomail.NewMessage()
 	m.SetHeader("From", smtpUser, "Tax Center Gunadarma")
