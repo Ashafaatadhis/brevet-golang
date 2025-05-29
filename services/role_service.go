@@ -17,9 +17,9 @@ func NewRoleService(db *gorm.DB) *RoleService {
 }
 
 // GetRoleByName retrieves a role by its name
-func (s *RoleService) GetRoleByName(name string) (*models.Role, error) {
+func (s *RoleService) GetRoleByName(db *gorm.DB, name string) (*models.Role, error) {
 	var role models.Role
-	if err := s.db.Where("name = ?", name).First(&role).Error; err != nil {
+	if err := db.Where("name = ?", name).First(&role).Error; err != nil {
 		return nil, err
 	}
 	return &role, nil

@@ -23,7 +23,11 @@ func NewVerificationService(db *gorm.DB) *VerificationService {
 }
 
 // GenerateVerificationCode generates a 6-digit verification code for a user
-func (s *VerificationService) GenerateVerificationCode(userID uuid.UUID) (string, error) {
+func (s *VerificationService) GenerateVerificationCode(db *gorm.DB, userID uuid.UUID) (string, error) {
+	if db == nil {
+		db = s.db // fallback ke default db di service
+	}
+
 	// Generate 6-digit random code
 	code := rand.Intn(900000) + 100000
 	codeStr := fmt.Sprintf("%06d", code)
@@ -37,7 +41,7 @@ func (s *VerificationService) GenerateVerificationCode(userID uuid.UUID) (string
 	expiry := time.Now().Add(time.Duration(expiryMinutes) * time.Minute)
 
 	// Update database: code, expiry, dan waktu terakhir dikirim
-	if err := s.db.Model(&models.User{}).
+	if err := db.Model(&models.User{}).
 		Where("id = ?", userID).
 		Updates(map[string]any{
 			"verify_code":  codeStr,
