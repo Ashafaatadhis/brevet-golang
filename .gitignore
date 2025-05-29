@@ -1,0 +1,36 @@
+# Binary output
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Temporary files
+tmp/
+*.tmp
+*.log
+
+# Local config files
+.env
+*.local
+*.conf
+.air.*
+
+# Dependency directories (vendoring)
+vendor/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker build cache
+**/docker-compose.override.yml

@@ -1,0 +1,34 @@
+# build stage
+FROM golang:1.24-alpine AS builder
+
+WORKDIR /app
+
+# Install git  
+RUN apk add --no-cache git
+
+# Copy go.mod dan go.sum
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy seluruh source code
+COPY . .
+
+# Build aplikasi
+RUN go build -o app ./main.go
+
+# production stage
+FROM alpine:latest
+
+# Optional: Install ca-certificates kalau aplikasi butuh HTTPS client
+RUN apk add --no-cache ca-certificates
+
+WORKDIR /root/
+
+# Copy binary dari stage builder
+COPY --from=builder /app/app .
+
+# Jalankan binary
+CMD ["./app"]
+
+# Expose port  
+EXPOSE 8080
