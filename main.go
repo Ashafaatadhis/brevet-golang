@@ -54,7 +54,7 @@ func main() {
 
 	// Purpose route for testing
 	app.Get("/hello", func(c *fiber.Ctx) error {
-		return utils.SuccessResponse(c, fiber.StatusOK, "Hello, World!, this is new commit", nil)
+		return utils.SuccessResponse(c, fiber.StatusOK, "Hello, World!", nil)
 	})
 
 	// Register routes
