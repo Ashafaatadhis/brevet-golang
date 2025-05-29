@@ -52,6 +52,11 @@ func main() {
 	// Cleanup expired sessions every hour
 	scheduler.StartCleanupScheduler(db)
 
+	// Purpose route for testing
+	app.Get("/hello", func(c *fiber.Ctx) error {
+		return utils.SuccessResponse(c, fiber.StatusOK, "Hello, World!", nil)
+	})
+
 	// Register routes
 	routes.RegisterRoutes(app, db)
 
