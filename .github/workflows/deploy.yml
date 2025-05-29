@@ -37,7 +37,8 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_PRIVATE_KEY }}
           script: |
-            docker pull ashafaatadhis/brevet-api:latest
+            cd ~/brevet-api
+            docker compose pull
             docker stop brevet-api || true
             docker rm brevet-api || true
-            docker run -d --name=brevet-api -p 8083:8080 ashafaatadhis/brevet-api:latest
+            docker compose up -d --build
