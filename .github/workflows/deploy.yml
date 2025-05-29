@@ -39,5 +39,6 @@ jobs:
           script: |
             cd ~/brevet-api
             docker compose pull
-            docker compose down
+            docker stop brevet-api || true
+            docker rm brevet-api || true
             docker compose up -d --build
