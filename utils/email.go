@@ -13,7 +13,7 @@ import (
 // SendVerificationEmail mengirim email verifikasi ke pengguna
 func SendVerificationEmail(toEmail string, code string, token string) error {
 	frontendURL := config.GetEnv("FRONTEND_URL", "http://localhost:3000")
-	verificationURL := fmt.Sprintf("%s/verify?token=%s", frontendURL, token)
+	verificationURL := fmt.Sprintf("%s/auth/verify?token=%s", frontendURL, token)
 
 	codeHTML := ""
 	for _, digit := range code {
