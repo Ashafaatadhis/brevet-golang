@@ -182,8 +182,8 @@ func (ctrl *AuthController) Login(c *fiber.Ctx) error {
 		Value:    refreshToken,
 		HTTPOnly: true,
 		Secure:   isSecure,
+		SameSite: "None",
 		Path:     "/",
-		SameSite: "Lax",
 	})
 
 	// Map to response
@@ -332,14 +332,15 @@ func (ctrl *AuthController) Logout(c *fiber.Ctx) error {
 	if env == "production" {
 		isSecure = true
 	}
+
 	c.Cookie(&fiber.Cookie{
 		Name:     "refresh_token",
 		Value:    "",
 		HTTPOnly: true,
-		Secure:   isSecure,
+		Secure:   isSecure, // true kalau HTTPS (production)
+		SameSite: "None",   // WAJIB untuk cross-origin
 		Path:     "/",
-		SameSite: "Lax",
-		Expires:  time.Unix(0, 0), // Set cookie expired di masa lalu supaya terhapus
+		Expires:  time.Unix(0, 0),
 	})
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Logout successful", nil)
