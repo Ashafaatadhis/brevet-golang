@@ -17,15 +17,15 @@ import (
 
 // AuthController represents the authentication controller
 type AuthController struct {
-	authService         *services.AuthService
-	roleService         *services.RoleService
+	authService *services.AuthService
+
 	verificationService *services.VerificationService
 	db                  *gorm.DB // ← tambahkan ini
 }
 
 // NewAuthController creates a new AuthController
-func NewAuthController(authService *services.AuthService, roleService *services.RoleService, verificationService *services.VerificationService, db *gorm.DB) *AuthController {
-	return &AuthController{authService: authService, roleService: roleService, verificationService: verificationService, db: db}
+func NewAuthController(authService *services.AuthService, verificationService *services.VerificationService, db *gorm.DB) *AuthController {
+	return &AuthController{authService: authService, verificationService: verificationService, db: db}
 }
 
 // Register handles user registration
@@ -41,14 +41,7 @@ func (ctrl *AuthController) Register(c *fiber.Ctx) error {
 
 	if !ctrl.authService.IsEmailUnique(tx, body.Email) || !ctrl.authService.IsPhoneUnique(tx, body.Phone) {
 		tx.Rollback()
-		return utils.ErrorResponse(c, 400, "Email or phone is already registered", nil)
-	}
-
-	// Get default role
-	role, roleErr := ctrl.roleService.GetRoleByName(tx, "siswa")
-	if roleErr != nil {
-		tx.Rollback()
-		return utils.ErrorResponse(c, 500, "Failed to find default role", roleErr.Error())
+		return utils.ErrorResponse(c, 400, "Email atau nomor telephone sudah digunakan", nil)
 	}
 
 	// Create user
@@ -65,11 +58,11 @@ func (ctrl *AuthController) Register(c *fiber.Ctx) error {
 	}
 
 	user.Password = hashedPassword
-	user.RoleID = role.ID
+	user.RoleType = models.RoleTypeSiswa // Default role type
 
 	if createUserErr := ctrl.authService.CreateUser(tx, &user); createUserErr != nil {
 		tx.Rollback()
-		return utils.ErrorResponse(c, 500, "Failed to create user", createUserErr.Error())
+		return utils.ErrorResponse(c, 500, "Gagal Membuat User", createUserErr.Error())
 	}
 
 	// Generate verification code
@@ -82,8 +75,7 @@ func (ctrl *AuthController) Register(c *fiber.Ctx) error {
 	// generate JWT token
 	token, err := utils.GenerateVerificationToken(user.ID, user.Email)
 	if err != nil {
-
-		return c.Status(500).JSON(fiber.Map{"error": "failed to generate token"})
+		return utils.ErrorResponse(c, 500, "failed to generate token", err.Error())
 	}
 
 	// Send verification email (implement this)
@@ -106,7 +98,7 @@ func (ctrl *AuthController) Register(c *fiber.Ctx) error {
 	}
 
 	// Get user with role
-	fullUser, getUserErr := ctrl.authService.GetUserByIDWithRole(user.ID)
+	fullUser, getUserErr := ctrl.authService.GetUserByID(user.ID)
 	if getUserErr != nil {
 		return utils.ErrorResponse(c, 500, "Failed to get user details", getUserErr.Error())
 	}
@@ -120,7 +112,7 @@ func (ctrl *AuthController) Register(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, 500, "Failed to create profile response", profileRespCopyErr.Error())
 	}
 
-	return utils.SuccessResponse(c, 201, "Registration successful - please verify your email", response)
+	return utils.SuccessResponse(c, 201, "Sukses Registrasi - Mohon Cek Email Anda", response)
 }
 
 // Login handles user authentication
@@ -128,7 +120,7 @@ func (ctrl *AuthController) Login(c *fiber.Ctx) error {
 	body := c.Locals("body").(*dto.LoginRequest)
 
 	// Find user by email with role
-	user, err := ctrl.authService.GetUserByEmailWithRoleAndProfile(body.Email)
+	user, err := ctrl.authService.GetUserByEmailWithProfile(body.Email)
 	if err != nil {
 		return utils.ErrorResponse(c, 401, "Invalid credentials", err.Error())
 	}
@@ -140,7 +132,7 @@ func (ctrl *AuthController) Login(c *fiber.Ctx) error {
 
 	// Check if user is verified
 	if !user.IsVerified {
-		return utils.ErrorResponse(c, 401, "Email not verified. Please verify your email first.", nil)
+		return utils.ErrorResponse(c, 401, "Email Belum Diverifikasi. Mohon Verifikasi email kamu terlebih dahulu.", nil)
 	}
 
 	// Generate access token

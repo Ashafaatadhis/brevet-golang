@@ -14,9 +14,9 @@ import (
 func RegisterAuthRoutes(r fiber.Router, db *gorm.DB) {
 	// Inisialisasi service dan controller
 	authService := services.NewAuthService(db)
-	roleService := services.NewRoleService(db)
+
 	verificationService := services.NewVerificationService(db)
-	authController := controllers.NewAuthController(authService, roleService, verificationService, db)
+	authController := controllers.NewAuthController(authService, verificationService, db)
 
 	r.Post("/register", middlewares.ValidateBody[dto.RegisterRequest](), authController.Register)
 	r.Post("/login", middlewares.ValidateBody[dto.LoginRequest](), authController.Login)

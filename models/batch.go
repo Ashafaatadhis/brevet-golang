@@ -23,5 +23,5 @@ type Batch struct {
 	UpdatedAt      time.Time `gorm:"autoUpdateTime"`
 
 	Course     Course     `gorm:"foreignKey:CourseID"`
-	CourseType CourseType `gorm:"foreignKey:CourseTypeID"`
+	CourseType CourseType `gorm:"type:course_type;not null"`
 }

@@ -12,8 +12,6 @@ type Profile struct {
 	ID     uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
 	UserID uuid.UUID `gorm:"type:uuid;not null"`
 
-	GroupID *uuid.UUID `gorm:"type:uuid"`
-
 	NIM      sql.NullString // NIM
 	NIMProof sql.NullString // Bukti NIM
 	NIK      sql.NullString // NIK
@@ -26,6 +24,5 @@ type Profile struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	User  *User  `gorm:"foreignKey:UserID"`
-	Group *Group `gorm:"foreignKey:GroupID"`
+	User *User `gorm:"foreignKey:UserID"`
 }

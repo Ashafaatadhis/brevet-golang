@@ -61,7 +61,7 @@ func GenerateJWT(user models.User, jwtSecret string, expiryHours int) (string, e
 	claims := &Claims{
 		UserID: user.ID,
 		Email:  user.Email,
-		Role:   user.Role.Name, // Make sure Role.Name is always loaded
+		Role:   string(user.RoleType), // Make sure Role.Name is always loaded
 		Name:   user.Name,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),

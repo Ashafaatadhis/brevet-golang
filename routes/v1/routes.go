@@ -19,8 +19,4 @@ func RegisterV1Routes(r fiber.Router, db *gorm.DB) {
 	userGroup := r.Group("/users")
 	RegisterUserRoutes(userGroup, db)
 
-	// /v1/groups
-	groupGroup := r.Group("/groups")
-	RegisterGroupRoutes(groupGroup, db)
-
 }

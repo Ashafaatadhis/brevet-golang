@@ -11,16 +11,36 @@ import (
 func main() {
 	db := config.ConnectDB()
 
-	db.Migrator().DropTable(&models.User{})
-	db.Migrator().DropTable(&models.Profile{})
+	// db.Migrator().DropTable(&models.User{})
+	// db.Migrator().DropTable(&models.Profile{})
 
-	err := db.AutoMigrate(
-		&models.Role{},
-
-		&models.CourseType{},
+	// DROP semua tabel secara eksplisit, urutkan dari yang tidak punya FK → punya FK
+	err := db.Migrator().DropTable(
+		&models.SubmissionFile{},
+		&models.Purchase{},
+		&models.Meeting{},
+		&models.GroupDaysBatch{},
+		&models.BatchTeacher{},
+		&models.BatchGroup{},
+		&models.Attendance{},
+		&models.AssignmentSubmission{},
+		&models.AssignmentGrade{},
+		&models.Assignment{},
+		&models.Batch{},
+		&models.Course{},
+		&models.Profile{},
+		&models.UserSession{},
+		&models.User{},
 		&models.Price{},
-		&models.Group{},
-		&models.Day{},
+	)
+	if err != nil {
+		log.Fatal("Failed to drop tables:", err)
+	}
+
+	fmt.Println("All tables dropped successfully.")
+
+	err = db.AutoMigrate(
+		&models.Price{},
 		&models.User{},
 		&models.UserSession{},
 		&models.Profile{},
