@@ -9,12 +9,13 @@ import (
 
 // Profile is a struct that represents a profile
 type Profile struct {
-	ID     uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
-	UserID uuid.UUID `gorm:"type:uuid;not null"`
-
-	NIM      sql.NullString // NIM
-	NIMProof sql.NullString // Bukti NIM
-	NIK      sql.NullString // NIK
+	ID            uuid.UUID      `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
+	UserID        uuid.UUID      `gorm:"type:uuid;not null"`
+	GroupType     *GroupType     `gorm:"type:group_type"`
+	GroupVerified bool           `gorm:"default:false"`
+	NIM           sql.NullString // NIM
+	NIMProof      sql.NullString // Bukti NIM
+	NIK           sql.NullString // NIK
 
 	Institution string       `gorm:"type:varchar(255)"`
 	Origin      string       `gorm:"type:varchar(255)"`

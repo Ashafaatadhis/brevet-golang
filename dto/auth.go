@@ -59,16 +59,17 @@ type RegisterResponse struct {
 	RoleType  models.RoleType `json:"role_type"`
 
 	Profile struct {
-		GroupType   *models.GroupType `json:"group_type,omitempty"`
-		NIM         *string           `json:"nim,omitempty"`
-		NIMProof    *string           `json:"nim_proof,omitempty"`
-		NIK         *string           `json:"nik,omitempty"`
-		Institution string            `json:"institution"`
-		Origin      string            `json:"origin"`
-		BirthDate   time.Time         `json:"birth_date"`
-		Address     string            `json:"address"`
-		CreatedAt   time.Time         `json:"created_at"`
-		UpdatedAt   time.Time         `json:"updated_at"`
+		GroupType     *models.GroupType `json:"group_type,omitempty"`
+		GroupVerified bool              `json:"group_verified"`
+		NIM           *string           `json:"nim,omitempty"`
+		NIMProof      *string           `json:"nim_proof,omitempty"`
+		NIK           *string           `json:"nik,omitempty"`
+		Institution   string            `json:"institution"`
+		Origin        string            `json:"origin"`
+		BirthDate     time.Time         `json:"birth_date"`
+		Address       string            `json:"address"`
+		CreatedAt     time.Time         `json:"created_at"`
+		UpdatedAt     time.Time         `json:"updated_at"`
 	} `json:"profile"`
 }
 
@@ -86,15 +87,16 @@ type UserResponse struct {
 	RoleType models.RoleType `json:"role_type"`
 
 	Profile struct {
-		GroupType   *models.GroupType `json:"group_type,omitempty"`
-		NIM         *string           `json:"nim,omitempty"`
-		NIMProof    *string           `json:"nim_proof,omitempty"`
-		NIK         *string           `json:"nik,omitempty"`
-		Institution string            `json:"institution"`
-		Origin      string            `json:"origin"`
-		BirthDate   time.Time         `json:"birth_date"`
-		Address     string            `json:"address"`
-		CreatedAt   time.Time         `json:"created_at"`
-		UpdatedAt   time.Time         `json:"updated_at"`
+		GroupType     *models.GroupType `json:"group_type,omitempty"`
+		GroupVerified bool              `json:"group_verified"`
+		NIM           *string           `json:"nim,omitempty"`
+		NIMProof      *string           `json:"nim_proof,omitempty"`
+		NIK           *string           `json:"nik,omitempty"`
+		Institution   string            `json:"institution"`
+		Origin        string            `json:"origin"`
+		BirthDate     time.Time         `json:"birth_date"`
+		Address       string            `json:"address"`
+		CreatedAt     time.Time         `json:"created_at"`
+		UpdatedAt     time.Time         `json:"updated_at"`
 	} `json:"profile"`
 }

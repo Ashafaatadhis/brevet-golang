@@ -4,7 +4,6 @@ import (
 	"brevet-api/models"
 	"brevet-api/utils"
 	"fmt"
-	"strings"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -44,36 +43,11 @@ func (s *UserService) GetAllFilteredUsers(opts utils.QueryOptions) ([]models.Use
 	// Define custom join conditions for relations
 	joinConditions := map[string]string{
 		"profile": "LEFT JOIN profiles AS profiles ON profiles.user_id = users.id",
-		"role":    "LEFT JOIN roles AS roles ON roles.id = users.role_id",
 	}
 
 	joinedRelations := map[string]bool{}
 
-	for key, val := range opts.Filters {
-		if strings.Contains(key, ".") {
-			// Validate relation.column filter
-			if !validSortFields[key] {
-				continue // skip invalid filter
-			}
-			parts := strings.SplitN(key, ".", 2)
-			relation, column := parts[0], parts[1]
-			alias := relation + "s"
-			if !joinedRelations[relation] {
-				if cond, ok := joinConditions[relation]; ok {
-					db = db.Joins(cond)
-				} else {
-					db = db.Joins(fmt.Sprintf("LEFT JOIN %ss AS %s ON %s.id = users.%s_id", relation, alias, alias, relation))
-				}
-				joinedRelations[relation] = true
-			}
-			db = db.Where(fmt.Sprintf("%s.%s = ?", alias, column), val)
-		} else {
-			// Validate direct column filter
-			if validSortFields[key] {
-				db = db.Where(fmt.Sprintf("%s = ?", key), val)
-			}
-		}
-	}
+	db = utils.ApplyFiltersWithJoins(db, "users", opts.Filters, validSortFields, joinConditions, joinedRelations)
 
 	if opts.Search != "" {
 		db = db.Where("name ILIKE ?", "%"+opts.Search+"%")
@@ -99,4 +73,27 @@ func (s *UserService) GetUserByID(userID uuid.UUID) (*models.User, error) {
 		return nil, err
 	}
 	return &user, nil
+}
+
+// SaveUser untuk update user
+func (s *UserService) SaveUser(user *models.User) error {
+	// Jika Profile belum nil, pastikan foreign key-nya benar
+	if user.Profile != nil {
+		user.Profile.UserID = user.ID
+	}
+
+	// Simpan user (beserta profile)
+	if err := s.db.Save(user).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteUser is for delete user
+func (s *UserService) DeleteUser(userID uuid.UUID) error {
+	result := s.db.Delete(&models.User{}, "id = ?", userID)
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return result.Error
 }

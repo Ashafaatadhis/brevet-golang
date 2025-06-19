@@ -15,31 +15,31 @@ func main() {
 	// db.Migrator().DropTable(&models.Profile{})
 
 	// DROP semua tabel secara eksplisit, urutkan dari yang tidak punya FK → punya FK
-	err := db.Migrator().DropTable(
-		&models.SubmissionFile{},
-		&models.Purchase{},
-		&models.Meeting{},
-		&models.GroupDaysBatch{},
-		&models.BatchTeacher{},
-		&models.BatchGroup{},
-		&models.Attendance{},
-		&models.AssignmentSubmission{},
-		&models.AssignmentGrade{},
-		&models.Assignment{},
-		&models.Batch{},
-		&models.Course{},
-		&models.Profile{},
-		&models.UserSession{},
-		&models.User{},
-		&models.Price{},
-	)
-	if err != nil {
-		log.Fatal("Failed to drop tables:", err)
-	}
+	// err := db.Migrator().DropTable(
+	// 	&models.SubmissionFile{},
+	// 	&models.Purchase{},
+	// 	&models.Meeting{},
+	// 	&models.GroupDaysBatch{},
+	// 	&models.BatchTeacher{},
+	// 	&models.BatchGroup{},
+	// 	&models.Attendance{},
+	// 	&models.AssignmentSubmission{},
+	// 	&models.AssignmentGrade{},
+	// 	&models.Assignment{},
+	// 	&models.Batch{},
+	// 	&models.Course{},
+	// 	&models.Profile{},
+	// 	&models.UserSession{},
+	// 	&models.User{},
+	// 	&models.Price{},
+	// )
+	// if err != nil {
+	// 	log.Fatal("Failed to drop tables:", err)
+	// }
 
-	fmt.Println("All tables dropped successfully.")
+	// fmt.Println("All tables dropped successfully.")
 
-	err = db.AutoMigrate(
+	err := db.AutoMigrate(
 		&models.Price{},
 		&models.User{},
 		&models.UserSession{},

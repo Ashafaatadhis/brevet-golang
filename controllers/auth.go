@@ -59,6 +59,11 @@ func (ctrl *AuthController) Register(c *fiber.Ctx) error {
 
 	user.Password = hashedPassword
 	user.RoleType = models.RoleTypeSiswa // Default role type
+	groupVerified := false
+
+	if body.GroupType == models.Umum {
+		groupVerified = true
+	}
 
 	if createUserErr := ctrl.authService.CreateUser(tx, &user); createUserErr != nil {
 		tx.Rollback()
@@ -87,6 +92,7 @@ func (ctrl *AuthController) Register(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, 500, "Failed to map profile data", profileCopyErr.Error())
 	}
 	profile.UserID = user.ID
+	profile.GroupVerified = groupVerified
 
 	if createProfileErr := ctrl.authService.CreateProfile(tx, &profile); createProfileErr != nil {
 		tx.Rollback()
