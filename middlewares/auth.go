@@ -5,6 +5,8 @@ import (
 	"brevet-api/utils"
 	"strings"
 
+	"slices"
+
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -35,5 +37,26 @@ func RequireAuth() fiber.Handler {
 		c.Locals("access_token", tokenString)
 
 		return c.Next()
+	}
+}
+
+// RequireRole is function to check role
+func RequireRole(allowedRoles []string) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		userRaw := c.Locals("user")
+		if userRaw == nil {
+			return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Unauthorized: user not found", nil)
+		}
+
+		user, ok := userRaw.(*utils.Claims)
+		if !ok {
+			return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Unauthorized: invalid user data", nil)
+		}
+
+		if slices.Contains(allowedRoles, user.Role) {
+			return c.Next()
+		}
+
+		return utils.ErrorResponse(c, fiber.StatusForbidden, "Forbidden: insufficient role access", nil)
 	}
 }

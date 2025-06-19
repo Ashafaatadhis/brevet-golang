@@ -12,14 +12,18 @@ import (
 func GroupTypeValidator(fl validator.FieldLevel) bool {
 	field := fl.Field()
 
-	var val string
-
-	// Handle pointer case
+	// Jika nil, anggap valid (karena tidak wajib)
 	if field.Kind() == reflect.Ptr {
 		if field.IsNil() {
-			return false // required, jadi nil tidak valid
+			return true
 		}
-		val = field.Elem().String() // ambil isi string dari pointer
+	}
+
+	var val string
+
+	// Handle pointer dan non-pointer string
+	if field.Kind() == reflect.Ptr {
+		val = field.Elem().String()
 	} else if field.Kind() == reflect.String {
 		val = field.String()
 	} else {
@@ -37,17 +41,20 @@ func GroupTypeValidator(fl validator.FieldLevel) bool {
 
 // RoleTypeValidator checks if role_type value is valid
 func RoleTypeValidator(fl validator.FieldLevel) bool {
-
 	field := fl.Field()
+
+	// Kalau nil, anggap valid (tidak wajib)
+	if field.Kind() == reflect.Ptr {
+		if field.IsNil() {
+			return true
+		}
+	}
 
 	var val string
 
-	// Handle pointer case
+	// Ambil nilai string dari pointer atau value biasa
 	if field.Kind() == reflect.Ptr {
-		if field.IsNil() {
-			return false // required, jadi nil tidak valid
-		}
-		val = field.Elem().String() // ambil isi string dari pointer
+		val = field.Elem().String()
 	} else if field.Kind() == reflect.String {
 		val = field.String()
 	} else {
@@ -64,9 +71,23 @@ func RoleTypeValidator(fl validator.FieldLevel) bool {
 
 // BirthDateValidator validates that a birth date is not in the future
 func BirthDateValidator(fl validator.FieldLevel) bool {
-	birthDate, ok := fl.Field().Interface().(time.Time)
-	if !ok {
+	field := fl.Field()
+
+	// Kalau nil, anggap valid (tidak wajib diisi)
+	if field.Kind() == reflect.Ptr && field.IsNil() {
+		return true
+	}
+
+	var birthDate time.Time
+	switch field.Kind() {
+	case reflect.Ptr:
+		birthDate = field.Elem().Interface().(time.Time)
+	case reflect.Struct:
+		birthDate = field.Interface().(time.Time)
+	default:
 		return false
 	}
+
+	// Valid jika tanggal lahir tidak setelah hari ini
 	return !birthDate.After(time.Now())
 }

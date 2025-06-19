@@ -19,12 +19,16 @@ const (
 
 // Scan implements the sql.Scanner interface for GroupType
 func (gt *GroupType) Scan(value any) error {
-	b, ok := value.([]byte)
-	if !ok {
-		return errors.New("failed to scan GroupType: type assertion to []byte failed")
+
+	switch v := value.(type) {
+	case []byte:
+		*gt = GroupType(string(v))
+		return nil
+	case string:
+		*gt = GroupType(v)
+		return nil
 	}
-	*gt = GroupType(string(b))
-	return nil
+	return errors.New("failed to scan GroupType: type assertion to []byte failed")
 }
 
 // Value implements the driver.Valuer interface for GroupType
