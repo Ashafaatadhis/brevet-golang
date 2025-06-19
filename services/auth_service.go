@@ -55,37 +55,37 @@ func (s *AuthService) CreateProfile(db *gorm.DB, profile *models.Profile) error 
 	return nil
 }
 
-// GetUserWithRole gets user with role information
-func (s *AuthService) GetUserWithRole(userID uuid.UUID) (*models.User, error) {
+// GetUsers gets user
+func (s *AuthService) GetUsers(userID uuid.UUID) (*models.User, error) {
 	var user models.User
-	if err := s.db.Preload("Role").Where("id = ?", userID).First(&user).Error; err != nil {
+	if err := s.db.Where("id = ?", userID).First(&user).Error; err != nil {
 		return nil, err
 	}
 	return &user, nil
 }
 
-// GetUserByEmailWithRole finds user by email with role information
-func (s *AuthService) GetUserByEmailWithRole(email string) (*models.User, error) {
+// GetUserByEmail finds user by email with role information
+func (s *AuthService) GetUserByEmail(email string) (*models.User, error) {
 	var user models.User
-	if err := s.db.Preload("Role").Where("email = ?", email).First(&user).Error; err != nil {
+	if err := s.db.Where("email = ?", email).First(&user).Error; err != nil {
 		return nil, err
 	}
 	return &user, nil
 }
 
-// GetUserByEmailWithRoleAndProfile finds user by email with role and profile information
-func (s *AuthService) GetUserByEmailWithRoleAndProfile(email string) (*models.User, error) {
+// GetUserByEmailWithProfile finds user by email with role and profile information
+func (s *AuthService) GetUserByEmailWithProfile(email string) (*models.User, error) {
 	var user models.User
-	if err := s.db.Preload("Role").Preload("Profile").Where("email = ?", email).First(&user).Error; err != nil {
+	if err := s.db.Preload("Profile").Where("email = ?", email).First(&user).Error; err != nil {
 		return nil, err
 	}
 	return &user, nil
 }
 
-// GetUserByIDWithRoleAndProfile finds user by email with role and profile information
-func (s *AuthService) GetUserByIDWithRoleAndProfile(userID uuid.UUID) (*models.User, error) {
+// GetUserByIDWithProfile is
+func (s *AuthService) GetUserByIDWithProfile(userID uuid.UUID) (*models.User, error) {
 	var user models.User
-	if err := s.db.Preload("Role", "Profile").Where("id = ?", userID).First(&user).Error; err != nil {
+	if err := s.db.Preload("Profile").Where("id = ?", userID).First(&user).Error; err != nil {
 		return nil, err
 	}
 
@@ -96,15 +96,6 @@ func (s *AuthService) GetUserByIDWithRoleAndProfile(userID uuid.UUID) (*models.U
 func (s *AuthService) GetUserByID(userID uuid.UUID) (*models.User, error) {
 	var user models.User
 	if err := s.db.Where("id = ?", userID).First(&user).Error; err != nil {
-		return nil, err
-	}
-	return &user, nil
-}
-
-// GetUserByIDWithRole gets a user by their ID with role information
-func (s *AuthService) GetUserByIDWithRole(userID uuid.UUID) (*models.User, error) {
-	var user models.User
-	if err := s.db.Preload("Role").Where("id = ?", userID).First(&user).Error; err != nil {
 		return nil, err
 	}
 	return &user, nil

@@ -26,7 +26,7 @@ func ValidateBody[T any]() fiber.Handler {
 
 		if err := validate.Struct(body); err != nil {
 			if ve, ok := err.(validator.ValidationErrors); ok {
-				errMap := utils.FormatValidationError(ve)
+				errMap := validators.FormatValidationError(ve)
 				return utils.ErrorResponse(c, fiber.StatusBadRequest, "Validasi gagal", errMap)
 			}
 			return utils.ErrorResponse(c, fiber.StatusBadRequest, "Validasi gagal", err.Error())

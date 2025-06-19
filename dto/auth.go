@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"brevet-api/models"
 	"time"
 
 	"github.com/google/uuid"
@@ -35,14 +36,14 @@ type RegisterRequest struct {
 	ConfirmPassword string `json:"confirm_password" validate:"required,eqfield=Password"`
 
 	// Profile fields (optional)
-	GroupID     string    `json:"group_id" validate:"required,uuid4"`
-	NIM         *string   `json:"nim,omitempty"`
-	NIMProof    *string   `json:"nim_proof,omitempty"`
-	NIK         *string   `json:"nik,omitempty"`
-	Institution string    `json:"institution" validate:"required"`
-	Origin      string    `json:"origin" validate:"required"`
-	BirthDate   time.Time `json:"birth_date" validate:"required"`
-	Address     string    `json:"address" validate:"required"`
+	GroupType   models.GroupType `json:"group_type" validate:"required,group_type"`
+	NIM         *string          `json:"nim,omitempty"`
+	NIMProof    *string          `json:"nim_proof,omitempty"`
+	NIK         *string          `json:"nik,omitempty"`
+	Institution string           `json:"institution" validate:"required"`
+	Origin      string           `json:"origin" validate:"required"`
+	BirthDate   time.Time        `json:"birth_date" validate:"required"`
+	Address     string           `json:"address" validate:"required"`
 }
 
 // RegisterResponse is a struct that represents the response body for registering a user
@@ -50,28 +51,24 @@ type RegisterResponse struct {
 	ID   uuid.UUID `json:"id"`
 	Name string    `json:"name"`
 
-	Email     string    `json:"email"`
-	Phone     string    `json:"phone"`
-	Avatar    *string   `json:"avatar,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-
-	Role struct {
-		ID   uuid.UUID `json:"id"`
-		Name string    `json:"name"`
-	} `json:"role"`
+	Email     string          `json:"email"`
+	Phone     string          `json:"phone"`
+	Avatar    *string         `json:"avatar,omitempty"`
+	CreatedAt time.Time       `json:"created_at"`
+	UpdatedAt time.Time       `json:"updated_at"`
+	RoleType  models.RoleType `json:"role_type"`
 
 	Profile struct {
-		GroupID     *string   `json:"group_id,omitempty"`
-		NIM         *string   `json:"nim,omitempty"`
-		NIMProof    *string   `json:"nim_proof,omitempty"`
-		NIK         *string   `json:"nik,omitempty"`
-		Institution string    `json:"institution"`
-		Origin      string    `json:"origin"`
-		BirthDate   time.Time `json:"birth_date"`
-		Address     string    `json:"address"`
-		CreatedAt   time.Time `json:"created_at"`
-		UpdatedAt   time.Time `json:"updated_at"`
+		GroupType   *models.GroupType `json:"group_type,omitempty"`
+		NIM         *string           `json:"nim,omitempty"`
+		NIMProof    *string           `json:"nim_proof,omitempty"`
+		NIK         *string           `json:"nik,omitempty"`
+		Institution string            `json:"institution"`
+		Origin      string            `json:"origin"`
+		BirthDate   time.Time         `json:"birth_date"`
+		Address     string            `json:"address"`
+		CreatedAt   time.Time         `json:"created_at"`
+		UpdatedAt   time.Time         `json:"updated_at"`
 	} `json:"profile"`
 }
 
@@ -86,21 +83,18 @@ type UserResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 
-	Role struct {
-		ID   uuid.UUID `json:"id"`
-		Name string    `json:"name"`
-	} `json:"role"`
+	RoleType models.RoleType `json:"role_type"`
 
 	Profile struct {
-		GroupID     *string   `json:"group_id,omitempty"`
-		NIM         *string   `json:"nim,omitempty"`
-		NIMProof    *string   `json:"nim_proof,omitempty"`
-		NIK         *string   `json:"nik,omitempty"`
-		Institution string    `json:"institution"`
-		Origin      string    `json:"origin"`
-		BirthDate   time.Time `json:"birth_date"`
-		Address     string    `json:"address"`
-		CreatedAt   time.Time `json:"created_at"`
-		UpdatedAt   time.Time `json:"updated_at"`
+		GroupType   *models.GroupType `json:"group_type,omitempty"`
+		NIM         *string           `json:"nim,omitempty"`
+		NIMProof    *string           `json:"nim_proof,omitempty"`
+		NIK         *string           `json:"nik,omitempty"`
+		Institution string            `json:"institution"`
+		Origin      string            `json:"origin"`
+		BirthDate   time.Time         `json:"birth_date"`
+		Address     string            `json:"address"`
+		CreatedAt   time.Time         `json:"created_at"`
+		UpdatedAt   time.Time         `json:"updated_at"`
 	} `json:"profile"`
 }

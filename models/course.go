@@ -16,6 +16,7 @@ type Course struct {
 	Achievements     string    `gorm:"type:text"`
 
 	CourseThumbnail string `gorm:"type:varchar"`
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }

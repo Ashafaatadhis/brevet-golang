@@ -22,7 +22,7 @@ func NewUserService(db *gorm.DB) *UserService {
 
 // GetAllFilteredUsers is a method that returns all users
 func (s *UserService) GetAllFilteredUsers(opts utils.QueryOptions) ([]models.User, int64, error) {
-	validSortFields, err := utils.GetValidColumns(s.db, &models.User{}, &models.Profile{}, &models.Role{})
+	validSortFields, err := utils.GetValidColumns(s.db, &models.User{}, &models.Profile{})
 
 	if err != nil {
 		return nil, 0, err
