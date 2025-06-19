@@ -86,7 +86,6 @@ func (s *UserService) GetAllFilteredUsers(opts utils.QueryOptions) ([]models.Use
 	err = db.Order(fmt.Sprintf("%s %s", sort, order)).
 		Limit(opts.Limit).
 		Offset(opts.Offset).
-		Preload("Role").
 		Preload("Profile").
 		Find(&users).Error
 
@@ -96,7 +95,7 @@ func (s *UserService) GetAllFilteredUsers(opts utils.QueryOptions) ([]models.Use
 // GetUserByID is a method that returns a user by ID
 func (s *UserService) GetUserByID(userID uuid.UUID) (*models.User, error) {
 	var user models.User
-	if err := s.db.Preload("Role").Preload("Profile").Where("id = ?", userID).First(&user).Error; err != nil {
+	if err := s.db.Preload("Profile").Where("id = ?", userID).First(&user).Error; err != nil {
 		return nil, err
 	}
 	return &user, nil
