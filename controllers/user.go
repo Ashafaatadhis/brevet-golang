@@ -88,7 +88,7 @@ func (ctrl *UserController) GetProfile(c *fiber.Ctx) error {
 
 // CreateUserWithProfile is for create user
 func (ctrl *UserController) CreateUserWithProfile(c *fiber.Ctx) error {
-	body := c.Locals("body").(*dto.RegisterRequest)
+	body := c.Locals("body").(*dto.CreateUserWithProfileRequest)
 
 	tx := ctrl.db.Begin()
 	defer func() {
