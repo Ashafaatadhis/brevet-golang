@@ -53,17 +53,17 @@ type RegisterResponse struct {
 
 	Email     string          `json:"email"`
 	Phone     string          `json:"phone"`
-	Avatar    *string         `json:"avatar,omitempty"`
+	Avatar    *string         `json:"avatar"`
 	CreatedAt time.Time       `json:"created_at"`
 	UpdatedAt time.Time       `json:"updated_at"`
 	RoleType  models.RoleType `json:"role_type"`
 
 	Profile struct {
-		GroupType     *models.GroupType `json:"group_type,omitempty"`
+		GroupType     *models.GroupType `json:"group_type"`
 		GroupVerified bool              `json:"group_verified"`
-		NIM           *string           `json:"nim,omitempty"`
-		NIMProof      *string           `json:"nim_proof,omitempty"`
-		NIK           *string           `json:"nik,omitempty"`
+		NIM           *string           `json:"nim"`
+		NIMProof      *string           `json:"nim_proof"`
+		NIK           *string           `json:"nik"`
 		Institution   string            `json:"institution"`
 		Origin        string            `json:"origin"`
 		BirthDate     time.Time         `json:"birth_date"`
@@ -80,18 +80,18 @@ type UserResponse struct {
 
 	Email     string    `json:"email"`
 	Phone     string    `json:"phone"`
-	Avatar    *string   `json:"avatar,omitempty"`
+	Avatar    *string   `json:"avatar"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 
 	RoleType models.RoleType `json:"role_type"`
 
 	Profile struct {
-		GroupType     *models.GroupType `json:"group_type,omitempty"`
+		GroupType     *models.GroupType `json:"group_type"`
 		GroupVerified bool              `json:"group_verified"`
-		NIM           *string           `json:"nim,omitempty"`
-		NIMProof      *string           `json:"nim_proof,omitempty"`
-		NIK           *string           `json:"nik,omitempty"`
+		NIM           *string           `json:"nim"`
+		NIMProof      *string           `json:"nim_proof"`
+		NIK           *string           `json:"nik"`
 		Institution   string            `json:"institution"`
 		Origin        string            `json:"origin"`
 		BirthDate     time.Time         `json:"birth_date"`
