@@ -18,6 +18,9 @@ func RegisterUserRoutes(r fiber.Router, db *gorm.DB) {
 	userService := services.NewUserService(db)
 	userController := controllers.NewUserController(userService, authService, db)
 
+	// Protected route example (requires authentication)
+	r.Get("/me", middlewares.RequireAuth(), userController.GetProfile)
+
 	// Public route
 	r.Get("/", middlewares.RequireAuth(), middlewares.RequireRole([]string{"admin"}), userController.GetAllUsers)
 	r.Get("/:id", middlewares.RequireAuth(), middlewares.RequireRole([]string{"admin"}), userController.GetUserByID)
@@ -28,6 +31,4 @@ func RegisterUserRoutes(r fiber.Router, db *gorm.DB) {
 	r.Delete("/:id", middlewares.RequireAuth(), middlewares.RequireRole([]string{"admin"}),
 		userController.DeleteUserByID)
 
-	// Protected route example (requires authentication)
-	r.Get("/me", middlewares.RequireAuth(), userController.GetProfile)
 }

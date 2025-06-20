@@ -6,6 +6,7 @@ import (
 	"brevet-api/services"
 	"brevet-api/utils"
 	"errors"
+	"fmt"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -109,23 +110,27 @@ func (ctrl *UserController) CreateUserWithProfile(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal mengenkripsi password", err.Error())
 	}
 
+	fmt.Print("Hashed Password: ", hashedPassword)
+
 	// Inisialisasi user
 	user := &models.User{
-		Password:   hashedPassword,
+
 		RoleType:   models.RoleTypeSiswa, // default role
 		IsVerified: true,                 // karena admin yang buat, dianggap langsung verified
 	}
 
 	// Salin data user
-	if err := copier.CopyWithOption(user, body, copier.Option{IgnoreEmpty: true}); err != nil {
+	if err := copier.CopyWithOption(&user, &body, copier.Option{IgnoreEmpty: true}); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal mapping data user", err.Error())
 	}
+
+	user.Password = hashedPassword
 
 	// Inisialisasi & salin profile
 	profile := &models.Profile{
 		UserID: user.ID,
 	}
-	if err := copier.CopyWithOption(profile, body, copier.Option{IgnoreEmpty: true}); err != nil {
+	if err := copier.CopyWithOption(&profile, &body, copier.Option{IgnoreEmpty: true}); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal mapping data profil", err.Error())
 	}
 

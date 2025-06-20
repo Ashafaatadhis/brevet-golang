@@ -3,6 +3,7 @@ package middlewares
 import (
 	"brevet-api/config"
 	"brevet-api/utils"
+	"fmt"
 	"strings"
 
 	"slices"
@@ -14,6 +15,7 @@ import (
 func RequireAuth() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		authHeader := c.Get("Authorization")
+		fmt.Println("Authorization Header:", authHeader)
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 			return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Missing or invalid Authorization header", nil)
 		}
@@ -32,10 +34,10 @@ func RequireAuth() fiber.Handler {
 		if err != nil || user == nil {
 			return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Invalid or expired token", nil)
 		}
-
+		fmt.Println("User Claims:", user)
 		c.Locals("user", user)
 		c.Locals("access_token", tokenString)
-
+		fmt.Println("Access Token:", tokenString)
 		return c.Next()
 	}
 }
