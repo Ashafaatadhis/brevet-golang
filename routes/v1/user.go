@@ -22,7 +22,7 @@ func RegisterUserRoutes(r fiber.Router, db *gorm.DB) {
 	r.Get("/", middlewares.RequireAuth(), middlewares.RequireRole([]string{"admin"}), userController.GetAllUsers)
 	r.Get("/:id", middlewares.RequireAuth(), middlewares.RequireRole([]string{"admin"}), userController.GetUserByID)
 	r.Post("/", middlewares.RequireAuth(), middlewares.RequireRole([]string{"admin"}),
-		middlewares.ValidateBody[dto.RegisterRequest](), userController.CreateUserWithProfile)
+		middlewares.ValidateBody[dto.CreateUserWithProfileRequest](), userController.CreateUserWithProfile)
 	r.Put("/:id", middlewares.RequireAuth(), middlewares.RequireRole([]string{"admin"}),
 		middlewares.ValidateBody[dto.UpdateUserWithProfileRequest](), userController.UpdateUserWithProfile)
 	r.Delete("/:id", middlewares.RequireAuth(), middlewares.RequireRole([]string{"admin"}),
