@@ -6,7 +6,6 @@ import (
 	"brevet-api/services"
 	"brevet-api/utils"
 	"errors"
-	"fmt"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -110,11 +109,8 @@ func (ctrl *UserController) CreateUserWithProfile(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal mengenkripsi password", err.Error())
 	}
 
-	fmt.Print("Hashed Password: ", hashedPassword)
-
 	// Inisialisasi user
 	user := &models.User{
-
 		RoleType:   models.RoleTypeSiswa, // default role
 		IsVerified: true,                 // karena admin yang buat, dianggap langsung verified
 	}
@@ -218,4 +214,43 @@ func (ctrl *UserController) DeleteUserByID(c *fiber.Ctx) error {
 	}
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "User berhasil dihapus", nil)
+}
+
+// UpdateMyProfile updates the profile of the authenticated user
+func (ctrl *UserController) UpdateMyProfile(c *fiber.Ctx) error {
+	claims := c.Locals("user").(*utils.Claims)
+	userID := claims.UserID
+
+	body := c.Locals("body").(*dto.UpdateMyProfile)
+
+	// Ambil user
+	user, err := ctrl.userService.GetUserByID(userID)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "User tidak ditemukan", err.Error())
+	}
+
+	// Pastikan profile tidak nil
+	if user.Profile == nil {
+		user.Profile = &models.Profile{UserID: user.ID}
+	}
+
+	// Salin field
+	if err := copier.CopyWithOption(user, body, copier.Option{IgnoreEmpty: true}); err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal update user", err.Error())
+	}
+	if err := copier.CopyWithOption(user.Profile, body, copier.Option{IgnoreEmpty: true}); err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal update profile", err.Error())
+	}
+
+	// Simpan perubahan
+	if err := ctrl.userService.SaveUser(user); err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal menyimpan data", err.Error())
+	}
+
+	var userResponse dto.UserResponse
+	if err := copier.Copy(&userResponse, user); err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal mapping response", err.Error())
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Profil berhasil diperbarui", userResponse)
 }
