@@ -20,7 +20,11 @@ func RegisterUserRoutes(r fiber.Router, db *gorm.DB) {
 
 	// Protected route example (requires authentication)
 	r.Get("/me", middlewares.RequireAuth(), userController.GetProfile)
-
+	r.Put("/me",
+		middlewares.RequireAuth(),
+		middlewares.ValidateBody[dto.UpdateMyProfile](),
+		userController.UpdateMyProfile,
+	)
 	// Public route
 	r.Get("/", middlewares.RequireAuth(), middlewares.RequireRole([]string{"admin"}), userController.GetAllUsers)
 	r.Get("/:id", middlewares.RequireAuth(), middlewares.RequireRole([]string{"admin"}), userController.GetUserByID)
