@@ -2,7 +2,8 @@ package services
 
 import (
 	"brevet-api/config"
-	"brevet-api/models"
+	"brevet-api/repository"
+
 	"fmt"
 	"math/rand"
 	"strconv"
@@ -12,22 +13,18 @@ import (
 	"gorm.io/gorm"
 )
 
-// VerificationService handles verification-related operations
+// VerificationService is a service for handling user verification codes
 type VerificationService struct {
-	db *gorm.DB
+	repo *repository.VerificationRepository
 }
 
-// NewVerificationService creates a new VerificationService
-func NewVerificationService(db *gorm.DB) *VerificationService {
-	return &VerificationService{db: db}
+// NewVerificationService creates a new instance of VerificationService
+func NewVerificationService(repo *repository.VerificationRepository) *VerificationService {
+	return &VerificationService{repo: repo}
 }
 
-// GenerateVerificationCode generates a 6-digit verification code for a user
-func (s *VerificationService) GenerateVerificationCode(db *gorm.DB, userID uuid.UUID) (string, error) {
-	if db == nil {
-		db = s.db // fallback ke default db di service
-	}
-
+// GenerateVerificationCode generates a new verification code for a user
+func (s *VerificationService) GenerateVerificationCode(tx *gorm.DB, userID uuid.UUID) (string, error) {
 	// Generate 6-digit random code
 	code := rand.Intn(900000) + 100000
 	codeStr := fmt.Sprintf("%06d", code)
@@ -40,42 +37,32 @@ func (s *VerificationService) GenerateVerificationCode(db *gorm.DB, userID uuid.
 	}
 	expiry := time.Now().Add(time.Duration(expiryMinutes) * time.Minute)
 
-	// Update database: code, expiry, dan waktu terakhir dikirim
-	if err := db.Model(&models.User{}).
-		Where("id = ?", userID).
-		Updates(map[string]any{
-			"verify_code":  codeStr,
-			"code_expiry":  expiry,
-			"last_sent_at": time.Now(),
-		}).Error; err != nil {
+	// Update kode verifikasi ke DB
+	if err := s.repo.UpdateVerificationCode(tx, userID, codeStr, expiry); err != nil {
 		return "", err
 	}
 
 	return codeStr, nil
 }
 
-// VerifyCode verifies a verification code for a user
+// VerifyCode checks if the provided verification code is valid for the user
 func (s *VerificationService) VerifyCode(userID uuid.UUID, code string) bool {
-	var user models.User
-	if err := s.db.Where("id = ? AND verify_code = ? AND code_expiry > ?",
-		userID, code, time.Now()).First(&user).Error; err != nil {
+	user, err := s.repo.FindUserByCode(userID, code)
+	if err != nil {
 		return false
 	}
 
-	// Mark as verified and clear verification fields
-	s.db.Model(&user).Updates(map[string]any{
-		"is_verified": true,
-		"verify_code": nil,
-		"code_expiry": nil,
-	})
+	if err := s.repo.MarkUserVerified(user.ID); err != nil {
+		return false
+	}
 
 	return true
 }
 
-// GetCooldownRemaining returns the remaining cooldown time for a user
+// GetCooldownRemaining returns the remaining cooldown time for sending a new verification code
 func (s *VerificationService) GetCooldownRemaining(userID uuid.UUID) (time.Duration, error) {
-	var user models.User
-	if err := s.db.Where("id = ?", userID).First(&user).Error; err != nil {
+	user, err := s.repo.GetUserByID(userID)
+	if err != nil {
 		return 0, err
 	}
 

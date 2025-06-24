@@ -4,6 +4,7 @@ import (
 	"brevet-api/controllers"
 	"brevet-api/dto"
 	"brevet-api/middlewares"
+	"brevet-api/repository"
 	"brevet-api/services"
 
 	"github.com/gofiber/fiber/v2"
@@ -13,9 +14,12 @@ import (
 // RegisterAuthRoutes registers authentication-related routes
 func RegisterAuthRoutes(r fiber.Router, db *gorm.DB) {
 	// Inisialisasi service dan controller
-	authService := services.NewAuthService(db)
+	authRepository := repository.NewAuthRepository(db)
+	sessionRepository := repository.NewUserSessionRepository(db)
+	verificationRepository := repository.NewVerificationRepository(db) // Assuming you have a verification repository
+	verificationService := services.NewVerificationService(verificationRepository)
+	authService := services.NewAuthService(authRepository, verificationService, sessionRepository)
 
-	verificationService := services.NewVerificationService(db)
 	authController := controllers.NewAuthController(authService, verificationService, db)
 
 	r.Post("/register", middlewares.ValidateBody[dto.RegisterRequest](), authController.Register)

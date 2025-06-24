@@ -2,6 +2,7 @@ package utils
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -14,10 +15,5 @@ var AllowedDocumentExtensions = []string{".pdf", ".doc", ".docx", ".ppt", ".pptx
 // IsAllowedExtension checks if the file extension is allowed
 func IsAllowedExtension(filename string, allowedExts []string) bool {
 	ext := strings.ToLower(filepath.Ext(filename))
-	for _, allowed := range allowedExts {
-		if ext == allowed {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowedExts, ext)
 }

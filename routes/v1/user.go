@@ -4,6 +4,7 @@ import (
 	"brevet-api/controllers"
 	"brevet-api/dto"
 	"brevet-api/middlewares" // Import your middleware package
+	"brevet-api/repository"
 	"brevet-api/services"
 
 	"github.com/gofiber/fiber/v2"
@@ -12,13 +13,17 @@ import (
 
 // RegisterUserRoutes registers all user-related routes
 func RegisterUserRoutes(r fiber.Router, db *gorm.DB) {
-	// Inisialisasi service dan controller
-	authService := services.NewAuthService(db)
 
-	userService := services.NewUserService(db)
+	authRepository := repository.NewAuthRepository(db)
+	sessionRepository := repository.NewUserSessionRepository(db)
+	verificationRepository := repository.NewVerificationRepository(db)
+	verificationService := services.NewVerificationService(verificationRepository)
+	authService := services.NewAuthService(authRepository, verificationService, sessionRepository)
+
+	userRepository := repository.NewUserRepository(db)
+	userService := services.NewUserService(userRepository, db, authRepository)
 	userController := controllers.NewUserController(userService, authService, db)
 
-	// Protected route example (requires authentication)
 	r.Get("/me", middlewares.RequireAuth(), userController.GetProfile)
 	r.Put("/me",
 		middlewares.RequireAuth(),

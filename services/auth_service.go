@@ -2,140 +2,107 @@ package services
 
 import (
 	"brevet-api/config"
+	"brevet-api/dto"
 	"brevet-api/models"
-	"brevet-api/utils"
-	"database/sql"
-	"errors"
+	"brevet-api/repository"
 	"fmt"
 	"strconv"
 	"time"
 
+	"brevet-api/utils"
+	"errors"
+
 	"github.com/gofiber/fiber/v2"
-	"github.com/google/uuid"
+	"github.com/jinzhu/copier"
 	"gorm.io/gorm"
 )
 
-// AuthService is a struct that represents a user service
+// AuthService is a struct that represents the authentication service
 type AuthService struct {
-	db *gorm.DB
+	repo            *repository.AuthRepository
+	verificationSvc *VerificationService
+	sessionRepo     *repository.UserSessionRepository // Assuming you have a session repository
 }
 
-// NewAuthService creates a new user service
-func NewAuthService(db *gorm.DB) *AuthService {
-	return &AuthService{db: db}
-}
-
-// IsEmailUnique checks if email is unique
-func (s *AuthService) IsEmailUnique(db *gorm.DB, email string) bool {
-	var user models.User
-	err := db.Where("email = ?", email).First(&user).Error
-	return errors.Is(err, gorm.ErrRecordNotFound)
-}
-
-// IsPhoneUnique checks if phone is unique
-func (s *AuthService) IsPhoneUnique(db *gorm.DB, phone string) bool {
-	var user models.User
-	err := db.Where("phone = ?", phone).First(&user).Error
-	return errors.Is(err, gorm.ErrRecordNotFound)
-}
-
-// CreateUser creates a new user in database
-func (s *AuthService) CreateUser(db *gorm.DB, user *models.User) error {
-	if err := db.Create(user).Error; err != nil {
-		return err
+// NewAuthService creates a new instance of AuthService
+func NewAuthService(repo *repository.AuthRepository, verificationSvc *VerificationService, sessionRepo *repository.UserSessionRepository) *AuthService {
+	return &AuthService{
+		repo:            repo,
+		verificationSvc: verificationSvc,
+		sessionRepo:     sessionRepo,
 	}
-	return nil
 }
 
-// CreateProfile creates a new profile in database
-func (s *AuthService) CreateProfile(db *gorm.DB, profile *models.Profile) error {
-	if err := db.Create(profile).Error; err != nil {
-		return err
+// Register creates a new user and profile
+func (s *AuthService) Register(tx *gorm.DB, req *dto.RegisterRequest) (*dto.RegisterResponse, error) {
+	// Validasi
+	if !s.repo.IsEmailUnique(tx, req.Email) || !s.repo.IsPhoneUnique(tx, req.Phone) {
+		return nil, errors.New("Email atau nomor telephone sudah digunakan")
 	}
-	return nil
-}
 
-// GetUsers gets user
-func (s *AuthService) GetUsers(userID uuid.UUID) (*models.User, error) {
+	// Mapping & hash
 	var user models.User
-	if err := s.db.Where("id = ?", userID).First(&user).Error; err != nil {
-		return nil, err
-	}
-	return &user, nil
-}
+	copier.Copy(&user, req)
+	user.RoleType = models.RoleTypeSiswa
+	user.Password, _ = utils.HashPassword(req.Password)
 
-// GetUserByEmail finds user by email with role information
-func (s *AuthService) GetUserByEmail(email string) (*models.User, error) {
-	var user models.User
-	if err := s.db.Where("email = ?", email).First(&user).Error; err != nil {
-		return nil, err
-	}
-	return &user, nil
-}
+	groupVerified := req.GroupType == models.Umum
 
-// GetUserByEmailWithProfile finds user by email with role and profile information
-func (s *AuthService) GetUserByEmailWithProfile(email string) (*models.User, error) {
-	var user models.User
-	if err := s.db.Preload("Profile").Where("email = ?", email).First(&user).Error; err != nil {
-		return nil, err
-	}
-	return &user, nil
-}
-
-// GetUserByIDWithProfile is
-func (s *AuthService) GetUserByIDWithProfile(userID uuid.UUID) (*models.User, error) {
-	var user models.User
-	if err := s.db.Preload("Profile").Where("id = ?", userID).First(&user).Error; err != nil {
+	if err := s.repo.CreateUser(tx, &user); err != nil {
 		return nil, err
 	}
 
-	return &user, nil
-}
-
-// GetUserByID gets a user by their ID
-func (s *AuthService) GetUserByID(userID uuid.UUID) (*models.User, error) {
-	var user models.User
-	if err := s.db.Where("id = ?", userID).First(&user).Error; err != nil {
-		return nil, err
-	}
-	return &user, nil
-}
-
-// TokenPair represents a pair of tokens
-type TokenPair struct {
-	AccessToken string
-}
-
-// RefreshTokens refreshes tokens
-func (s *AuthService) RefreshTokens(refreshToken string) (*TokenPair, error) {
-	refreshTokenSecret := config.GetEnv("REFRESH_TOKEN_SECRET", "default-key")
-	accessTokenSecret := config.GetEnv("ACCESS_TOKEN_SECRET", "default-key")
-
-	// 1. Validasi token JWT
-	claims, err := utils.ExtractClaimsFromToken(refreshToken, refreshTokenSecret)
-	if err != nil || claims == nil {
-		return nil, fmt.Errorf("invalid or expired refresh token")
-	}
-
-	// 2. Cek session refresh token di DB
-	var session models.UserSession
-	if err = s.db.Where("refresh_token = ?", refreshToken).First(&session).Error; err != nil {
-		return nil, fmt.Errorf("refresh token session not found")
-	}
-	if session.IsRevoked {
-		return nil, fmt.Errorf("refresh token revoked")
-	}
-	if session.ExpiresAt.Before(time.Now()) {
-		return nil, fmt.Errorf("refresh token expired")
-	}
-
-	// 3. Ambil data user
-	user, err := s.GetUserByID(claims.UserID)
+	// Generate kode verifikasi
+	code, err := s.verificationSvc.GenerateVerificationCode(tx, user.ID)
 	if err != nil {
-		return nil, fmt.Errorf("user not found")
+		return nil, err
 	}
 
-	// 4. Generate access token baru
+	// Kirim email async
+	token, _ := utils.GenerateVerificationToken(user.ID, user.Email)
+	go utils.SendVerificationEmail(user.Email, code, token)
+
+	// Create Profile
+	var profile models.Profile
+	copier.Copy(&profile, req)
+	profile.UserID = user.ID
+	profile.GroupVerified = groupVerified
+
+	if err := s.repo.CreateProfile(tx, &profile); err != nil {
+		return nil, err
+	}
+
+	// Buat response
+	fullUser, err := s.repo.GetUserByIDTx(tx, user.ID)
+	if err != nil {
+		fmt.Println("Error fetching full user:", err)
+		return nil, err
+	}
+
+	fmt.Println("User registered successfully:", user)
+	fmt.Println("User registered successfully 2:", fullUser)
+	var resp dto.RegisterResponse
+	copier.Copy(&resp, &fullUser)
+	copier.Copy(&resp.Profile, &profile)
+
+	return &resp, nil
+}
+
+// Login authenticates a user and returns access and refresh tokens
+func (s *AuthService) Login(req *dto.LoginRequest, c *fiber.Ctx) (*dto.LoginResult, error) {
+	user, err := s.repo.GetUserByEmailWithProfile(req.Email)
+	if err != nil {
+		return nil, errors.New("Email tidak ditemukan")
+	}
+
+	if !utils.CheckPasswordHash(req.Password, user.Password) {
+		return nil, errors.New("Password salah")
+	}
+
+	if !user.IsVerified {
+		return nil, errors.New("Email belum diverifikasi")
+	}
+	accessTokenSecret := config.GetEnv("ACCESS_TOKEN_SECRET", "default-key")
 	accessTokenExpiryStr := config.GetEnv("ACCESS_TOKEN_EXPIRY_HOURS", "24")
 	accessTokenExpiryHours, err := strconv.Atoi(accessTokenExpiryStr)
 	if err != nil {
@@ -143,54 +110,175 @@ func (s *AuthService) RefreshTokens(refreshToken string) (*TokenPair, error) {
 	}
 	accessToken, err := utils.GenerateJWT(*user, accessTokenSecret, accessTokenExpiryHours)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate access token: %w", err)
+		return nil, fmt.Errorf("gagal generate access token: %w", err)
 	}
 
-	// 5. (Optional) generate refresh token baru juga, simpan & revoke session lama
-	// Kalau mau implement rotate refresh token, bisa dilakukan di sini.
-
-	return &TokenPair{
-		AccessToken: accessToken,
-		// RefreshToken: newRefreshToken, // kalau generate baru
-	}, nil
-}
-
-// CreateUserSession creates a new user session
-func (s *AuthService) CreateUserSession(userID uuid.UUID, refreshToken string, c *fiber.Ctx) error {
-	userAgent := c.Get("User-Agent")
-	ipAddress := c.IP()
-
+	refreshTokenSecret := config.GetEnv("REFRESH_TOKEN_SECRET", "default-key")
 	refreshTokenExpiryStr := config.GetEnv("REFRESH_TOKEN_EXPIRY_HOURS", "24")
 	refreshTokenExpiryHours, err := strconv.Atoi(refreshTokenExpiryStr)
 	if err != nil {
 		refreshTokenExpiryHours = 24
 	}
-
-	expiresAt := time.Now().Add(time.Duration(refreshTokenExpiryHours) * time.Hour)
-
-	session := models.UserSession{
-		UserID:       userID,
-		RefreshToken: refreshToken,
-		UserAgent:    sql.NullString{String: userAgent, Valid: userAgent != ""},
-		IPAddress:    sql.NullString{String: ipAddress, Valid: ipAddress != ""},
-		ExpiresAt:    expiresAt,
-		IsRevoked:    false,
+	refreshToken, err := utils.GenerateJWT(*user, refreshTokenSecret, refreshTokenExpiryHours)
+	if err != nil {
+		return nil, fmt.Errorf("gagal generate refresh token: %w", err)
 	}
 
-	return s.db.Create(&session).Error
+	if err := s.repo.CreateUserSession(user.ID, refreshToken, c); err != nil {
+		return nil, fmt.Errorf("gagal menyimpan sesi user: %w", err)
+	}
+
+	// Mapping ke DTO response
+	var userResponse dto.UserResponse
+	copier.Copy(&userResponse, &user)
+	copier.Copy(&userResponse.Profile, &user.Profile)
+
+	return &dto.LoginResult{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		User:         userResponse,
+	}, nil
 }
 
-// RevokeUserSessionByRefreshToken revokes a user session by refresh token
-func (s *AuthService) RevokeUserSessionByRefreshToken(refreshToken string) error {
-	var session models.UserSession
-	if err := s.db.Where("refresh_token = ?", refreshToken).First(&session).Error; err != nil {
-		return fmt.Errorf("refresh token session not found")
+// VerifyUserEmail verifies the user's email using a verification token and code
+func (s *AuthService) VerifyUserEmail(token, code string) error {
+	jwtSecret := config.GetEnv("VERIFICATION_TOKEN_SECRET", "default-key")
+
+	payload, err := utils.ExtractUserIDFromToken(token, jwtSecret)
+	if err != nil {
+		return fmt.Errorf("token tidak valid: %w", err)
 	}
 
-	// Update session jadi revoked
+	user, err := s.repo.GetUserByID(payload.UserID)
+	if err != nil {
+		return fmt.Errorf("user tidak ditemukan: %w", err)
+	}
+
+	if user.IsVerified {
+		return fmt.Errorf("email sudah diverifikasi")
+	}
+
+	isValid := s.verificationSvc.VerifyCode(user.ID, code)
+	if !isValid {
+		return fmt.Errorf("kode verifikasi salah atau kadaluarsa")
+	}
+
+	return nil
+}
+
+// ResendVerificationCode resends the verification code to the user's email
+func (s *AuthService) ResendVerificationCode(token string) error {
+	jwtSecret := config.GetEnv("VERIFICATION_TOKEN_SECRET", "default-key")
+
+	payload, err := utils.ExtractUserIDFromToken(token, jwtSecret)
+	if err != nil {
+		return fmt.Errorf("token tidak valid")
+	}
+
+	user, err := s.repo.GetUserByID(payload.UserID)
+	if err != nil {
+		return fmt.Errorf("user tidak ditemukan: %w", err)
+	}
+
+	if user.IsVerified {
+		return fmt.Errorf("email sudah diverifikasi")
+	}
+
+	// Cek cooldown
+	remaining, err := s.verificationSvc.GetCooldownRemaining(user.ID)
+	if err != nil {
+		return fmt.Errorf("gagal cek cooldown: %w", err)
+	}
+	if remaining > 0 {
+		return fmt.Errorf("tunggu %d detik untuk mengirim ulang", int(remaining.Seconds()))
+	}
+
+	// Generate ulang kode
+	code, err := s.verificationSvc.GenerateVerificationCode(nil, user.ID)
+	if err != nil {
+		return fmt.Errorf("gagal generate kode: %w", err)
+	}
+
+	// Generate token verifikasi baru
+	token, err = utils.GenerateVerificationToken(user.ID, user.Email)
+	if err != nil {
+		return fmt.Errorf("gagal buat token verifikasi: %w", err)
+	}
+
+	// Kirim email (async)
+	go utils.SendVerificationEmail(user.Email, code, token)
+
+	return nil
+}
+
+// RefreshTokens refreshes the access token using the provided refresh token
+func (s *AuthService) RefreshTokens(refreshToken string) (*dto.LoginResult, error) {
+	// Verifikasi refresh token
+	refreshSecret := config.GetEnv("REFRESH_TOKEN_SECRET", "default-key")
+	claims, err := utils.ExtractUserIDFromToken(refreshToken, refreshSecret)
+	if err != nil {
+		return nil, fmt.Errorf("refresh token tidak valid: %w", err)
+	}
+
+	// Ambil user dari DB
+	user, err := s.repo.GetUserByID(claims.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("user tidak ditemukan: %w", err)
+	}
+
+	// Buat access token baru
+	accessSecret := config.GetEnv("ACCESS_TOKEN_SECRET", "default-key")
+	accessToken := ""
+	accessExpiry := config.GetIntEnv("ACCESS_TOKEN_EXPIRY_HOURS", 24)
+
+	accessToken, err = utils.GenerateJWT(*user, accessSecret, accessExpiry)
+	if err != nil {
+		return nil, fmt.Errorf("gagal generate token baru: %w", err)
+	}
+
+	// Mapping response
+	var userResp dto.UserResponse
+	_ = copier.Copy(&userResp, &user)
+	_ = copier.Copy(&userResp.Profile, &user.Profile)
+
+	return &dto.LoginResult{
+		AccessToken: accessToken,
+		User:        userResp,
+	}, nil
+}
+
+// LogoutUser logs out the user by revoking their session and blacklisting the access token
+func (s *AuthService) LogoutUser(accessToken, refreshToken string) error {
+	// Revoke session
+	if err := s.RevokeUserSessionByRefreshToken(refreshToken); err != nil {
+		return fmt.Errorf("gagal revoke session: %w", err)
+	}
+
+	// Masukkan access token ke Redis blacklist
+	ttlStr := config.GetEnv("TOKEN_BLACKLIST_TTL", "86400") // default 24 jam
+	ttl, err := strconv.Atoi(ttlStr)
+	if err != nil || ttl <= 0 {
+		ttl = 86400
+	}
+
+	err = config.RedisClient.Set(config.Ctx, accessToken, "blacklisted", time.Duration(ttl)*time.Second).Err()
+	if err != nil {
+		return fmt.Errorf("gagal blacklist token: %w", err)
+	}
+
+	return nil
+}
+
+// RevokeUserSessionByRefreshToken revokes a user session by its refresh token
+func (s *AuthService) RevokeUserSessionByRefreshToken(refreshToken string) error {
+	session, err := s.sessionRepo.GetByRefreshToken(refreshToken)
+	if err != nil {
+		return fmt.Errorf("refresh token session not found: %w", err)
+	}
+
 	session.IsRevoked = true
-	if err := s.db.Save(&session).Error; err != nil {
-		return err
+	if err := s.sessionRepo.Update(session); err != nil {
+		return fmt.Errorf("gagal revoke session: %w", err)
 	}
 
 	return nil

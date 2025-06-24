@@ -15,7 +15,8 @@ type Course struct {
 	LearningOutcomes string    `gorm:"type:text"`
 	Achievements     string    `gorm:"type:text"`
 
-	CourseThumbnail string `gorm:"type:varchar"`
+	// CourseThumbnail string `gorm:"type:varchar"`
+	CourseImages []CourseImage `gorm:"foreignKey:CourseID"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
