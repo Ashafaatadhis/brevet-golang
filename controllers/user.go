@@ -71,90 +71,34 @@ func (ctrl *UserController) GetUserByID(c *fiber.Ctx) error {
 
 // GetProfile retrieves the profile of the authenticated user
 func (ctrl *UserController) GetProfile(c *fiber.Ctx) error {
-	token := c.Locals("user").(*utils.Claims)
+	claims := c.Locals("user").(*utils.Claims)
 
-	user, err := ctrl.userService.GetUserByID(token.UserID)
+	userResp, err := ctrl.userService.GetProfileResponseByID(claims.UserID)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", err.Error())
 	}
 
-	var userResponse dto.UserResponse
-	if copyErr := copier.Copy(&userResponse, user); copyErr != nil {
-		return utils.ErrorResponse(c, 500, "Failed to map user data", copyErr.Error())
-	}
-
-	return utils.SuccessResponse(c, fiber.StatusOK, "Profile fetched", userResponse)
+	return utils.SuccessResponse(c, fiber.StatusOK, "Profile fetched", userResp)
 }
 
 // CreateUserWithProfile is for create user
 func (ctrl *UserController) CreateUserWithProfile(c *fiber.Ctx) error {
 	body := c.Locals("body").(*dto.CreateUserWithProfileRequest)
 
-	tx := ctrl.db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
+	// Validasi minimum (cukup di sini)
+	if body.RoleType == models.RoleTypeSiswa {
+		if body.NIK == nil {
+			return utils.ErrorResponse(c, fiber.StatusBadRequest, "Mahasiswa wajib mengisi NIK", nil)
 		}
-	}()
-	defer tx.Rollback()
-
-	// Cek apakah email/phone sudah digunakan
-	if !ctrl.authService.IsEmailUnique(tx, body.Email) || !ctrl.authService.IsPhoneUnique(tx, body.Phone) {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Email atau nomor telepon sudah digunakan", nil)
+		if (body.NIM == nil && body.NIMProof != nil) || (body.NIM != nil && body.NIMProof == nil) {
+			return utils.ErrorResponse(c, fiber.StatusBadRequest, "NIM dan bukti NIM harus diisi bersamaan", nil)
+		}
 	}
 
-	// Hash password
-	hashedPassword, err := utils.HashPassword(body.Password)
+	// Delegasikan ke service
+	userResp, err := ctrl.userService.CreateUserWithProfile(body)
 	if err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal mengenkripsi password", err.Error())
-	}
-
-	// Inisialisasi user
-	user := &models.User{
-		RoleType:   models.RoleTypeSiswa, // default role
-		IsVerified: true,                 // karena admin yang buat, dianggap langsung verified
-	}
-
-	// Salin data user
-	if err := copier.CopyWithOption(&user, &body, copier.Option{IgnoreEmpty: true}); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal mapping data user", err.Error())
-	}
-
-	user.Password = hashedPassword
-
-	// Inisialisasi & salin profile
-	profile := &models.Profile{
-		UserID: user.ID,
-	}
-	if err := copier.CopyWithOption(&profile, &body, copier.Option{IgnoreEmpty: true}); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal mapping data profil", err.Error())
-	}
-
-	user.Profile = profile
-
-	// Simpan ke DB
-	if err := ctrl.userService.SaveUser(user); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal menyimpan user baru", err.Error())
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal commit transaksi", err.Error())
-	}
-
-	// Ambil ulang user
-	fullUser, err := ctrl.userService.GetUserByID(user.ID)
-	if err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal mengambil data user", err.Error())
-	}
-
-	// Mapping ke response
-	var userResp dto.UserResponse
-	if err := copier.Copy(&userResp, fullUser); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal mapping response user", err.Error())
-	}
-
-	if err := copier.Copy(&userResp.Profile, fullUser.Profile); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal mapping response profil", err.Error())
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal membuat user", err.Error())
 	}
 
 	return utils.SuccessResponse(c, fiber.StatusCreated, "User berhasil dibuat", userResp)
@@ -162,7 +106,6 @@ func (ctrl *UserController) CreateUserWithProfile(c *fiber.Ctx) error {
 
 // UpdateUserWithProfile untuk controler update user
 func (ctrl *UserController) UpdateUserWithProfile(c *fiber.Ctx) error {
-	// Ambil ID dari parameter
 	userIDStr := c.Params("id")
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
@@ -171,31 +114,16 @@ func (ctrl *UserController) UpdateUserWithProfile(c *fiber.Ctx) error {
 
 	body := c.Locals("body").(*dto.UpdateUserWithProfileRequest)
 
-	user, err := ctrl.userService.GetUserByID(userID)
+	// Delegasikan semua ke service
+	userResp, err := ctrl.userService.UpdateUserWithProfile(userID, body)
 	if err != nil {
-		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", err.Error())
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return utils.ErrorResponse(c, fiber.StatusNotFound, "User tidak ditemukan", nil)
+		}
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal memperbarui user", err.Error())
 	}
 
-	// Copy data
-	if err := copier.CopyWithOption(&user, &body, copier.Option{IgnoreEmpty: true}); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal menyalin data user", err.Error())
-	}
-
-	if err := copier.CopyWithOption(&user.Profile, &body, copier.Option{IgnoreEmpty: true}); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal menyalin data profile", err.Error())
-	}
-
-	// Simpan ke database
-	if err := ctrl.userService.SaveUser(user); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal menyimpan data user", err.Error())
-	}
-
-	var usersResponse dto.UserResponse
-	if copyErr := copier.Copy(&usersResponse, user); copyErr != nil {
-		return utils.ErrorResponse(c, 500, "Failed to map user data", copyErr.Error())
-	}
-
-	return utils.SuccessResponse(c, fiber.StatusOK, "User berhasil diperbarui", usersResponse)
+	return utils.SuccessResponse(c, fiber.StatusOK, "User berhasil diperbarui", userResp)
 }
 
 // DeleteUserByID for delete user controller
@@ -206,7 +134,8 @@ func (ctrl *UserController) DeleteUserByID(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "ID user tidak valid", nil)
 	}
 
-	if err := ctrl.userService.DeleteUser(userID); err != nil {
+	// Delegasi ke service
+	if err := ctrl.userService.DeleteUserByID(userID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return utils.ErrorResponse(c, fiber.StatusNotFound, "User tidak ditemukan", nil)
 		}
@@ -223,34 +152,14 @@ func (ctrl *UserController) UpdateMyProfile(c *fiber.Ctx) error {
 
 	body := c.Locals("body").(*dto.UpdateMyProfile)
 
-	// Ambil user
-	user, err := ctrl.userService.GetUserByID(userID)
+	// Delegasikan semuanya ke service
+	userResp, err := ctrl.userService.UpdateMyProfile(userID, body)
 	if err != nil {
-		return utils.ErrorResponse(c, fiber.StatusNotFound, "User tidak ditemukan", err.Error())
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return utils.ErrorResponse(c, fiber.StatusNotFound, "User tidak ditemukan", nil)
+		}
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal update profil", err.Error())
 	}
 
-	// Pastikan profile tidak nil
-	if user.Profile == nil {
-		user.Profile = &models.Profile{UserID: user.ID}
-	}
-
-	// Salin field
-	if err := copier.CopyWithOption(user, body, copier.Option{IgnoreEmpty: true}); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal update user", err.Error())
-	}
-	if err := copier.CopyWithOption(user.Profile, body, copier.Option{IgnoreEmpty: true}); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal update profile", err.Error())
-	}
-
-	// Simpan perubahan
-	if err := ctrl.userService.SaveUser(user); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal menyimpan data", err.Error())
-	}
-
-	var userResponse dto.UserResponse
-	if err := copier.Copy(&userResponse, user); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal mapping response", err.Error())
-	}
-
-	return utils.SuccessResponse(c, fiber.StatusOK, "Profil berhasil diperbarui", userResponse)
+	return utils.SuccessResponse(c, fiber.StatusOK, "Profil berhasil diperbarui", userResp)
 }

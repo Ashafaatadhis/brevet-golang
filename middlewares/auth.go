@@ -3,7 +3,6 @@ package middlewares
 import (
 	"brevet-api/config"
 	"brevet-api/utils"
-	"fmt"
 	"strings"
 
 	"slices"
@@ -15,7 +14,6 @@ import (
 func RequireAuth() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		authHeader := c.Get("Authorization")
-		fmt.Println("Authorization Header:", authHeader)
 
 		// Cek apakah Authorization kosong atau tidak diawali dengan Bearer
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {

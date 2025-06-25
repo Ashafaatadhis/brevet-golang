@@ -73,6 +73,13 @@ type RegisterResponse struct {
 	} `json:"profile"`
 }
 
+// LoginResult is a struct that represents the response body for logging in a user
+type LoginResult struct {
+	AccessToken  string       `json:"access_token"`
+	RefreshToken string       `json:"refresh_token"`
+	User         UserResponse `json:"user"`
+}
+
 // UserResponse is a struct that represents the response body for getting a user
 type UserResponse struct {
 	ID   uuid.UUID `json:"id"`
