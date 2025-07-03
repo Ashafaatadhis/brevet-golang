@@ -40,9 +40,9 @@ func main() {
 	// fmt.Println("All tables dropped successfully.")
 
 	err := db.AutoMigrate(
-		&models.Blog{},
 		&models.Course{},
 		&models.CourseImage{},
+		&models.Batch{},
 	// &models.Price{},
 	// &models.User{},
 	// &models.UserSession{},

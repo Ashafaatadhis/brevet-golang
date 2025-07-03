@@ -4,6 +4,8 @@ import (
 	"brevet-api/dto"
 	"brevet-api/services"
 	"brevet-api/utils"
+	"fmt"
+	"log"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -79,7 +81,10 @@ func (ctrl *CourseController) CreateCourse(c *fiber.Ctx) error {
 
 // UpdateCourse updates an existing course with the provided details
 func (ctrl *CourseController) UpdateCourse(c *fiber.Ctx) error {
+	log.Print("UpdateCourse called\n")
+	fmt.Print("TAIKKKK")
 	idParam := c.Params("id")
+	fmt.Print(idParam, "ID Param\n")
 	id, err := uuid.Parse(idParam)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())

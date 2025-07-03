@@ -69,6 +69,36 @@ func RoleTypeValidator(fl validator.FieldLevel) bool {
 	}
 }
 
+// CourseTypeValidator checks if course_type value is valid
+func CourseTypeValidator(fl validator.FieldLevel) bool {
+	field := fl.Field()
+
+	// Kalau nil, anggap valid (tidak wajib)
+	if field.Kind() == reflect.Ptr {
+		if field.IsNil() {
+			return true
+		}
+	}
+
+	var val string
+
+	// Ambil nilai string dari pointer atau value biasa
+	if field.Kind() == reflect.Ptr {
+		val = field.Elem().String()
+	} else if field.Kind() == reflect.String {
+		val = field.String()
+	} else {
+		return false
+	}
+
+	switch models.CourseType(val) {
+	case models.CourseTypeOnline, models.CourseTypeOffline:
+		return true
+	default:
+		return false
+	}
+}
+
 // BirthDateValidator validates that a birth date is not in the future
 func BirthDateValidator(fl validator.FieldLevel) bool {
 	field := fl.Field()

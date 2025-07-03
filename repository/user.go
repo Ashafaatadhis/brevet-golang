@@ -71,6 +71,15 @@ func (r *UserRepository) FindByID(userID uuid.UUID) (*models.User, error) {
 	return &user, nil
 }
 
+// FindByIDTx retireves
+func (r *UserRepository) FindByIDTx(db *gorm.DB, userID uuid.UUID) (*models.User, error) {
+	var user models.User
+	if err := db.Where("id = ?", userID).First(&user).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
 // Save updates an existing user or creates a new one if it doesn't exist
 func (r *UserRepository) Save(user *models.User) error {
 	if user.Profile != nil {

@@ -17,12 +17,16 @@ const (
 
 // Scan implements the sql.Scanner interface
 func (c *CourseType) Scan(value any) error {
-	b, ok := value.([]byte)
-	if !ok {
-		return errors.New("failed to scan CourseType: type assertion to []byte failed")
+	switch v := value.(type) {
+	case string:
+		*c = CourseType(v)
+		return nil
+	case []byte:
+		*c = CourseType(string(v))
+		return nil
+	default:
+		return errors.New("failed to scan CourseType: unsupported type")
 	}
-	*c = CourseType(string(b))
-	return nil
 }
 
 // Value implements the driver.Valuer interface
