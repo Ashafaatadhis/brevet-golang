@@ -14,9 +14,14 @@ import (
 // RegisterCourseRoutes registers all course-related routes
 func RegisterCourseRoutes(r fiber.Router, db *gorm.DB) {
 	courseRepository := repository.NewCourseRepository(db)
-	fileServce := services.NewFileService()
-	courseService := services.NewCourseService(courseRepository, db, fileServce)
+	fileService := services.NewFileService()
+	courseService := services.NewCourseService(courseRepository, db, fileService)
 	courseController := controllers.NewCourseController(courseService, db)
+
+	batchRepository := repository.NewBatchRepository(db)
+	userRepository := repository.NewUserRepository(db)
+	batchService := services.NewBatchService(batchRepository, userRepository, courseRepository, db, fileService)
+	batchController := controllers.NewBatchController(batchService, db)
 
 	r.Get("/", courseController.GetAllCourses)
 	r.Get("/:slug", courseController.GetCourseBySlug)
@@ -37,4 +42,12 @@ func RegisterCourseRoutes(r fiber.Router, db *gorm.DB) {
 		middlewares.RequireRole([]string{"admin"}),
 		courseController.DeleteCourse,
 	)
+
+	r.Post("/:courseId/batches",
+		middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"admin"}),
+		middlewares.ValidateBody[dto.CreateBatchRequest](),
+		batchController.CreateBatch,
+	)
+
 }

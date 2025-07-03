@@ -1,0 +1,50 @@
+package v1
+
+import (
+	"brevet-api/controllers"
+	"brevet-api/dto"
+	"brevet-api/middlewares"
+	"brevet-api/repository"
+	"brevet-api/services"
+
+	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
+)
+
+// RegisterBatchRoute registers all batch-related routes
+func RegisterBatchRoute(r fiber.Router, db *gorm.DB) {
+	batchRepository := repository.NewBatchRepository(db)
+	userRepository := repository.NewUserRepository(db)
+	courseRepository := repository.NewCourseRepository(db)
+	fileService := services.NewFileService()
+	batchService := services.NewBatchService(batchRepository, userRepository, courseRepository, db, fileService)
+	batchController := controllers.NewBatchController(batchService, db)
+
+	r.Get("/", batchController.GetAllBatches)
+	r.Get("/:slug", batchController.GetBatchBySlug)
+	// POST /v1/courses/:courseId/batches
+	r.Put("/:id",
+		middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"admin"}),
+		middlewares.ValidateBody[dto.UpdateBatchRequest](),
+		batchController.UpdateBatch,
+	)
+	r.Delete("/:id",
+		middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"admin"}),
+		batchController.DeleteBatch,
+	)
+
+	// THIS IS ROUTE FOR ASSIGN TEACHER TO BATCH
+	// 	Method	Route	Deskripsi
+	// POST	/batches/:batchID/teachers	Tambah teacher ke batch tertentu
+	// GET	/batches/:batchID/teachers	List semua teacher dalam satu batch
+	// DELETE	/batches/:batchID/teachers/:userID	Hapus teacher tertentu dari
+
+	r.Post("/:batchID/teachers", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"admin"}),
+		middlewares.ValidateBody[dto.CreateBatchTeacherRequest](), batchController.AddTeacherToBatch)
+	r.Get("/:batchID/teachers", batchController.GetTeachersByBatch)
+	r.Delete("/:batchID/teachers/:userID", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"admin"}), batchController.RemoveTeacherFromBatch)
+}

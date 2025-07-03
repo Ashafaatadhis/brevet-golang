@@ -1,0 +1,57 @@
+package dto
+
+import (
+	"brevet-api/models"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// BatchResponse represents the response structure for a batch
+type BatchResponse struct {
+	ID             uuid.UUID `json:"id"`
+	CourseID       uuid.UUID `json:"course_id"`
+	Slug           string    `json:"slug"`
+	Title          string    `json:"title"`
+	Description    *string   `json:"description"`
+	BatchThumbnail *string   `json:"batch_thumbnail"`
+	StartAt        time.Time `json:"start_at"`
+	EndAt          time.Time `json:"end_at"`
+	Room           string    `json:"room"`
+	Quota          int       `json:"quota"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+
+	CourseType models.CourseType `json:"course_type"`
+}
+
+// CreateBatchRequest represents the request structure for creating a batch
+type CreateBatchRequest struct {
+	Title          string            `json:"title" validate:"required"`
+	Description    *string           `json:"description" validate:"omitempty"`
+	BatchThumbnail *string           `json:"batch_thumbnail,omitempty"`
+	StartAt        time.Time         `json:"start_at" validate:"required"`
+	EndAt          time.Time         `json:"end_at" validate:"required"`
+	Room           string            `json:"room" validate:"required"`
+	Quota          int               `json:"quota" validate:"required,min=1"`
+	CourseType     models.CourseType `json:"course_type" validate:"required,course_type"`
+}
+
+// UpdateBatchRequest represents the request structure for updating a batch
+type UpdateBatchRequest struct {
+	Title          *string            `json:"title,omitempty" validate:"omitempty"`
+	Description    *string            `json:"description,omitempty" validate:"omitempty"`
+	BatchThumbnail *string            `json:"batch_thumbnail,omitempty" validate:"omitempty"`
+	StartAt        *time.Time         `json:"start_at,omitempty" validate:"omitempty"`
+	EndAt          *time.Time         `json:"end_at,omitempty" validate:"omitempty"`
+	Room           *string            `json:"room,omitempty" validate:"omitempty"`
+	Quota          *int               `json:"quota,omitempty" validate:"omitempty,min=1"`
+	CourseType     *models.CourseType `json:"course_type,omitempty" validate:"omitempty,course_type"`
+}
+
+// BATCH TEACHER
+
+// CreateBatchTeacherRequest represents the request structure for creating a batch teacher
+type CreateBatchTeacherRequest struct {
+	UserID uuid.UUID `json:"user_id" validate:"required"`
+}

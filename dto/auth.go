@@ -93,7 +93,7 @@ type UserResponse struct {
 
 	RoleType models.RoleType `json:"role_type"`
 
-	Profile struct {
+	Profile *struct {
 		GroupType     *models.GroupType `json:"group_type"`
 		GroupVerified bool              `json:"group_verified"`
 		NIM           *string           `json:"nim"`
@@ -105,5 +105,5 @@ type UserResponse struct {
 		Address       string            `json:"address"`
 		CreatedAt     time.Time         `json:"created_at"`
 		UpdatedAt     time.Time         `json:"updated_at"`
-	} `json:"profile"`
+	} `json:"profile,omitempty"`
 }

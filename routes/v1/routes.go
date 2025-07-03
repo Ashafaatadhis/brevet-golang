@@ -27,4 +27,8 @@ func RegisterV1Routes(r fiber.Router, db *gorm.DB) {
 	blogGroup := r.Group("/blogs")
 	RegisterBlogRoutes(blogGroup, db)
 
+	// /v1/batches
+	batchGroup := r.Group("/batches")
+	RegisterBatchRoute(batchGroup, db)
+
 }
