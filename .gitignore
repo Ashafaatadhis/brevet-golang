@@ -34,3 +34,6 @@ Thumbs.db
 
 # Docker build cache
 **/docker-compose.override.yml
+
+
+/public/
