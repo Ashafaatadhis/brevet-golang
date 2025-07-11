@@ -13,15 +13,17 @@ import (
 
 // BatchController handles batch-related operations
 type BatchController struct {
-	batchService *services.BatchService
-	db           *gorm.DB
+	batchService  *services.BatchService
+	courseService *services.CourseService
+	db            *gorm.DB
 }
 
 // NewBatchController creates a new BatchController
-func NewBatchController(batchService *services.BatchService, db *gorm.DB) *BatchController {
+func NewBatchController(batchService *services.BatchService, courseService *services.CourseService, db *gorm.DB) *BatchController {
 	return &BatchController{
-		batchService: batchService,
-		db:           db,
+		batchService:  batchService,
+		courseService: courseService,
+		db:            db,
 	}
 }
 
@@ -190,4 +192,29 @@ func (ctrl *BatchController) RemoveTeacherFromBatch(c *fiber.Ctx) error {
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Teacher in batch deleted successfully", nil)
 
+}
+
+// GetBatchByCourseSlug this function for get batch by course slug
+func (ctrl *BatchController) GetBatchByCourseSlug(c *fiber.Ctx) error {
+	courseSlug := c.Params("courseSlug")
+
+	opts := utils.ParseQueryOptions(c)
+
+	course, err := ctrl.courseService.GetCourseBySlug(courseSlug)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusNotFound, "Course not found", err.Error())
+	}
+
+	batches, total, err := ctrl.batchService.GetBatchByCourseSlug(course.ID, opts)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch teachers", err.Error())
+	}
+
+	var batchResponses []dto.BatchResponse
+	if copyErr := copier.Copy(&batchResponses, batches); copyErr != nil {
+		return utils.ErrorResponse(c, 500, "Failed to map batch", copyErr.Error())
+	}
+
+	meta := utils.BuildPaginationMeta(total, opts.Limit, opts.Page)
+	return utils.SuccessWithMeta(c, fiber.StatusOK, "Batches fetched", batchResponses, meta)
 }

@@ -254,3 +254,12 @@ func (s *BatchService) DeleteTeacherFromBatch(batchID uuid.UUID, userID uuid.UUI
 
 	return nil
 }
+
+// GetBatchByCourseSlug is function for get all batches by course slug
+func (s *BatchService) GetBatchByCourseSlug(courseID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error) {
+	batches, total, err := s.repo.GetAllFilteredBatchesByCourseSlug(courseID, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	return batches, total, nil
+}
