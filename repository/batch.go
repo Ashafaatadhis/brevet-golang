@@ -59,6 +59,46 @@ func (r *BatchRepository) GetAllFilteredBatches(opts utils.QueryOptions) ([]mode
 	return batch, total, err
 }
 
+// GetAllFilteredBatchesByCourseSlug retrieves all filtered batches by course slug
+func (r *BatchRepository) GetAllFilteredBatchesByCourseSlug(courseID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error) {
+	validSortFields, err := utils.GetValidColumns(r.db, &models.Batch{})
+	if err != nil {
+		return nil, 0, err
+	}
+
+	sort := opts.Sort
+	if !validSortFields[sort] {
+		sort = "id"
+	}
+
+	order := opts.Order
+	if order != "asc" && order != "desc" {
+		order = "asc"
+	}
+
+	db := r.db.Model(&models.Batch{}).Where("course_id = ?", courseID)
+
+	joinConditions := map[string]string{}
+	joinedRelations := map[string]bool{}
+
+	db = utils.ApplyFiltersWithJoins(db, "batches", opts.Filters, validSortFields, joinConditions, joinedRelations)
+
+	if opts.Search != "" {
+		db = db.Where("title ILIKE ?", "%"+opts.Search+"%")
+	}
+
+	var total int64
+	db.Count(&total)
+
+	var batch []models.Batch
+	err = db.Order(fmt.Sprintf("%s %s", sort, order)).
+		Limit(opts.Limit).
+		Offset(opts.Offset).
+		Find(&batch).Error
+
+	return batch, total, err
+}
+
 // GetBatchBySlug retrieves a batch by its slug
 func (r *BatchRepository) GetBatchBySlug(slug string) (*models.Batch, error) {
 	var batch models.Batch

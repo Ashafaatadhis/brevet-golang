@@ -17,8 +17,9 @@ func RegisterBatchRoute(r fiber.Router, db *gorm.DB) {
 	userRepository := repository.NewUserRepository(db)
 	courseRepository := repository.NewCourseRepository(db)
 	fileService := services.NewFileService()
+	courseService := services.NewCourseService(courseRepository, db, fileService)
 	batchService := services.NewBatchService(batchRepository, userRepository, courseRepository, db, fileService)
-	batchController := controllers.NewBatchController(batchService, db)
+	batchController := controllers.NewBatchController(batchService, courseService, db)
 
 	r.Get("/", batchController.GetAllBatches)
 	r.Get("/:slug", batchController.GetBatchBySlug)
