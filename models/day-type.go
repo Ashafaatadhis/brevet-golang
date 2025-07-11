@@ -27,11 +27,14 @@ const (
 
 // Scan scans the value from the database into the DayType type
 func (d *DayType) Scan(value any) error {
-	b, ok := value.([]byte)
-	if !ok {
-		return errors.New("failed to scan DayType: type assertion to []byte failed")
+	switch v := value.(type) {
+	case []byte:
+		*d = DayType(string(v))
+	case string:
+		*d = DayType(v)
+	default:
+		return errors.New("failed to scan DayType: incompatible type")
 	}
-	*d = DayType(string(b))
 	return nil
 }
 

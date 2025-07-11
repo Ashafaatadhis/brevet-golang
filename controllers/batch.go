@@ -37,8 +37,26 @@ func (ctrl *BatchController) GetAllBatches(c *fiber.Ctx) error {
 	}
 
 	var batchesResponse []dto.BatchResponse
-	if copyErr := copier.Copy(&batchesResponse, batches); copyErr != nil {
-		return utils.ErrorResponse(c, 500, "Failed to map batch data", copyErr.Error())
+
+	// Loop dan map manual
+	for _, batch := range batches {
+		var res dto.BatchResponse
+
+		if err := copier.CopyWithOption(&res, batch, copier.Option{
+			IgnoreEmpty: true,
+			DeepCopy:    true,
+		}); err != nil {
+			return utils.ErrorResponse(c, 500, "Failed to map batch data", err.Error())
+		}
+
+		if err := copier.CopyWithOption(&res.Days, batch.BatchDays, copier.Option{
+			IgnoreEmpty: true,
+			DeepCopy:    true,
+		}); err != nil {
+			return utils.ErrorResponse(c, 500, "Failed to map batch data", err.Error())
+		}
+
+		batchesResponse = append(batchesResponse, res)
 	}
 
 	meta := utils.BuildPaginationMeta(total, opts.Limit, opts.Page)
@@ -55,8 +73,18 @@ func (ctrl *BatchController) GetBatchBySlug(c *fiber.Ctx) error {
 	}
 
 	var batchResponse dto.BatchResponse
-	if copyErr := copier.Copy(&batchResponse, batch); copyErr != nil {
+	if copyErr := copier.CopyWithOption(&batchResponse, batch, copier.Option{
+		IgnoreEmpty: true,
+		DeepCopy:    true,
+	}); copyErr != nil {
 		return utils.ErrorResponse(c, 500, "Failed to map batch data", copyErr.Error())
+	}
+
+	if copyErr := copier.CopyWithOption(&batchResponse.Days, batch.BatchDays, copier.Option{
+		IgnoreEmpty: true,
+		DeepCopy:    true,
+	}); copyErr != nil {
+		return utils.ErrorResponse(c, 500, "Failed to map batch day", copyErr.Error())
 	}
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Batch fetched", batchResponse)
@@ -74,12 +102,22 @@ func (ctrl *BatchController) CreateBatch(c *fiber.Ctx) error {
 
 	batch, err := ctrl.batchService.CreateBatch(courseID, body)
 	if err != nil {
-
 		return utils.ErrorResponse(c, 400, "Gagal membuat batch", err.Error())
 	}
+
 	var batchResponse dto.BatchResponse
-	if copyErr := copier.Copy(&batchResponse, batch); copyErr != nil {
+	if copyErr := copier.CopyWithOption(&batchResponse, batch, copier.Option{
+		IgnoreEmpty: true,
+		DeepCopy:    true,
+	}); copyErr != nil {
 		return utils.ErrorResponse(c, 500, "Failed to map batch data", copyErr.Error())
+	}
+
+	if copyErr := copier.CopyWithOption(&batchResponse.Days, batch.BatchDays, copier.Option{
+		IgnoreEmpty: true,
+		DeepCopy:    true,
+	}); copyErr != nil {
+		return utils.ErrorResponse(c, 500, "Failed to map batch day", copyErr.Error())
 	}
 
 	return utils.SuccessResponse(c, 201, "Sukses membuat batch", batchResponse)
@@ -101,7 +139,10 @@ func (ctrl *BatchController) UpdateBatch(c *fiber.Ctx) error {
 	}
 
 	var batchResponse dto.BatchResponse
-	if copyErr := copier.Copy(&batchResponse, batch); copyErr != nil {
+	if copyErr := copier.CopyWithOption(&batchResponse, batch, copier.Option{
+		IgnoreEmpty: true,
+		DeepCopy:    true,
+	}); copyErr != nil {
 		return utils.ErrorResponse(c, 500, "Failed to map batch data", copyErr.Error())
 	}
 
@@ -210,11 +251,29 @@ func (ctrl *BatchController) GetBatchByCourseSlug(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch teachers", err.Error())
 	}
 
-	var batchResponses []dto.BatchResponse
-	if copyErr := copier.Copy(&batchResponses, batches); copyErr != nil {
-		return utils.ErrorResponse(c, 500, "Failed to map batch", copyErr.Error())
+	var batchesResponse []dto.BatchResponse
+
+	// Loop dan map manual
+	for _, batch := range batches {
+		var res dto.BatchResponse
+
+		if err := copier.CopyWithOption(&res, batch, copier.Option{
+			IgnoreEmpty: true,
+			DeepCopy:    true,
+		}); err != nil {
+			return utils.ErrorResponse(c, 500, "Failed to map batch data", err.Error())
+		}
+
+		if err := copier.CopyWithOption(&res.Days, batch.BatchDays, copier.Option{
+			IgnoreEmpty: true,
+			DeepCopy:    true,
+		}); err != nil {
+			return utils.ErrorResponse(c, 500, "Failed to map batch data", err.Error())
+		}
+
+		batchesResponse = append(batchesResponse, res)
 	}
 
 	meta := utils.BuildPaginationMeta(total, opts.Limit, opts.Page)
-	return utils.SuccessWithMeta(c, fiber.StatusOK, "Batches fetched", batchResponses, meta)
+	return utils.SuccessWithMeta(c, fiber.StatusOK, "Batches fetched", batchesResponse, meta)
 }

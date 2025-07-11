@@ -99,6 +99,37 @@ func CourseTypeValidator(fl validator.FieldLevel) bool {
 	}
 }
 
+// DayTypeValidator checks if day value is valid
+func DayTypeValidator(fl validator.FieldLevel) bool {
+	field := fl.Field()
+
+	// Kalau nil, anggap valid (tidak wajib)
+	if field.Kind() == reflect.Ptr {
+		if field.IsNil() {
+			return true
+		}
+	}
+
+	var val string
+
+	// Ambil nilai string dari pointer atau value biasa
+	if field.Kind() == reflect.Ptr {
+		val = field.Elem().String()
+	} else if field.Kind() == reflect.String {
+		val = field.String()
+	} else {
+		return false
+	}
+
+	switch models.DayType(val) {
+	case models.Monday, models.Tuesday, models.Wednesday, models.Thursday,
+		models.Friday, models.Saturday, models.Sunday:
+		return true
+	default:
+		return false
+	}
+}
+
 // BirthDateValidator validates that a birth date is not in the future
 func BirthDateValidator(fl validator.FieldLevel) bool {
 	field := fl.Field()

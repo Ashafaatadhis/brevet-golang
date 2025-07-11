@@ -43,6 +43,7 @@ func main() {
 		&models.Course{},
 		&models.CourseImage{},
 		&models.Batch{},
+		&models.BatchDay{},
 	// &models.Price{},
 	// &models.User{},
 	// &models.UserSession{},

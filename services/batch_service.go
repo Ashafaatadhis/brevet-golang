@@ -57,15 +57,11 @@ func (s *BatchService) CreateBatch(courseID uuid.UUID, body *dto.CreateBatchRequ
 	}()
 	defer tx.Rollback()
 
-	fmt.Printf("courseRepo is nil? %v\n", s.courseRepo == nil)
-	fmt.Printf("courseRepo pointer: %p\n", s.courseRepo.FindByID)
-
-	a, err := s.courseRepo.FindByID(tx, courseID)
+	// Validasi course ID
+	_, err := s.courseRepo.FindByID(tx, courseID)
 	if err != nil {
 		return nil, err
 	}
-
-	fmt.Print(a, "TAI\n")
 
 	var batch models.Batch
 	copier.Copy(&batch, body)
@@ -75,15 +71,28 @@ func (s *BatchService) CreateBatch(courseID uuid.UUID, body *dto.CreateBatchRequ
 	batch.Slug = slug
 	batch.CourseID = courseID
 
+	// Simpan batch utama
 	if err := s.repo.CreateTx(tx, &batch); err != nil {
 		return nil, err
+	}
+
+	// Simpan BatchDays
+	for _, day := range body.Days {
+		batchDay := models.BatchDay{
+			BatchID: batch.ID,
+			Day:     day,
+		}
+
+		if err := tx.Create(&batchDay).Error; err != nil {
+			return nil, err
+		}
 	}
 
 	if err := tx.Commit().Error; err != nil {
 		return nil, err
 	}
 
-	return &batch, nil
+	return s.repo.FindByID(batch.ID)
 }
 
 // UpdateBatch updates an existing batch with the provided details
@@ -112,11 +121,27 @@ func (s *BatchService) UpdateBatch(id uuid.UUID, body *dto.UpdateBatchRequest) (
 	// Optional: regenerate slug kalau Title berubah
 	// if body.Title != nil {
 	// 	slug := utils.GenerateUniqueSlug(*body.Title, s.repo)
-	// 	course.Slug = slug
+	// 	batch.Slug = slug
 	// }
 
 	if err := s.repo.UpdateTx(tx, batch); err != nil {
 		return nil, err
+	}
+
+	// Update BatchDays jika diberikan
+	if body.Days != nil {
+		if err := tx.Where("batch_id = ?", batch.ID).Delete(&models.BatchDay{}).Error; err != nil {
+			return nil, err
+		}
+		for _, day := range *body.Days {
+			batchDay := models.BatchDay{
+				BatchID: batch.ID,
+				Day:     day,
+			}
+			if err := tx.Create(&batchDay).Error; err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	if err := tx.Commit().Error; err != nil {
