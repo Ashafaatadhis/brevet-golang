@@ -7,6 +7,8 @@ import (
 	"mime/multipart"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -30,9 +32,13 @@ func (s *FileService) SaveFile(ctx *fiber.Ctx, file *multipart.FileHeader, locat
 		return "", fmt.Errorf("Ekstensi file tidak diperbolehkan")
 	}
 
-	ext := filepath.Ext(file.Filename)
+	ext := strings.ToLower(filepath.Ext(file.Filename))
 	filename := uuid.New().String() + ext
-	saveDir := filepath.Join(s.BaseDir, filepath.Clean(location))
+
+	// Buat sub-folder berdasarkan tanggal: uploads/location/2025/07/11
+	now := time.Now()
+	subPath := filepath.Join(location, now.Format("2006"), now.Format("01"), now.Format("02"))
+	saveDir := filepath.Join(s.BaseDir, filepath.Clean(subPath))
 
 	if !utils.IsSafePath(s.BaseDir, saveDir) {
 		return "", fmt.Errorf("Lokasi upload tidak valid")
@@ -47,7 +53,16 @@ func (s *FileService) SaveFile(ctx *fiber.Ctx, file *multipart.FileHeader, locat
 		return "", fmt.Errorf("Gagal menyimpan file: %w", err)
 	}
 
-	return fmt.Sprintf("/uploads/%s/%s", location, filename), nil
+	// ✅ Generate Public URL berdasarkan ENV
+	if config.GetEnv("USE_CDN", "false") == "true" {
+		// Misalnya: https://cdn.example.com/images/2025/07/11/abc.jpg
+		cdnBase := config.GetEnv("CDN_URL", "https://cdn.example.com")
+		return fmt.Sprintf("%s/%s/%s", cdnBase, subPath, filename), nil
+	}
+
+	// 🧪 Local mode (pakai Fiber.Static /uploads)
+	// Akan jadi: /uploads/images/2025/07/11/abc.jpg
+	return fmt.Sprintf("/uploads/%s/%s", subPath, filename), nil
 }
 
 // DeleteFile deletes a file from the server after validating the path
