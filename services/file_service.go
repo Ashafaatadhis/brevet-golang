@@ -53,16 +53,15 @@ func (s *FileService) SaveFile(ctx *fiber.Ctx, file *multipart.FileHeader, locat
 		return "", fmt.Errorf("Gagal menyimpan file: %w", err)
 	}
 
-	// ✅ Generate Public URL berdasarkan ENV
+	publicPath := filepath.ToSlash(filepath.Join(subPath, filename))
+
 	if config.GetEnv("USE_CDN", "false") == "true" {
-		// Misalnya: https://cdn.example.com/images/2025/07/11/abc.jpg
-		cdnBase := config.GetEnv("CDN_URL", "https://cdn.example.com")
-		return fmt.Sprintf("%s/%s/%s", cdnBase, subPath, filename), nil
+		cdnBase := config.GetEnv("CDN_URL", "https://cdn.tcugapps.com")
+		return fmt.Sprintf("%s/%s", strings.TrimRight(cdnBase, "/"), publicPath), nil
 	}
 
-	// 🧪 Local mode (pakai Fiber.Static /uploads)
-	// Akan jadi: /uploads/images/2025/07/11/abc.jpg
-	return fmt.Sprintf("/uploads/%s/%s", subPath, filename), nil
+	return fmt.Sprintf("/uploads/%s", publicPath), nil
+
 }
 
 // DeleteFile deletes a file from the server after validating the path
