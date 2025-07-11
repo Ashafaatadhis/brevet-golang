@@ -19,8 +19,13 @@ type BatchResponse struct {
 	EndAt          time.Time `json:"end_at"`
 	Room           string    `json:"room"`
 	Quota          int       `json:"quota"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	Days           []*struct {
+		ID      uuid.UUID      `json:"id"`
+		BatchID uuid.UUID      `json:"batch_id"`
+		Day     models.DayType `json:"day"`
+	} `json:"days"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 
 	CourseType models.CourseType `json:"course_type"`
 }
@@ -32,6 +37,7 @@ type CreateBatchRequest struct {
 	BatchThumbnail *string           `json:"batch_thumbnail,omitempty"`
 	StartAt        time.Time         `json:"start_at" validate:"required"`
 	EndAt          time.Time         `json:"end_at" validate:"required"`
+	Days           []models.DayType  `json:"days" validate:"required,min=1,dive,required,day_type"` // dive = validasi tiap elemen array
 	Room           string            `json:"room" validate:"required"`
 	Quota          int               `json:"quota" validate:"required,min=1"`
 	CourseType     models.CourseType `json:"course_type" validate:"required,course_type"`
@@ -44,6 +50,7 @@ type UpdateBatchRequest struct {
 	BatchThumbnail *string            `json:"batch_thumbnail,omitempty" validate:"omitempty"`
 	StartAt        *time.Time         `json:"start_at,omitempty" validate:"omitempty"`
 	EndAt          *time.Time         `json:"end_at,omitempty" validate:"omitempty"`
+	Days           *[]models.DayType  `json:"days,omitempty" validate:"omitempty,min=1,dive,required,day_type"`
 	Room           *string            `json:"room,omitempty" validate:"omitempty"`
 	Quota          *int               `json:"quota,omitempty" validate:"omitempty,min=1"`
 	CourseType     *models.CourseType `json:"course_type,omitempty" validate:"omitempty,course_type"`

@@ -21,6 +21,7 @@ type Batch struct {
 	CreatedAt      time.Time `gorm:"autoCreateTime"`
 	UpdatedAt      time.Time `gorm:"autoUpdateTime"`
 
+	BatchDays  []BatchDay `gorm:"foreignKey:BatchID;constraint:OnDelete:CASCADE"`
 	Course     Course     `gorm:"foreignKey:CourseID;constraint:OnDelete:CASCADE"`
 	CourseType CourseType `gorm:"type:course_type;not null"`
 }

@@ -21,7 +21,7 @@ func NewBatchRepository(db *gorm.DB) *BatchRepository {
 
 // GetAllFilteredBatches retrieves all batches with pagination and filtering options
 func (r *BatchRepository) GetAllFilteredBatches(opts utils.QueryOptions) ([]models.Batch, int64, error) {
-	validSortFields, err := utils.GetValidColumns(r.db, &models.Batch{})
+	validSortFields, err := utils.GetValidColumns(r.db, &models.Batch{}, &models.BatchDay{})
 	if err != nil {
 		return nil, 0, err
 	}
@@ -36,7 +36,7 @@ func (r *BatchRepository) GetAllFilteredBatches(opts utils.QueryOptions) ([]mode
 		order = "asc"
 	}
 
-	db := r.db.Model(&models.Batch{})
+	db := r.db.Preload("BatchDays").Model(&models.Batch{})
 
 	joinConditions := map[string]string{}
 	joinedRelations := map[string]bool{}
@@ -61,7 +61,7 @@ func (r *BatchRepository) GetAllFilteredBatches(opts utils.QueryOptions) ([]mode
 
 // GetAllFilteredBatchesByCourseSlug retrieves all filtered batches by course slug
 func (r *BatchRepository) GetAllFilteredBatchesByCourseSlug(courseID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error) {
-	validSortFields, err := utils.GetValidColumns(r.db, &models.Batch{})
+	validSortFields, err := utils.GetValidColumns(r.db, &models.Batch{}, &models.BatchDay{})
 	if err != nil {
 		return nil, 0, err
 	}
@@ -76,7 +76,7 @@ func (r *BatchRepository) GetAllFilteredBatchesByCourseSlug(courseID uuid.UUID, 
 		order = "asc"
 	}
 
-	db := r.db.Model(&models.Batch{}).Where("course_id = ?", courseID)
+	db := r.db.Preload("BatchDays").Model(&models.Batch{}).Where("course_id = ?", courseID)
 
 	joinConditions := map[string]string{}
 	joinedRelations := map[string]bool{}
@@ -102,7 +102,7 @@ func (r *BatchRepository) GetAllFilteredBatchesByCourseSlug(courseID uuid.UUID, 
 // GetBatchBySlug retrieves a batch by its slug
 func (r *BatchRepository) GetBatchBySlug(slug string) (*models.Batch, error) {
 	var batch models.Batch
-	err := r.db.First(&batch, "slug = ?", slug).Error
+	err := r.db.Preload("BatchDays").First(&batch, "slug = ?", slug).Error
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ func (r *BatchRepository) FindByIDTx(db *gorm.DB, id uuid.UUID) (*models.Batch, 
 // FindByID retrieves a batch by its ID
 func (r *BatchRepository) FindByID(id uuid.UUID) (*models.Batch, error) {
 	var batch models.Batch
-	err := r.db.First(&batch, "id = ?", id).Error
+	err := r.db.Preload("BatchDays").First(&batch, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
