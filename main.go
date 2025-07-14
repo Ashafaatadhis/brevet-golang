@@ -10,6 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/joho/godotenv"
 )
 
@@ -31,7 +32,7 @@ func main() {
 
 	// Middleware: logger
 	app.Use(logger.New())
-
+	app.Use(recover.New())
 	// Middleware: CORS dari .env
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     config.GetEnv("ALLOWED_ORIGINS", "*"),

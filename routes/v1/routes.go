@@ -19,6 +19,10 @@ func RegisterV1Routes(r fiber.Router, db *gorm.DB) {
 	userGroup := r.Group("/users")
 	RegisterUserRoutes(userGroup, db)
 
+	// /v1/me
+	meGroup := r.Group("/me")
+	RegisterMeRoutes(meGroup, db)
+
 	// /v1/courses
 	courseGroup := r.Group("/courses")
 	RegisterCourseRoutes(courseGroup, db)
@@ -30,5 +34,13 @@ func RegisterV1Routes(r fiber.Router, db *gorm.DB) {
 	// /v1/batches
 	batchGroup := r.Group("/batches")
 	RegisterBatchRoute(batchGroup, db)
+
+	// /v1/purchases
+	purchaseGroup := r.Group("/purchases")
+	RegisterPurchaseRoutes(purchaseGroup, db)
+
+	// /v1/meetings
+	meetingGroup := r.Group("/meetings")
+	RegisterMeetingRoutes(meetingGroup, db)
 
 }

@@ -9,4 +9,5 @@ func RegisterCustomValidators(v *validator.Validate) {
 	v.RegisterValidation("group_type", GroupTypeValidator)
 	v.RegisterValidation("day_type", DayTypeValidator)
 	v.RegisterValidation("course_type", CourseTypeValidator)
+	v.RegisterValidation("meeting_type", MeetingTypeValidator)
 }

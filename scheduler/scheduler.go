@@ -23,10 +23,18 @@ func StartCleanupScheduler(db *gorm.DB) {
 	ticker := time.NewTicker(time.Duration(hours) * time.Hour)
 	go func() {
 		for range ticker.C {
+			// 1. Cleanup expired sessions
 			if err := utils.CleanExpiredSessions(db); err != nil {
 				log.Println("Failed to clean expired sessions:", err)
 			} else {
 				log.Println("Expired sessions cleaned successfully")
+			}
+
+			// 2. Mark expired purchases
+			if err := utils.MarkExpiredPurchases(db); err != nil {
+				log.Println("Failed to mark expired purchases:", err)
+			} else {
+				log.Println("Expired purchases marked successfully")
 			}
 		}
 	}()

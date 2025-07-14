@@ -26,4 +26,7 @@ type User struct {
 	// Foreign Key
 	Profile  *Profile `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE;"`
 	RoleType RoleType `gorm:"type:role_type;not null"`
+
+	// many2many
+	Meetings []Meeting `gorm:"many2many:meeting_teachers"`
 }

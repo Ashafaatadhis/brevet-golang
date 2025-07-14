@@ -121,11 +121,6 @@ func (r *BatchRepository) CreateTx(db *gorm.DB, batch *models.Batch) error {
 	return db.Create(batch).Error
 }
 
-// CreateBatchTeacherTx inserts a new batch with teacher information within a transaction
-func (r *BatchRepository) CreateBatchTeacherTx(db *gorm.DB, batch *models.BatchTeacher) error {
-	return db.Create(batch).Error
-}
-
 // UpdateTx updates an existing batch within a transaction
 func (r *BatchRepository) UpdateTx(tx *gorm.DB, batch *models.Batch) error {
 	return tx.Save(batch).Error
@@ -154,18 +149,6 @@ func (r *BatchRepository) FindByID(id uuid.UUID) (*models.Batch, error) {
 // DeleteByIDTx deletes a batch by its ID within a transaction
 func (r *BatchRepository) DeleteByIDTx(tx *gorm.DB, id uuid.UUID) error {
 	return tx.Where("id = ?", id).Delete(&models.Batch{}).Error
-}
-
-// IsTeacherAssigned checks whether a user is already assigned as a teacher in a batch
-func (r *BatchRepository) IsTeacherAssigned(batchID, userID uuid.UUID) (bool, error) {
-	var count int64
-	err := r.db.Model(&models.BatchTeacher{}).
-		Where("batch_id = ? AND user_id = ?", batchID, userID).
-		Count(&count).Error
-	if err != nil {
-		return false, err
-	}
-	return count > 0, nil
 }
 
 // GetAllTeacherInBatch get all teacher in batch
@@ -215,17 +198,97 @@ func (r *BatchRepository) GetAllTeacherInBatch(batchID uuid.UUID, opts utils.Que
 	return users, total, err
 }
 
-// FindBatchTeacherByBatchIDAndUserIDTx this function for Find batchTeacher where userid and batchid with TX (Transaction)
-func (r *BatchRepository) FindBatchTeacherByBatchIDAndUserIDTx(db *gorm.DB, batchID uuid.UUID, userID uuid.UUID) (*models.BatchTeacher, error) {
-	var batchTeacher models.BatchTeacher
-	err := db.First(&batchTeacher, "batch_id = ? AND user_id = ?", batchID, userID).Error
+// GetBatchesByUserPurchaseFiltered is repository for get all batches where user purchase
+func (r *BatchRepository) GetBatchesByUserPurchaseFiltered(userID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error) {
+	validSortFields, err := utils.GetValidColumns(r.db, &models.Batch{}, &models.BatchDay{})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return &batchTeacher, nil
+
+	sort := opts.Sort
+	if !validSortFields[sort] {
+		sort = "id"
+	}
+
+	order := opts.Order
+	if order != "asc" && order != "desc" {
+		order = "asc"
+	}
+
+	// JOIN ke purchases, dan preload relasi
+	db := r.db.
+		Joins("JOIN purchases ON purchases.batch_id = batches.id").
+		Preload("BatchDays").
+		Model(&models.Batch{}).
+		Where("purchases.user_id = ?", userID)
+
+	joinConditions := map[string]string{}
+	joinedRelations := map[string]bool{}
+
+	// Apply dynamic filter (dari query param)
+	db = utils.ApplyFiltersWithJoins(db, "batches", opts.Filters, validSortFields, joinConditions, joinedRelations)
+
+	// Search by title (opsional)
+	if opts.Search != "" {
+		db = db.Where("batches.title ILIKE ?", "%"+opts.Search+"%")
+	}
+
+	var total int64
+	db.Count(&total)
+
+	var batch []models.Batch
+	err = db.
+		Order(fmt.Sprintf("batches.%s %s", sort, order)).
+		Limit(opts.Limit).
+		Offset(opts.Offset).
+		Find(&batch).Error
+
+	return batch, total, err
 }
 
-// DeleteTeacherByIDTx delete teacher from batchTeacher
-func (r *BatchRepository) DeleteTeacherByIDTx(tx *gorm.DB, batchID uuid.UUID, userID uuid.UUID) error {
-	return tx.Where("batch_id = ? AND user_id = ?", batchID, userID).Delete(&models.BatchTeacher{}).Error
+// GetBatchesByGuruMeetingRelationFiltered is repo for get all batches where has taught
+func (r *BatchRepository) GetBatchesByGuruMeetingRelationFiltered(guruID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error) {
+	validSortFields, err := utils.GetValidColumns(r.db, &models.Batch{}, &models.BatchDay{}, &models.User{})
+	if err != nil {
+		return nil, 0, err
+	}
+
+	sort := opts.Sort
+	if !validSortFields[sort] {
+		sort = "id"
+	}
+
+	order := opts.Order
+	if order != "asc" && order != "desc" {
+		order = "asc"
+	}
+
+	db := r.db.
+		Joins("JOIN meetings ON meetings.batch_id = batches.id").
+		Joins("JOIN meeting_teachers ON meeting_teachers.meeting_id = meetings.id").
+		Preload("BatchDays").
+		Model(&models.Batch{}).
+		Where("meeting_teacher.user_id = ?", guruID).
+		Group("batches.id")
+
+	joinConditions := map[string]string{}
+	joinedRelations := map[string]bool{}
+
+	db = utils.ApplyFiltersWithJoins(db, "batches", opts.Filters, validSortFields, joinConditions, joinedRelations)
+
+	if opts.Search != "" {
+		db = db.Where("batches.title ILIKE ?", "%"+opts.Search+"%")
+	}
+
+	var total int64
+	db.Count(&total)
+
+	var batches []models.Batch
+	err = db.
+		Order(fmt.Sprintf("batches.%s %s", sort, order)).
+		Limit(opts.Limit).
+		Offset(opts.Offset).
+		Find(&batches).Error
+
+	return batches, total, err
 }

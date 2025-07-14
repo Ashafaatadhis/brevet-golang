@@ -3,10 +3,8 @@ package services
 import (
 	"brevet-api/dto"
 	"brevet-api/models"
-	"brevet-api/policies"
 	"brevet-api/repository"
 	"brevet-api/utils"
-	"fmt"
 
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/google/uuid"
@@ -185,101 +183,6 @@ func (s *BatchService) DeleteBatch(batchID uuid.UUID) error {
 	return nil
 }
 
-// THIS IN BOTTOM SERVICES IS FOR ASSIGN TEACHER TO BATCH
-
-// AddTeacherToBatch adds a teacher to a batch
-func (s *BatchService) AddTeacherToBatch(batchID uuid.UUID, body *dto.CreateBatchTeacherRequest) (*models.User, error) {
-	tx := s.db.Begin()
-
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-	defer tx.Rollback()
-
-	_, err := s.repo.FindByIDTx(tx, batchID)
-	if err != nil {
-		return nil, err
-	}
-
-	user, err := s.userRepo.FindByIDTx(tx, body.UserID)
-	if err != nil {
-		return nil, err
-	}
-
-	if !policies.CanBeAssignedAsTeacher(user) {
-		return nil, fmt.Errorf("user bukan teacher")
-	}
-
-	// Cek apakah user sudah jadi teacher di batch ini
-	exists, err := s.repo.IsTeacherAssigned(batchID, body.UserID)
-	if err != nil {
-		return nil, err
-	}
-	if exists {
-		return nil, fmt.Errorf("user sudah jadi teacher di batch ini")
-	}
-
-	var batch models.BatchTeacher
-	if err := copier.Copy(&batch, body); err != nil {
-		return nil, err
-	}
-
-	batch.BatchID = batchID
-
-	if err := s.repo.CreateBatchTeacherTx(tx, &batch); err != nil {
-		return nil, err
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		return nil, err
-	}
-
-	return user, nil
-}
-
-// GetTeacherInBatch get teacher in batch by batch id
-func (s *BatchService) GetTeacherInBatch(batchID uuid.UUID, opts utils.QueryOptions) ([]models.User, int64, error) {
-	if _, err := s.repo.FindByID(batchID); err != nil {
-		return nil, 0, err
-	}
-
-	users, total, err := s.repo.GetAllTeacherInBatch(batchID, opts)
-	if err != nil {
-		return nil, 0, err
-	}
-	return users, total, nil
-}
-
-// DeleteTeacherFromBatch deletes a teacher from a batch
-func (s *BatchService) DeleteTeacherFromBatch(batchID uuid.UUID, userID uuid.UUID) error {
-	tx := s.db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-	defer tx.Rollback()
-
-	// Optional: cek dulu apakah ada batch-nya
-	_, err := s.repo.FindBatchTeacherByBatchIDAndUserIDTx(tx, batchID, userID)
-	if err != nil {
-		return err
-	}
-
-	// Hapus batch (images akan ikut terhapus karena cascade)
-	if err := s.repo.DeleteTeacherByIDTx(tx, batchID, userID); err != nil {
-		return err
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // GetBatchByCourseSlug is function for get all batches by course slug
 func (s *BatchService) GetBatchByCourseSlug(courseID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error) {
 	batches, total, err := s.repo.GetAllFilteredBatchesByCourseSlug(courseID, opts)
@@ -287,4 +190,14 @@ func (s *BatchService) GetBatchByCourseSlug(courseID uuid.UUID, opts utils.Query
 		return nil, 0, err
 	}
 	return batches, total, nil
+}
+
+// GetBatchesPurchasedByUser is service for get batches where the user has purchased
+func (s *BatchService) GetBatchesPurchasedByUser(userID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error) {
+	return s.repo.GetBatchesByUserPurchaseFiltered(userID, opts)
+}
+
+// GetBatchesTaughtByGuru is service for get batches where teacher was taughted
+func (s *BatchService) GetBatchesTaughtByGuru(guruID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error) {
+	return s.repo.GetBatchesByGuruMeetingRelationFiltered(guruID, opts)
 }
