@@ -19,6 +19,11 @@ func NewUserRepository(db *gorm.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
+// WithTx running with transaction
+func (r *UserRepository) WithTx(tx *gorm.DB) *UserRepository {
+	return &UserRepository{db: tx}
+}
+
 // FindAllFiltered retrieves all users with optional filters, sorting, and pagination
 func (r *UserRepository) FindAllFiltered(opts utils.QueryOptions) ([]models.User, int64, error) {
 	validSortFields, err := utils.GetValidColumns(r.db, &models.User{}, &models.Profile{})
@@ -71,10 +76,19 @@ func (r *UserRepository) FindByID(userID uuid.UUID) (*models.User, error) {
 	return &user, nil
 }
 
+// FindByIDs is get all users in ids
+func (r *UserRepository) FindByIDs(userIDs []uuid.UUID) ([]models.User, error) {
+	var users []models.User
+	if err := r.db.Where("id IN ?", userIDs).Find(&users).Error; err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
 // FindByIDTx retireves
 func (r *UserRepository) FindByIDTx(db *gorm.DB, userID uuid.UUID) (*models.User, error) {
 	var user models.User
-	if err := db.Where("id = ?", userID).First(&user).Error; err != nil {
+	if err := db.Preload("Profile").Where("id = ?", userID).First(&user).Error; err != nil {
 		return nil, err
 	}
 	return &user, nil

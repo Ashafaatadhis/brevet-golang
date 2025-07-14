@@ -31,7 +31,9 @@ func FormatValidationError(errs validator.ValidationErrors) map[string]string {
 		case "role_type":
 			msg = fmt.Sprintf("%s harus salah satu dari: siswa, guru, admin", field)
 		case "day_type":
-			msg = fmt.Sprintf("%s harus salah satu dari: Monday, Tuesday, ..., Sunday", field)
+			msg = fmt.Sprintf("%s harus salah satu dari: monday, tuesday, ..., sunday", field)
+		case "meeting_type":
+			msg = fmt.Sprintf("%s harus salah satu dari: basic, exam", field)
 		case "course_type":
 			msg = fmt.Sprintf("%s harus salah satu dari: online, offline", field)
 		default:

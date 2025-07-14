@@ -130,6 +130,36 @@ func DayTypeValidator(fl validator.FieldLevel) bool {
 	}
 }
 
+// MeetingTypeValidator checks if meeting value is valid
+func MeetingTypeValidator(fl validator.FieldLevel) bool {
+	field := fl.Field()
+
+	// Kalau nil, anggap valid (tidak wajib)
+	if field.Kind() == reflect.Ptr {
+		if field.IsNil() {
+			return true
+		}
+	}
+
+	var val string
+
+	// Ambil nilai string dari pointer atau value biasa
+	if field.Kind() == reflect.Ptr {
+		val = field.Elem().String()
+	} else if field.Kind() == reflect.String {
+		val = field.String()
+	} else {
+		return false
+	}
+
+	switch models.MeetingType(val) {
+	case models.BasicMeeting, models.ExamMeeting:
+		return true
+	default:
+		return false
+	}
+}
+
 // BirthDateValidator validates that a birth date is not in the future
 func BirthDateValidator(fl validator.FieldLevel) bool {
 	field := fl.Field()

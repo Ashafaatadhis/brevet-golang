@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"brevet-api/dto"
+	"brevet-api/models"
 	"brevet-api/services"
 	"brevet-api/utils"
 
@@ -164,77 +165,6 @@ func (ctrl *BatchController) DeleteBatch(c *fiber.Ctx) error {
 	return utils.SuccessResponse(c, fiber.StatusOK, "Batch deleted successfully", nil)
 }
 
-// ASSIGN TEACHER TO BATCH
-
-// AddTeacherToBatch adds a teacher to a batch
-func (ctrl *BatchController) AddTeacherToBatch(c *fiber.Ctx) error {
-	body := c.Locals("body").(*dto.CreateBatchTeacherRequest)
-
-	batchIDParam := c.Params("batchID")
-	batchID, err := uuid.Parse(batchIDParam)
-	if err != nil {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
-	}
-
-	user, err := ctrl.batchService.AddTeacherToBatch(batchID, body)
-	if err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to add teacher to batch", err.Error())
-	}
-
-	var userResponse dto.UserResponse
-	if copyErr := copier.Copy(&userResponse, user); copyErr != nil {
-		return utils.ErrorResponse(c, 500, "Failed to map batch data", copyErr.Error())
-	}
-
-	return utils.SuccessResponse(c, 201, "Sukses membuat batch", userResponse)
-}
-
-// GetTeachersByBatch is represent get teacher by batch
-func (ctrl *BatchController) GetTeachersByBatch(c *fiber.Ctx) error {
-	batchIDParam := c.Params("batchID")
-	batchID, err := uuid.Parse(batchIDParam)
-	if err != nil {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
-	}
-
-	opts := utils.ParseQueryOptions(c)
-
-	teachers, total, err := ctrl.batchService.GetTeacherInBatch(batchID, opts)
-	if err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch teachers", err.Error())
-	}
-
-	var teachersResponse []dto.UserResponse
-	if copyErr := copier.Copy(&teachersResponse, teachers); copyErr != nil {
-		return utils.ErrorResponse(c, 500, "Failed to map teacher data", copyErr.Error())
-	}
-
-	meta := utils.BuildPaginationMeta(total, opts.Limit, opts.Page)
-	return utils.SuccessWithMeta(c, fiber.StatusOK, "Teachers fetched", teachersResponse, meta)
-}
-
-// RemoveTeacherFromBatch is controller for remove teacher from batch
-func (ctrl *BatchController) RemoveTeacherFromBatch(c *fiber.Ctx) error {
-	batchIDParam := c.Params("batchID")
-	batchID, err := uuid.Parse(batchIDParam)
-	if err != nil {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
-	}
-
-	userIDParam := c.Params("userID")
-	userID, err := uuid.Parse(userIDParam)
-	if err != nil {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
-	}
-
-	if err := ctrl.batchService.DeleteTeacherFromBatch(batchID, userID); err != nil {
-		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to delete teacher from batch", err.Error())
-	}
-
-	return utils.SuccessResponse(c, fiber.StatusOK, "Teacher in batch deleted successfully", nil)
-
-}
-
 // GetBatchByCourseSlug this function for get batch by course slug
 func (ctrl *BatchController) GetBatchByCourseSlug(c *fiber.Ctx) error {
 	courseSlug := c.Params("courseSlug")
@@ -276,4 +206,54 @@ func (ctrl *BatchController) GetBatchByCourseSlug(c *fiber.Ctx) error {
 
 	meta := utils.BuildPaginationMeta(total, opts.Limit, opts.Page)
 	return utils.SuccessWithMeta(c, fiber.StatusOK, "Batches fetched", batchesResponse, meta)
+}
+
+// GetMyBatches this function for mybatches controller
+func (ctrl *BatchController) GetMyBatches(c *fiber.Ctx) error {
+	user := c.Locals("user").(*utils.Claims)
+	opts := utils.ParseQueryOptions(c)
+
+	var batches []models.Batch
+	var total int64
+	var err error
+
+	switch user.Role {
+	case string(models.RoleTypeSiswa):
+		batches, total, err = ctrl.batchService.GetBatchesPurchasedByUser(user.UserID, opts)
+	case string(models.RoleTypeGuru):
+		batches, total, err = ctrl.batchService.GetBatchesTaughtByGuru(user.UserID, opts)
+	default:
+		return utils.ErrorResponse(c, fiber.StatusForbidden, "Akses ditolak", "Hanya siswa dan guru yang dapat melihat batch ini")
+	}
+
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal mengambil data batch", err.Error())
+	}
+
+	var batchesResponse []dto.BatchResponse
+
+	// Loop dan map manual
+	for _, batch := range batches {
+		var res dto.BatchResponse
+
+		if err := copier.CopyWithOption(&res, batch, copier.Option{
+			IgnoreEmpty: true,
+			DeepCopy:    true,
+		}); err != nil {
+			return utils.ErrorResponse(c, 500, "Failed to map batch data", err.Error())
+		}
+
+		if err := copier.CopyWithOption(&res.Days, batch.BatchDays, copier.Option{
+			IgnoreEmpty: true,
+			DeepCopy:    true,
+		}); err != nil {
+			return utils.ErrorResponse(c, 500, "Failed to map batch data", err.Error())
+		}
+
+		batchesResponse = append(batchesResponse, res)
+	}
+
+	meta := utils.BuildPaginationMeta(total, opts.Limit, opts.Page)
+
+	return utils.SuccessWithMeta(c, fiber.StatusOK, "Batch berhasil diambil", batchesResponse, meta)
 }

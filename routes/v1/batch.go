@@ -21,6 +21,13 @@ func RegisterBatchRoute(r fiber.Router, db *gorm.DB) {
 	batchService := services.NewBatchService(batchRepository, userRepository, courseRepository, db, fileService)
 	batchController := controllers.NewBatchController(batchService, courseService, db)
 
+	// ==================================
+	// 				Meeting
+	// ==================================
+	meetingRepo := repository.NewMeetingRepository(db)
+	meetingService := services.NewMeetingService(meetingRepo, userRepository, db)
+	meetingController := controllers.NewMeetingController(meetingService, db)
+
 	r.Get("/", batchController.GetAllBatches)
 	r.Get("/:slug", batchController.GetBatchBySlug)
 	// POST /v1/courses/:courseId/batches
@@ -36,16 +43,15 @@ func RegisterBatchRoute(r fiber.Router, db *gorm.DB) {
 		batchController.DeleteBatch,
 	)
 
+	r.Post("/:batchID/meetings", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"admin"}),
+		middlewares.ValidateBody[dto.CreateMeetingRequest](),
+		meetingController.CreateMeeting)
+
 	// THIS IS ROUTE FOR ASSIGN TEACHER TO BATCH
 	// 	Method	Route	Deskripsi
 	// POST	/batches/:batchID/teachers	Tambah teacher ke batch tertentu
 	// GET	/batches/:batchID/teachers	List semua teacher dalam satu batch
 	// DELETE	/batches/:batchID/teachers/:userID	Hapus teacher tertentu dari
 
-	r.Post("/:batchID/teachers", middlewares.RequireAuth(),
-		middlewares.RequireRole([]string{"admin"}),
-		middlewares.ValidateBody[dto.CreateBatchTeacherRequest](), batchController.AddTeacherToBatch)
-	r.Get("/:batchID/teachers", batchController.GetTeachersByBatch)
-	r.Delete("/:batchID/teachers/:userID", middlewares.RequireAuth(),
-		middlewares.RequireRole([]string{"admin"}), batchController.RemoveTeacherFromBatch)
 }
