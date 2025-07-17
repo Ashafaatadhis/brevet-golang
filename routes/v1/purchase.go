@@ -2,6 +2,7 @@ package v1
 
 import (
 	"brevet-api/controllers"
+	"brevet-api/dto"
 	"brevet-api/middlewares"
 	"brevet-api/repository"
 	"brevet-api/services"
@@ -22,5 +23,9 @@ func RegisterPurchaseRoutes(r fiber.Router, db *gorm.DB) {
 
 	r.Get("/:id", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin"}), purchaseController.GetPurchaseByID)
+	r.Patch("/:id/status", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"admin"}),
+		middlewares.ValidateBody[dto.UpdateStatusPayment](),
+		purchaseController.UpdateStatusPayment)
 
 }

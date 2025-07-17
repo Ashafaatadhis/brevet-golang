@@ -43,3 +43,8 @@ type PurchaseResponse struct {
 type PayPurchaseRequest struct {
 	PaymentProofURL string `json:"payment_proof_url" validate:"required"`
 }
+
+// UpdateStatusPayment struct for update status payment
+type UpdateStatusPayment struct {
+	PaymentStatus models.PaymentStatus `json:"payment_status" validate:"required,payment_status_type"`
+}

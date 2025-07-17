@@ -1,6 +1,7 @@
 package services
 
 import (
+	"brevet-api/dto"
 	"brevet-api/models"
 	"brevet-api/repository"
 	"brevet-api/utils"
@@ -115,6 +116,32 @@ func (s *PurchaseService) CreatePurchase(userID uuid.UUID, batchID uuid.UUID) (*
 
 	return purchaseWithPrice, nil
 
+}
+
+// UpdateStatusPayment verification payment service
+func (s *PurchaseService) UpdateStatusPayment(purchaseID uuid.UUID, body *dto.UpdateStatusPayment) (*models.Purchase, error) {
+	purchase, err := s.purchaseRepo.GetPurchaseByID(purchaseID)
+	if err != nil {
+		return nil, fmt.Errorf("data tidak ditemukan: %w", err)
+	}
+
+	if purchase.PaymentStatus != models.WaitingConfirmation {
+		return nil, fmt.Errorf("status pembayaran tidak bisa diverifikasi")
+	}
+
+	purchase.PaymentStatus = body.PaymentStatus
+
+	err = s.purchaseRepo.Update(purchase)
+	if err != nil {
+		return nil, err
+	}
+
+	purchaseWithPrice, err := s.purchaseRepo.GetPurchaseByID(purchase.ID)
+	if err != nil {
+		return nil, fmt.Errorf("Gagal mengambil ulang purchase: %w", err)
+	}
+
+	return purchaseWithPrice, nil
 }
 
 // PayPurchase is for pay purchase
