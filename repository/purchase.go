@@ -26,11 +26,8 @@ func (r *PurchaseRepository) WithTx(tx *gorm.DB) *PurchaseRepository {
 
 // GetAllFilteredPurchases retrieves all purchases with pagination and filtering options
 func (r *PurchaseRepository) GetAllFilteredPurchases(opts utils.QueryOptions) ([]models.Purchase, int64, error) {
-	validSortFields, err := utils.GetValidColumns(r.db, &models.Purchase{}, &models.User{}, &models.Batch{}, &models.Price{})
-	if err != nil {
-		return nil, 0, err
-	}
-
+	validSortFields := utils.GetValidColumnsFromStruct(&models.Purchase{}, &models.User{}, &models.Batch{}, &models.Price{})
+	fmt.Print(validSortFields, "TAI")
 	sort := opts.Sort
 	if !validSortFields[sort] {
 		sort = "id"
@@ -52,7 +49,7 @@ func (r *PurchaseRepository) GetAllFilteredPurchases(opts utils.QueryOptions) ([
 	db.Count(&total)
 
 	var purchases []models.Purchase
-	err = db.Order(fmt.Sprintf("%s %s", sort, order)).
+	err := db.Order(fmt.Sprintf("%s %s", sort, order)).
 		Limit(opts.Limit).
 		Offset(opts.Offset).
 		Preload("User").
