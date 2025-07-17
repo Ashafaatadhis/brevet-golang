@@ -25,6 +25,8 @@ type PurchaseResponse struct {
 
 	Batch *BatchResponse `json:"batch,omitempty"`
 
+	PaymentProof *string `json:"payment_proof"`
+
 	Price *struct {
 		ID        uuid.UUID        `json:"id"`
 		GroupType models.GroupType `json:"group_type"`
