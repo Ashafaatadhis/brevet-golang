@@ -138,6 +138,29 @@ func (ctrl *PurchaseController) CreatePurchase(c *fiber.Ctx) error {
 	return utils.SuccessResponse(c, 201, "Purchase created successfully", purchaseResponse)
 }
 
+// UpdateStatusPayment untuk verify pembayaran
+func (ctrl *PurchaseController) UpdateStatusPayment(c *fiber.Ctx) error {
+	idParam := c.Params("id")
+	id, err := uuid.Parse(idParam)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "ID tidak valid", err.Error())
+	}
+
+	body := c.Locals("body").(*dto.UpdateStatusPayment)
+
+	purchase, err := ctrl.purchaseService.UpdateStatusPayment(id, body)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Gagal verifikasi pembayaran", err.Error())
+	}
+
+	var purchaseResponse dto.PurchaseResponse
+	if copyErr := copier.Copy(&purchaseResponse, purchase); copyErr != nil {
+		return utils.ErrorResponse(c, 500, "Failed to map purchase data", copyErr.Error())
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Pembayaran berhasil diverifikasi", purchaseResponse)
+}
+
 // Pay is controller for paying purchase
 func (ctrl *PurchaseController) Pay(c *fiber.Ctx) error {
 	body := c.Locals("body").(*dto.PayPurchaseRequest)

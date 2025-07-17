@@ -160,6 +160,36 @@ func MeetingTypeValidator(fl validator.FieldLevel) bool {
 	}
 }
 
+// PaymentStatusValidator checks if payment status value is valid
+func PaymentStatusValidator(fl validator.FieldLevel) bool {
+	field := fl.Field()
+
+	// Kalau nil, anggap valid (tidak wajib)
+	if field.Kind() == reflect.Ptr {
+		if field.IsNil() {
+			return true
+		}
+	}
+
+	var val string
+
+	// Ambil nilai string dari pointer atau value biasa
+	if field.Kind() == reflect.Ptr {
+		val = field.Elem().String()
+	} else if field.Kind() == reflect.String {
+		val = field.String()
+	} else {
+		return false
+	}
+
+	switch models.PaymentStatus(val) {
+	case models.Cancelled, models.Expired, models.Paid, models.Pending, models.Rejected, models.WaitingConfirmation:
+		return true
+	default:
+		return false
+	}
+}
+
 // BirthDateValidator validates that a birth date is not in the future
 func BirthDateValidator(fl validator.FieldLevel) bool {
 	field := fl.Field()
