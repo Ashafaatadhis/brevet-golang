@@ -108,7 +108,13 @@ func (s *PurchaseService) CreatePurchase(userID uuid.UUID, batchID uuid.UUID) (*
 		return nil, err
 	}
 
-	return purchase, nil
+	purchaseWithPrice, err := s.purchaseRepo.GetPurchaseByID(purchase.ID)
+	if err != nil {
+		return nil, fmt.Errorf("Gagal mengambil ulang purchase: %w", err)
+	}
+
+	return purchaseWithPrice, nil
+
 }
 
 // PayPurchase is for pay purchase
@@ -143,7 +149,13 @@ func (s *PurchaseService) PayPurchase(userID uuid.UUID, purchaseID uuid.UUID, pr
 		return nil, err
 	}
 
-	return purchase, nil
+	purchaseWithPrice, err := s.purchaseRepo.GetPurchaseByID(purchase.ID)
+	if err != nil {
+		return nil, fmt.Errorf("Gagal mengambil ulang purchase: %w", err)
+	}
+
+	return purchaseWithPrice, nil
+
 }
 
 // CancelPurchase is using for cancel purchase
@@ -172,5 +184,11 @@ func (s *PurchaseService) CancelPurchase(userID, purchaseID uuid.UUID) (*models.
 		return nil, err
 	}
 
-	return purchase, nil
+	purchaseWithPrice, err := s.purchaseRepo.GetPurchaseByID(purchase.ID)
+	if err != nil {
+		return nil, fmt.Errorf("Gagal mengambil ulang purchase: %w", err)
+	}
+
+	return purchaseWithPrice, nil
+
 }

@@ -41,6 +41,7 @@ func main() {
 
 	db.Migrator().DropTable(&models.Purchase{})
 	db.Migrator().DropTable(&models.Meeting{})
+	db.Migrator().DropTable(&models.MeetingTeacher{})
 	err := db.AutoMigrate(
 		&models.Purchase{},
 		&models.Meeting{},
