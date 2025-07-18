@@ -5,6 +5,7 @@ import (
 	"brevet-api/dto"
 	"brevet-api/services"
 	"brevet-api/utils"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -61,12 +62,19 @@ func (ctrl *AuthController) Login(c *fiber.Ctx) error {
 	env := config.GetEnv("APP_ENV", "development")
 	isSecure := env == "production"
 
+	ttlStr := config.GetEnv("REFRESH_TOKEN_EXPIRY_HOURS", "24")
+	ttl, err := strconv.Atoi(ttlStr)
+	if err != nil || ttl <= 0 {
+		ttl = 24
+	}
+
 	c.Cookie(&fiber.Cookie{
 		Name:     "refresh_token",
 		Value:    result.RefreshToken,
 		HTTPOnly: true,
 		Secure:   isSecure,
 		SameSite: "None",
+		Expires:  time.Now().Add(time.Duration(ttl) * time.Hour),
 		Path:     "/",
 	})
 
