@@ -17,6 +17,8 @@ type BatchResponse struct {
 	BatchThumbnail *string   `json:"batch_thumbnail"`
 	StartAt        time.Time `json:"start_at"`
 	EndAt          time.Time `json:"end_at"`
+	StartTime      string    `json:"start_time"` // HH:mm
+	EndTime        string    `json:"end_time"`
 	Room           string    `json:"room"`
 	Quota          int       `json:"quota"`
 	Days           []*struct {
@@ -37,6 +39,8 @@ type CreateBatchRequest struct {
 	BatchThumbnail *string           `json:"batch_thumbnail,omitempty"`
 	StartAt        time.Time         `json:"start_at" validate:"required"`
 	EndAt          time.Time         `json:"end_at" validate:"required"`
+	StartTime      string            `json:"start_time" validate:"required"`                        // HH:mm
+	EndTime        string            `json:"end_time" validate:"required"`                          // HH:mm
 	Days           []models.DayType  `json:"days" validate:"required,min=1,dive,required,day_type"` // dive = validasi tiap elemen array
 	Room           string            `json:"room" validate:"required"`
 	Quota          int               `json:"quota" validate:"required,min=1"`
@@ -50,6 +54,8 @@ type UpdateBatchRequest struct {
 	BatchThumbnail *string            `json:"batch_thumbnail,omitempty" validate:"omitempty"`
 	StartAt        *time.Time         `json:"start_at,omitempty" validate:"omitempty"`
 	EndAt          *time.Time         `json:"end_at,omitempty" validate:"omitempty"`
+	StartTime      *string            `json:"start_time" validate:"omitempty"` // HH:mm
+	EndTime        *string            `json:"end_time" validate:"omitempty"`   // HH:mm
 	Days           *[]models.DayType  `json:"days,omitempty" validate:"omitempty,min=1,dive,required,day_type"`
 	Room           *string            `json:"room,omitempty" validate:"omitempty"`
 	Quota          *int               `json:"quota,omitempty" validate:"omitempty,min=1"`

@@ -5,6 +5,8 @@ import (
 	"brevet-api/models"
 	"brevet-api/repository"
 	"brevet-api/utils"
+	"fmt"
+	"time"
 
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/google/uuid"
@@ -66,8 +68,20 @@ func (s *BatchService) CreateBatch(courseID uuid.UUID, body *dto.CreateBatchRequ
 
 	slug := utils.GenerateUniqueSlug(body.Title, s.repo)
 
+	// Parse waktu dari string ke time.Time
+	parsedStart, err := time.Parse("15:04:05Z07:00", body.StartTime)
+	if err != nil {
+		return nil, err
+	}
+	parsedEnd, err := time.Parse("15:04:05Z07:00", body.EndTime)
+	if err != nil {
+		return nil, err
+	}
+
 	batch.Slug = slug
 	batch.CourseID = courseID
+	batch.StartTime = parsedStart.Format("15:04:05Z07:00")
+	batch.EndTime = parsedEnd.Format("15:04:05Z07:00")
 
 	// Simpan batch utama
 	if err := s.repo.CreateTx(tx, &batch); err != nil {
@@ -121,6 +135,23 @@ func (s *BatchService) UpdateBatch(id uuid.UUID, body *dto.UpdateBatchRequest) (
 	// 	slug := utils.GenerateUniqueSlug(*body.Title, s.repo)
 	// 	batch.Slug = slug
 	// }
+
+	// Parse waktu dari string ke time.Time
+	if body.StartTime != nil {
+		parsedStart, err := time.Parse("15:04:05Z07:00", *body.StartTime)
+		if err != nil {
+			return nil, fmt.Errorf("invalid start_time: %w", err)
+		}
+		batch.StartTime = parsedStart.Format("15:04:05Z07:00")
+	}
+
+	if body.EndTime != nil {
+		parsedEnd, err := time.Parse("15:04:05Z07:00", *body.EndTime)
+		if err != nil {
+			return nil, fmt.Errorf("invalid end_time: %w", err)
+		}
+		batch.EndTime = parsedEnd.Format("15:04:05Z07:00")
+	}
 
 	if err := s.repo.UpdateTx(tx, batch); err != nil {
 		return nil, err

@@ -14,12 +14,17 @@ type Batch struct {
 	Title          string    `gorm:"type:varchar(255);not null"`
 	Description    string    `gorm:"type:text"`
 	BatchThumbnail string    `gorm:"type:varchar(255)"`
-	StartAt        time.Time `gorm:"type:timestamp;not null"`
-	EndAt          time.Time `gorm:"type:timestamp;not null"`
-	Room           string    `gorm:"type:varchar(255);not null"`
-	Quota          int       `gorm:"not null"`
-	CreatedAt      time.Time `gorm:"autoCreateTime"`
-	UpdatedAt      time.Time `gorm:"autoUpdateTime"`
+	StartAt        time.Time `gorm:"type:timestamptz;not null"`
+	EndAt          time.Time `gorm:"type:timestamptz;not null"`
+	// StartTime      time.Time `gorm:"type:time;not null"`
+	// EndTime        time.Time `gorm:"type:time;not null"`
+	StartTime string `gorm:"type:time with time zone;default:'08:00:00+07';not null"`
+	EndTime   string `gorm:"type:time with time zone;default:'10:00:00+07';not null"`
+
+	Room      string    `gorm:"type:varchar(255);not null"`
+	Quota     int       `gorm:"not null"`
+	CreatedAt time.Time `gorm:"autoCreateTime"`
+	UpdatedAt time.Time `gorm:"autoUpdateTime"`
 
 	BatchDays  []BatchDay `gorm:"foreignKey:BatchID;constraint:OnDelete:CASCADE"`
 	Course     Course     `gorm:"foreignKey:CourseID;constraint:OnDelete:CASCADE"`
