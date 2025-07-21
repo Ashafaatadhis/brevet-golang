@@ -69,19 +69,19 @@ func (s *BatchService) CreateBatch(courseID uuid.UUID, body *dto.CreateBatchRequ
 	slug := utils.GenerateUniqueSlug(body.Title, s.repo)
 
 	// Parse waktu dari string ke time.Time
-	parsedStart, err := time.Parse("15:04:05Z07:00", body.StartTime)
+	parsedStart, err := time.Parse("15:04", body.StartTime)
 	if err != nil {
 		return nil, err
 	}
-	parsedEnd, err := time.Parse("15:04:05Z07:00", body.EndTime)
+	parsedEnd, err := time.Parse("15:04", body.EndTime)
 	if err != nil {
 		return nil, err
 	}
 
 	batch.Slug = slug
 	batch.CourseID = courseID
-	batch.StartTime = parsedStart.Format("15:04:05Z07:00")
-	batch.EndTime = parsedEnd.Format("15:04:05Z07:00")
+	batch.StartTime = parsedStart
+	batch.EndTime = parsedEnd
 
 	// Simpan batch utama
 	if err := s.repo.CreateTx(tx, &batch); err != nil {
@@ -138,19 +138,19 @@ func (s *BatchService) UpdateBatch(id uuid.UUID, body *dto.UpdateBatchRequest) (
 
 	// Parse waktu dari string ke time.Time
 	if body.StartTime != nil {
-		parsedStart, err := time.Parse("15:04:05Z07:00", *body.StartTime)
+		parsedStart, err := time.Parse("15:04", *body.StartTime)
 		if err != nil {
 			return nil, fmt.Errorf("invalid start_time: %w", err)
 		}
-		batch.StartTime = parsedStart.Format("15:04:05Z07:00")
+		batch.StartTime = parsedStart
 	}
 
 	if body.EndTime != nil {
-		parsedEnd, err := time.Parse("15:04:05Z07:00", *body.EndTime)
+		parsedEnd, err := time.Parse("15:04", *body.EndTime)
 		if err != nil {
 			return nil, fmt.Errorf("invalid end_time: %w", err)
 		}
-		batch.EndTime = parsedEnd.Format("15:04:05Z07:00")
+		batch.EndTime = parsedEnd
 	}
 
 	if err := s.repo.UpdateTx(tx, batch); err != nil {
