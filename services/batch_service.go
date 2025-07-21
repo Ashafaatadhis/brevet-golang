@@ -80,8 +80,8 @@ func (s *BatchService) CreateBatch(courseID uuid.UUID, body *dto.CreateBatchRequ
 
 	batch.Slug = slug
 	batch.CourseID = courseID
-	batch.StartTime = parsedStart
-	batch.EndTime = parsedEnd
+	batch.StartTime = parsedStart.Format("15:04")
+	batch.EndTime = parsedEnd.Format("15:04")
 
 	// Simpan batch utama
 	if err := s.repo.CreateTx(tx, &batch); err != nil {
@@ -142,7 +142,7 @@ func (s *BatchService) UpdateBatch(id uuid.UUID, body *dto.UpdateBatchRequest) (
 		if err != nil {
 			return nil, fmt.Errorf("invalid start_time: %w", err)
 		}
-		batch.StartTime = parsedStart
+		batch.StartTime = parsedStart.Format("15:04")
 	}
 
 	if body.EndTime != nil {
@@ -150,7 +150,7 @@ func (s *BatchService) UpdateBatch(id uuid.UUID, body *dto.UpdateBatchRequest) (
 		if err != nil {
 			return nil, fmt.Errorf("invalid end_time: %w", err)
 		}
-		batch.EndTime = parsedEnd
+		batch.EndTime = parsedEnd.Format("15:04")
 	}
 
 	if err := s.repo.UpdateTx(tx, batch); err != nil {
