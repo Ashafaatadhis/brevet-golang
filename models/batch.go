@@ -18,8 +18,8 @@ type Batch struct {
 	EndAt          time.Time `gorm:"type:timestamptz;not null"`
 	// StartTime      time.Time `gorm:"type:time;not null"`
 	// EndTime        time.Time `gorm:"type:time;not null"`
-	StartTime time.Time `gorm:"type:time without time zone;default:'08:00';not null"`
-	EndTime   time.Time `gorm:"type:time without time zone;default:'10:00';not null"`
+	StartTime string `gorm:"type:time without time zone;default:'08:00:00';not null"`
+	EndTime   string `gorm:"type:time without time zone;default:'10:00:00';not null"`
 
 	Room      string    `gorm:"type:varchar(255);not null"`
 	Quota     int       `gorm:"not null"`
