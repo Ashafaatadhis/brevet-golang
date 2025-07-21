@@ -38,18 +38,15 @@ func main() {
 	// }
 
 	// fmt.Println("All tables dropped successfully.")
-
-	db.Migrator().DropTable(&models.Purchase{})
-	db.Migrator().DropTable(&models.Meeting{})
-	db.Migrator().DropTable(&models.MeetingTeacher{})
+	// db.Migrator().DropTable(&models.Batch{})
 	err := db.AutoMigrate(
-		&models.Purchase{},
-		&models.Meeting{},
-		&models.User{},
-		&models.MeetingTeacher{},
+		// &models.Purchase{},
+		// &models.Meeting{},
+		// &models.User{},
+		// &models.MeetingTeacher{},
 		// &models.Course{},
 		// &models.CourseImage{},
-		// &models.Batch{},
+		&models.Batch{},
 		// &models.BatchDay{},
 	// &models.Price{},
 	// &models.User{},
