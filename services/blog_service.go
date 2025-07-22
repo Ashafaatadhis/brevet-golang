@@ -44,109 +44,109 @@ func (s *BlogService) GetBlogBySlug(slug string) (*models.Blog, error) {
 
 // CreateBlog creates a new blog with the provided details
 func (s *BlogService) CreateBlog(body *dto.CreateBlogRequest) (*models.Blog, error) {
-	tx := s.db.Begin()
-
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-	defer tx.Rollback()
-
 	var blog models.Blog
-	copier.Copy(&blog, body)
 
-	slug := utils.GenerateUniqueSlug(body.Title, s.repo)
+	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
+		copier.Copy(&blog, body)
+		slug := utils.GenerateUniqueSlug(body.Title, s.repo)
+		blog.Slug = slug
 
-	blog.Slug = slug
+		if err := s.repo.WithTx(tx).Create(&blog); err != nil {
+			return err
+		}
+		return nil
+	})
 
-	if err := s.repo.CreateTx(tx, &blog); err != nil {
-		return nil, err
-	}
-
-	if err := tx.Commit().Error; err != nil {
+	if err != nil {
 		return nil, err
 	}
 
 	return &blog, nil
+
 }
 
 // UpdateBlog updates an existing blog with the provided details
 func (s *BlogService) UpdateBlog(id uuid.UUID, body *dto.UpdateBlogRequest) (*models.Blog, error) {
-	tx := s.db.Begin()
+	var blog models.Blog
+	var oldImage string
+	var shouldDelete bool
 
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
+	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
+		blogPtr, err := s.repo.WithTx(tx).FindByID(id)
+		if err != nil {
+			return err
 		}
-	}()
-	defer tx.Rollback()
 
-	blog, err := s.repo.FindByID(tx, id)
+		blog = utils.Safe(blogPtr, models.Blog{})
+		oldImage = blog.Image
+
+		if err := copier.CopyWithOption(&blog, body, copier.Option{
+			IgnoreEmpty: true,
+			DeepCopy:    true,
+		}); err != nil {
+			return err
+		}
+
+		if err := s.repo.WithTx(tx).Update(&blog); err != nil {
+			return err
+		}
+
+		// ✅ Tandai kalau gambar berubah, tapi jangan hapus dulu
+		if oldImage != "" && oldImage != blog.Image {
+			shouldDelete = true
+		}
+
+		return nil
+	})
+
+	// Setelah TX berhasil hapus file
+	if err == nil && shouldDelete {
+		if delErr := s.fileService.DeleteFile(oldImage); delErr != nil {
+			log.Errorf("Gagal hapus file %s: %v", oldImage, delErr)
+		}
+	}
+
 	if err != nil {
 		return nil, err
 	}
-
-	oldImage := blog.Image
-
-	// Copy field yang tidak nil saja
-	if err := copier.CopyWithOption(blog, body, copier.Option{
-		IgnoreEmpty: true,
-		DeepCopy:    true,
-	}); err != nil {
-		return nil, err
-	}
-	if err := s.repo.UpdateTx(tx, blog); err != nil {
-		return nil, err
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		return nil, err
-	}
-
-	if body.Image != nil && *body.Image != "" && oldImage != *body.Image {
-		err = s.fileService.DeleteFile(oldImage) // error optional, bisa di-log
-		if err != nil {
-			// Log error tapi lanjut
-			log.Errorf("Gagal hapus file %s: %v", oldImage, err)
-		}
-	}
-
-	return blog, nil
-
+	return &blog, nil
 }
 
 // DeleteBlog deletes a blog by its ID
 func (s *BlogService) DeleteBlog(id uuid.UUID) error {
-	tx := s.db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
+	var blog models.Blog
+	var shouldDelete bool
+	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
+		var err error
+		blogPtr, err := s.repo.WithTx(tx).FindByID(id)
+		if err != nil {
+			return err
 		}
-	}()
-	defer tx.Rollback()
 
-	// Optional: cek dulu apakah ada blog-nya
-	blog, err := s.repo.FindByID(tx, id)
+		blog = utils.Safe(blogPtr, models.Blog{})
+
+		// Hapus blog (images akan ikut terhapus karena cascade)
+		if err := s.repo.WithTx(tx).DeleteByID(id); err != nil {
+			return err
+		}
+
+		if blog.Image != "" {
+			shouldDelete = true
+		}
+
+		return nil
+	})
+
+	if err == nil && shouldDelete {
+		// Hapus file gambar
+		if delErr := s.fileService.DeleteFile(blog.Image); delErr != nil {
+			log.Errorf("Gagal hapus file %s: %v", blog.Image, delErr)
+		}
+	}
+
 	if err != nil {
 		return err
 	}
-
-	// Hapus blog (images akan ikut terhapus karena cascade)
-	if err := s.repo.DeleteByIDTx(tx, id); err != nil {
-		return err
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		return err
-	}
-
-	// Hapus file gambar
-	err = s.fileService.DeleteFile(blog.Image)
-	if err != nil {
-		// Log error tapi lanjut
-		log.Errorf("Gagal hapus file %s: %v", blog.Image, err)
-	}
-
 	return nil
+
 }

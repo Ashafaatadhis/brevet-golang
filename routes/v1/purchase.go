@@ -15,7 +15,8 @@ import (
 func RegisterPurchaseRoutes(r fiber.Router, db *gorm.DB) {
 
 	purchaseRepo := repository.NewPurchaseRepository(db)
-	purchaseService := services.NewPurchaseService(purchaseRepo, db)
+	batchRepo := repository.NewBatchRepository(db)
+	purchaseService := services.NewPurchaseService(purchaseRepo, batchRepo, db)
 	purchaseController := controllers.NewPurchaseController(purchaseService, db)
 
 	r.Get("/", middlewares.RequireAuth(),

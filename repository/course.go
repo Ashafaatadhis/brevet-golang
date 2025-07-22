@@ -19,6 +19,11 @@ func NewCourseRepository(db *gorm.DB) *CourseRepository {
 	return &CourseRepository{db: db}
 }
 
+// WithTx running with transaction
+func (r *CourseRepository) WithTx(tx *gorm.DB) *CourseRepository {
+	return &CourseRepository{db: tx}
+}
+
 // GetAllFilteredCourses retrieves all courses with pagination and filtering options
 func (r *CourseRepository) GetAllFilteredCourses(opts utils.QueryOptions) ([]models.Course, int64, error) {
 	validSortFields, err := utils.GetValidColumns(r.db, &models.Course{})
@@ -70,33 +75,23 @@ func (r *CourseRepository) GetCourseBySlug(slug string) (*models.Course, error) 
 	return &course, nil
 }
 
-// CreateTx inserts a new course within a transaction
-func (r *CourseRepository) CreateTx(db *gorm.DB, course *models.Course) error {
-	return db.Create(course).Error
+// Create inserts a new course into the database
+func (r *CourseRepository) Create(course *models.Course) error {
+	return r.db.Create(course).Error
 }
 
-// CreateCourseImagesBulkTx inserts multiple course images into the database
-func (r *CourseRepository) CreateCourseImagesBulkTx(tx *gorm.DB, images []models.CourseImage) error {
+// CreateCourseImagesBulk inserts multiple course images into the database
+func (r *CourseRepository) CreateCourseImagesBulk(images []models.CourseImage) error {
 	if len(images) == 0 {
 		return nil
 	}
-	return tx.Create(&images).Error
+	return r.db.Create(&images).Error
 }
 
 // FindByIDWithImages retrieves a course by its ID along with its associated images
 func (r *CourseRepository) FindByIDWithImages(id uuid.UUID) (*models.Course, error) {
 	var course models.Course
 	err := r.db.Preload("CourseImages").First(&course, "id = ?", id).Error
-	if err != nil {
-		return nil, err
-	}
-	return &course, nil
-}
-
-// FindByIDWithImagesTx retrieves a course by its ID along with its associated images within a transaction
-func (r *CourseRepository) FindByIDWithImagesTx(db *gorm.DB, id uuid.UUID) (*models.Course, error) {
-	var course models.Course
-	err := db.Preload("CourseImages").First(&course, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -110,27 +105,27 @@ func (r *CourseRepository) IsSlugExists(slug string) bool {
 	return count > 0
 }
 
-// UpdateTx updates an existing course within a transaction
-func (r *CourseRepository) UpdateTx(tx *gorm.DB, course *models.Course) error {
-	return tx.Save(course).Error
+// Update updates an existing course
+func (r *CourseRepository) Update(course *models.Course) error {
+	return r.db.Save(course).Error
 }
 
 // DeleteCourseImagesByCourseID deletes all images associated with a course by its ID
-func (r *CourseRepository) DeleteCourseImagesByCourseID(tx *gorm.DB, courseID uuid.UUID) error {
-	return tx.Where("course_id = ?", courseID).Delete(&models.CourseImage{}).Error
+func (r *CourseRepository) DeleteCourseImagesByCourseID(courseID uuid.UUID) error {
+	return r.db.Where("course_id = ?", courseID).Delete(&models.CourseImage{}).Error
 }
 
 // FindByID retrieves a course by its ID
-func (r *CourseRepository) FindByID(db *gorm.DB, id uuid.UUID) (*models.Course, error) {
+func (r *CourseRepository) FindByID(id uuid.UUID) (*models.Course, error) {
 	var course models.Course
-	err := db.First(&course, "id = ?", id).Error
+	err := r.db.First(&course, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
 	return &course, nil
 }
 
-// DeleteByIDTx deletes a course by its ID within a transaction
-func (r *CourseRepository) DeleteByIDTx(tx *gorm.DB, id uuid.UUID) error {
-	return tx.Where("id = ?", id).Delete(&models.Course{}).Error
+// DeleteByID deletes a course by its ID
+func (r *CourseRepository) DeleteByID(id uuid.UUID) error {
+	return r.db.Where("id = ?", id).Delete(&models.Course{}).Error
 }

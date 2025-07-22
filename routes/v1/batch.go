@@ -25,7 +25,7 @@ func RegisterBatchRoute(r fiber.Router, db *gorm.DB) {
 	// 				Meeting
 	// ==================================
 	meetingRepo := repository.NewMeetingRepository(db)
-	meetingService := services.NewMeetingService(meetingRepo, userRepository, db)
+	meetingService := services.NewMeetingService(meetingRepo, batchRepository, userRepository, db)
 	meetingController := controllers.NewMeetingController(meetingService, db)
 
 	r.Get("/", batchController.GetAllBatches)
@@ -43,6 +43,9 @@ func RegisterBatchRoute(r fiber.Router, db *gorm.DB) {
 		batchController.DeleteBatch,
 	)
 
+	r.Get("/:batchSlug/meetings", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"admin"}),
+		meetingController.GetMeetingsByBatchSlug)
 	r.Post("/:batchID/meetings", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin"}),
 		middlewares.ValidateBody[dto.CreateMeetingRequest](),

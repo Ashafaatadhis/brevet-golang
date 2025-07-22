@@ -37,13 +37,21 @@ type PurchaseResponse struct {
 		UpdatedAt time.Time `json:"created_at"`
 	} `json:"price,omitempty"`
 
+	UniqueCode             int     `json:"unique_code"`               // contoh: 123
+	TransferAmount         float64 `json:"transfer_amount"`           // contoh: 1000123
+	BuyerBankAccountName   *string `json:"buyer_bank_account_name"`   // contoh: Adhis Mauliyahsa
+	BuyerBankAccountNumber *string `json:"buyer_bank_account_number"` // contoh: 1234567890
+	BuyerBankName          *string `json:"buyer_bank_name"`           // contoh: BRI
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // PayPurchaseRequest struct for pay purchase
 type PayPurchaseRequest struct {
-	PaymentProofURL string `json:"payment_proof_url" validate:"required"`
+	PaymentProofURL        string `json:"payment_proof_url" validate:"required"`
+	BuyerBankAccountName   string `json:"buyer_bank_account_name" validate:"required"`
+	BuyerBankAccountNumber string `json:"buyer_bank_account_number" validate:"required"`
 }
 
 // UpdateStatusPayment struct for update status payment

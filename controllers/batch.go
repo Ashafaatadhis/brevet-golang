@@ -37,7 +37,7 @@ func (ctrl *BatchController) GetAllBatches(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch batches", err.Error())
 	}
 
-	var batchesResponse []dto.BatchResponse
+	batchesResponse := make([]dto.BatchResponse, 0)
 
 	// Loop dan map manual
 	for _, batch := range batches {

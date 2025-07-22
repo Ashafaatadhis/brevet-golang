@@ -25,23 +25,28 @@ func NewAuthRepository(db *gorm.DB) *AuthRepository {
 	return &AuthRepository{db: db}
 }
 
+// WithTx running with transaction
+func (s *AuthRepository) WithTx(tx *gorm.DB) *AuthRepository {
+	return &AuthRepository{db: tx}
+}
+
 // IsEmailUnique checks if email is unique
-func (s *AuthRepository) IsEmailUnique(db *gorm.DB, email string) bool {
+func (s *AuthRepository) IsEmailUnique(email string) bool {
 	var user models.User
-	err := db.Where("email = ?", email).First(&user).Error
+	err := s.db.Where("email = ?", email).First(&user).Error
 	return errors.Is(err, gorm.ErrRecordNotFound)
 }
 
 // IsPhoneUnique checks if phone is unique
-func (s *AuthRepository) IsPhoneUnique(db *gorm.DB, phone string) bool {
+func (s *AuthRepository) IsPhoneUnique(phone string) bool {
 	var user models.User
-	err := db.Where("phone = ?", phone).First(&user).Error
+	err := s.db.Where("phone = ?", phone).First(&user).Error
 	return errors.Is(err, gorm.ErrRecordNotFound)
 }
 
 // CreateUser creates a new user in database
-func (s *AuthRepository) CreateUser(db *gorm.DB, user *models.User) error {
-	if err := db.Create(user).Error; err != nil {
+func (s *AuthRepository) CreateUser(user *models.User) error {
+	if err := s.db.Create(user).Error; err != nil {
 		return err
 	}
 	return nil

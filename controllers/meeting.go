@@ -43,6 +43,25 @@ func (ctrl *MeetingController) GetAllMeetings(c *fiber.Ctx) error {
 	return utils.SuccessWithMeta(c, fiber.StatusOK, "Meetings fetched", meetingResponse, meta)
 }
 
+// GetMeetingsByBatchSlug retrieves a list of meetings for a specific batch
+func (ctrl *MeetingController) GetMeetingsByBatchSlug(c *fiber.Ctx) error {
+	opts := utils.ParseQueryOptions(c)
+
+	batchSlug := c.Params("batchSlug")
+	meetings, total, err := ctrl.meetingService.GetMeetingsByBatchSlug(batchSlug, opts)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch meetings", err.Error())
+	}
+
+	var meetingResponse []dto.MeetingResponse
+	if copyErr := copier.Copy(&meetingResponse, meetings); copyErr != nil {
+		return utils.ErrorResponse(c, 500, "Failed to map meeting data", copyErr.Error())
+	}
+
+	meta := utils.BuildPaginationMeta(total, opts.Limit, opts.Page)
+	return utils.SuccessWithMeta(c, fiber.StatusOK, "Meetings fetched", meetingResponse, meta)
+}
+
 // GetMeetingByID is controller that retrieves meeting by them id
 func (ctrl *MeetingController) GetMeetingByID(c *fiber.Ctx) error {
 	idParam := c.Params("id")
@@ -84,6 +103,44 @@ func (ctrl *MeetingController) CreateMeeting(c *fiber.Ctx) error {
 	}
 
 	return utils.SuccessResponse(c, fiber.StatusCreated, "Meeting created successfully", meetingResponse)
+}
+
+// UpdateMeeting is for update meeting
+func (ctrl *MeetingController) UpdateMeeting(c *fiber.Ctx) error {
+	body := c.Locals("body").(*dto.UpdateMeetingRequest)
+
+	idParam := c.Params("id")
+	id, err := uuid.Parse(idParam)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
+	}
+
+	meeting, err := ctrl.meetingService.UpdateMeeting(id, body)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to update meeting", err.Error())
+	}
+
+	var meetingResponse dto.MeetingResponse
+	if copyErr := copier.Copy(&meetingResponse, meeting); copyErr != nil {
+		return utils.ErrorResponse(c, 500, "Failed to map meeting data", copyErr.Error())
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Meeting updated successfully", meetingResponse)
+}
+
+// DeleteMeeting deletes a meeting by its ID
+func (ctrl *MeetingController) DeleteMeeting(c *fiber.Ctx) error {
+	idParam := c.Params("id")
+	id, err := uuid.Parse(idParam)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
+	}
+
+	if err := ctrl.meetingService.DeleteMeeting(id); err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to delete meeting", err.Error())
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Meeting deleted successfully", nil)
 }
 
 // AddTeachersToMeeting is function to add teacher to meeting
