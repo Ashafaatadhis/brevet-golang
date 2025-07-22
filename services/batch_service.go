@@ -123,7 +123,7 @@ func (s *BatchService) UpdateBatch(id uuid.UUID, body *dto.UpdateBatchRequest) (
 		batch = utils.Safe(batchPtr, models.Batch{})
 
 		// Copy field yang tidak nil saja
-		if err := copier.CopyWithOption(batch, body, copier.Option{
+		if err := copier.CopyWithOption(&batch, body, copier.Option{
 			IgnoreEmpty: true,
 			DeepCopy:    true,
 		}); err != nil {
