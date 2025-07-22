@@ -85,15 +85,6 @@ func (r *UserRepository) FindByIDs(userIDs []uuid.UUID) ([]models.User, error) {
 	return users, nil
 }
 
-// FindByIDTx retireves
-func (r *UserRepository) FindByIDTx(db *gorm.DB, userID uuid.UUID) (*models.User, error) {
-	var user models.User
-	if err := db.Preload("Profile").Where("id = ?", userID).First(&user).Error; err != nil {
-		return nil, err
-	}
-	return &user, nil
-}
-
 // Save updates an existing user or creates a new one if it doesn't exist
 func (r *UserRepository) Save(user *models.User) error {
 	if user.Profile != nil {
@@ -112,11 +103,17 @@ func (r *UserRepository) DeleteByID(userID uuid.UUID) error {
 }
 
 // SaveUser saves a user within a transaction
-func (r *UserRepository) SaveUser(tx *gorm.DB, user *models.User) error {
+func (r *UserRepository) SaveUser(user *models.User) error {
 	if user.Profile != nil {
 		user.Profile.UserID = user.ID
 	}
-	return tx.Save(user).Error
+	return r.db.Save(user).Error
+}
+
+// SaveProfile saves a user profile within a transaction
+func (r *UserRepository) SaveProfile(profile *models.Profile) error {
+	profile.UserID = profile.UserID // pastikan tidak null
+	return r.db.Save(profile).Error
 }
 
 // DeleteUser deletes a user by their ID
