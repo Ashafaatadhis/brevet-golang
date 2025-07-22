@@ -82,19 +82,24 @@ func (s *UserService) CreateUserWithProfile(body *dto.CreateUserWithProfileReque
 			return err
 		}
 
-		profile := &models.Profile{UserID: user.ID}
+		profile := &models.Profile{}
 		if err := copier.CopyWithOption(profile, body, copier.Option{IgnoreEmpty: true}); err != nil {
 			return err
 		}
-		user.Profile = profile
 
 		// Simpan user
-		if err := s.userRepo.WithTx(tx).SaveUser(user); err != nil {
+		if err := s.userRepo.WithTx(tx).Create(user); err != nil {
+			return err
+		}
+
+		profile.UserID = user.ID
+		// Create profile setelah user
+		if err := s.userRepo.WithTx(tx).CreateProfile(profile); err != nil {
 			return err
 		}
 
 		// Fetch ulang user lengkap
-		fullUser, err := s.userRepo.FindByID(user.ID)
+		fullUser, err := s.userRepo.WithTx(tx).FindByID(user.ID)
 		if err != nil {
 			return err
 		}
@@ -143,7 +148,7 @@ func (s *UserService) UpdateUserWithProfile(userID uuid.UUID, body *dto.UpdateUs
 		}
 
 		// Save user
-		if err := s.userRepo.WithTx(tx).SaveUser(user); err != nil {
+		if err := s.userRepo.WithTx(tx).Save(user); err != nil {
 			return err
 		}
 
@@ -208,7 +213,7 @@ func (s *UserService) UpdateMyProfile(userID uuid.UUID, body *dto.UpdateMyProfil
 		}
 
 		// Simpan user dan profile
-		if err := s.userRepo.WithTx(tx).SaveUser(user); err != nil {
+		if err := s.userRepo.WithTx(tx).Save(user); err != nil {
 			return err
 		}
 		if err := s.userRepo.WithTx(tx).SaveProfile(user.Profile); err != nil {

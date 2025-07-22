@@ -4,6 +4,7 @@ import (
 	"brevet-api/models"
 	"brevet-api/utils"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -85,12 +86,28 @@ func (r *UserRepository) FindByIDs(userIDs []uuid.UUID) ([]models.User, error) {
 	return users, nil
 }
 
+// Create creates a new user in the database
+func (r *UserRepository) Create(user *models.User) error {
+	return r.db.Create(user).Error
+}
+
+// CreateProfile saves a user profile within a transaction
+func (r *UserRepository) CreateProfile(profile *models.Profile) error {
+	return r.db.Create(profile).Error
+}
+
 // Save updates an existing user or creates a new one if it doesn't exist
 func (r *UserRepository) Save(user *models.User) error {
-	if user.Profile != nil {
-		user.Profile.UserID = user.ID
+	err := r.db.Save(user).Error
+	if err != nil {
+		// Tangani error duplicate phone_number dari Postgres
+		if strings.Contains(err.Error(), "duplicate key") &&
+			strings.Contains(err.Error(), "phone_number") {
+			return fmt.Errorf("nomor telepon sudah digunakan")
+		}
 	}
-	return r.db.Save(user).Error
+
+	return err
 }
 
 // DeleteByID deletes a user by their ID
@@ -102,17 +119,8 @@ func (r *UserRepository) DeleteByID(userID uuid.UUID) error {
 	return result.Error
 }
 
-// SaveUser saves a user within a transaction
-func (r *UserRepository) SaveUser(user *models.User) error {
-	if user.Profile != nil {
-		user.Profile.UserID = user.ID
-	}
-	return r.db.Save(user).Error
-}
-
 // SaveProfile saves a user profile within a transaction
 func (r *UserRepository) SaveProfile(profile *models.Profile) error {
-	profile.UserID = profile.UserID // pastikan tidak null
 	return r.db.Save(profile).Error
 }
 
