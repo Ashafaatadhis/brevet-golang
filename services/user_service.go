@@ -89,7 +89,7 @@ func (s *UserService) CreateUserWithProfile(body *dto.CreateUserWithProfileReque
 		user.Profile = profile
 
 		// Simpan user
-		if err := s.userRepo.SaveUser(tx, user); err != nil {
+		if err := s.userRepo.WithTx(tx).SaveUser(user); err != nil {
 			return err
 		}
 
@@ -120,41 +120,56 @@ func (s *UserService) CreateUserWithProfile(body *dto.CreateUserWithProfileReque
 
 // UpdateUserWithProfile updates an existing user and their profile
 func (s *UserService) UpdateUserWithProfile(userID uuid.UUID, body *dto.UpdateUserWithProfileRequest) (*dto.UserResponse, error) {
-	user, err := s.userRepo.FindByID(userID)
+
+	var userResp dto.UserResponse
+	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
+
+		user, err := s.userRepo.WithTx(tx).FindByID(userID)
+		if err != nil {
+			return err
+		}
+
+		// Copy ke user
+		if err := copier.CopyWithOption(user, body, copier.Option{IgnoreEmpty: true}); err != nil {
+			return err
+		}
+
+		if user.Profile == nil {
+			user.Profile = &models.Profile{UserID: user.ID}
+		}
+
+		if err := copier.CopyWithOption(user.Profile, body, copier.Option{IgnoreEmpty: true}); err != nil {
+			return err
+		}
+
+		// Save user
+		if err := s.userRepo.WithTx(tx).SaveUser(user); err != nil {
+			return err
+		}
+
+		if err := s.userRepo.WithTx(tx).SaveProfile(user.Profile); err != nil {
+			return err
+		}
+
+		// Mapping response
+		if err := copier.Copy(&userResp, user); err != nil {
+			return err
+		}
+		if user.Profile != nil {
+			if err := copier.Copy(&userResp.Profile, user.Profile); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
 	if err != nil {
 		return nil, err
 	}
 
-	// Copy ke user
-	if err := copier.CopyWithOption(user, body, copier.Option{IgnoreEmpty: true}); err != nil {
-		return nil, err
-	}
-
-	if user.Profile == nil {
-		user.Profile = &models.Profile{UserID: user.ID}
-	}
-
-	if err := copier.CopyWithOption(user.Profile, body, copier.Option{IgnoreEmpty: true}); err != nil {
-		return nil, err
-	}
-
-	// Save user
-	if err := s.userRepo.SaveUser(s.db, user); err != nil {
-		return nil, err
-	}
-
-	// Mapping response
-	var userResp dto.UserResponse
-	if err := copier.Copy(&userResp, user); err != nil {
-		return nil, err
-	}
-	if user.Profile != nil {
-		if err := copier.Copy(&userResp.Profile, user.Profile); err != nil {
-			return nil, err
-		}
-	}
-
 	return &userResp, nil
+
 }
 
 // DeleteUserByID deletes a user by their ID
@@ -171,34 +186,50 @@ func (s *UserService) DeleteUserByID(userID uuid.UUID) error {
 
 // UpdateMyProfile updates the profile of the authenticated user
 func (s *UserService) UpdateMyProfile(userID uuid.UUID, body *dto.UpdateMyProfile) (*dto.UserResponse, error) {
-	user, err := s.userRepo.FindByID(userID)
+	var userResp dto.UserResponse
+
+	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
+		user, err := s.userRepo.WithTx(tx).FindByID(userID)
+		if err != nil {
+			return err
+		}
+
+		// Inisialisasi profile jika belum ada
+		if user.Profile == nil {
+			user.Profile = &models.Profile{UserID: user.ID}
+		}
+
+		// Copy data
+		if err := copier.CopyWithOption(user, body, copier.Option{IgnoreEmpty: true}); err != nil {
+			return err
+		}
+		if err := copier.CopyWithOption(user.Profile, body, copier.Option{IgnoreEmpty: true}); err != nil {
+			return err
+		}
+
+		// Simpan user dan profile
+		if err := s.userRepo.WithTx(tx).SaveUser(user); err != nil {
+			return err
+		}
+		if err := s.userRepo.WithTx(tx).SaveProfile(user.Profile); err != nil {
+			return err
+		}
+
+		// Copy ke response
+		if err := copier.Copy(&userResp, user); err != nil {
+			return err
+		}
+		if user.Profile != nil {
+			if err := copier.Copy(&userResp.Profile, user.Profile); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
 	if err != nil {
 		return nil, err
-	}
-
-	if user.Profile == nil {
-		user.Profile = &models.Profile{UserID: user.ID}
-	}
-
-	if err := copier.CopyWithOption(user, body, copier.Option{IgnoreEmpty: true}); err != nil {
-		return nil, err
-	}
-	if err := copier.CopyWithOption(user.Profile, body, copier.Option{IgnoreEmpty: true}); err != nil {
-		return nil, err
-	}
-
-	if err := s.userRepo.SaveUser(s.db, user); err != nil {
-		return nil, err
-	}
-
-	var userResp dto.UserResponse
-	if err := copier.Copy(&userResp, user); err != nil {
-		return nil, err
-	}
-	if user.Profile != nil {
-		if err := copier.Copy(&userResp.Profile, user.Profile); err != nil {
-			return nil, err
-		}
 	}
 
 	return &userResp, nil
