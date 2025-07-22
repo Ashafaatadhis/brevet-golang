@@ -15,16 +15,24 @@ import (
 func RegisterMeetingRoutes(r fiber.Router, db *gorm.DB) {
 
 	userRepository := repository.NewUserRepository(db)
+	batchRepository := repository.NewBatchRepository(db)
 
 	meetingRepo := repository.NewMeetingRepository(db)
-	meetingService := services.NewMeetingService(meetingRepo, userRepository, db)
+	meetingService := services.NewMeetingService(meetingRepo, batchRepository, userRepository, db)
 	meetingController := controllers.NewMeetingController(meetingService, db)
 
 	r.Get("/", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin"}), meetingController.GetAllMeetings)
-	r.Get("/:id", middlewares.RequireAuth(),
+	r.Get("/:id", middlewares.RequireAuth(), middlewares.RequireRole([]string{"admin"}), meetingController.GetMeetingByID)
 
-		middlewares.RequireRole([]string{"admin"}), meetingController.GetMeetingByID)
+	r.Patch("/:id", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"admin"}),
+		middlewares.ValidateBody[dto.UpdateMeetingRequest](),
+		meetingController.UpdateMeeting)
+	r.Delete("/:id", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"admin"}),
+		meetingController.DeleteMeeting)
+
 	r.Get("/:meetingID/teachers", middlewares.RequireAuth(), middlewares.RequireRole([]string{"admin"}), meetingController.GetTeachersByMeetingIDFiltered)
 
 	r.Post("/:meetingID/teachers",

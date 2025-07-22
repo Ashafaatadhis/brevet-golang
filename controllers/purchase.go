@@ -173,7 +173,7 @@ func (ctrl *PurchaseController) Pay(c *fiber.Ctx) error {
 	}
 
 	// Panggil service untuk proses bayar
-	purchase, err := ctrl.purchaseService.PayPurchase(user.UserID, purchaseID, body.PaymentProofURL)
+	purchase, err := ctrl.purchaseService.PayPurchase(user.UserID, purchaseID, body)
 	if err != nil {
 		return utils.ErrorResponse(c, 400, "Failed to upload payment proof", err.Error())
 	}

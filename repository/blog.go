@@ -19,6 +19,11 @@ func NewBlogRepository(db *gorm.DB) *BlogRepository {
 	return &BlogRepository{db: db}
 }
 
+// WithTx running with transaction
+func (r *BlogRepository) WithTx(tx *gorm.DB) *BlogRepository {
+	return &BlogRepository{db: tx}
+}
+
 // GetAllFilteredBlogs retrieves all blogs with pagination and filtering options
 func (r *BlogRepository) GetAllFilteredBlogs(opts utils.QueryOptions) ([]models.Blog, int64, error) {
 	validSortFields, err := utils.GetValidColumns(r.db, &models.Blog{})
@@ -76,27 +81,27 @@ func (r *BlogRepository) IsSlugExists(slug string) bool {
 	return count > 0
 }
 
-// CreateTx creates a new blog in the database within a transaction
-func (r *BlogRepository) CreateTx(db *gorm.DB, blog *models.Blog) error {
-	return db.Create(blog).Error
+// Create creates a new blog in the database
+func (r *BlogRepository) Create(blog *models.Blog) error {
+	return r.db.Create(blog).Error
 }
 
 // FindByID retrieves a blog by its ID
-func (r *BlogRepository) FindByID(db *gorm.DB, id uuid.UUID) (*models.Blog, error) {
+func (r *BlogRepository) FindByID(id uuid.UUID) (*models.Blog, error) {
 	var blog models.Blog
-	err := db.First(&blog, "id = ?", id).Error
+	err := r.db.First(&blog, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
 	return &blog, nil
 }
 
-// UpdateTx updates an existing blog in the database within a transaction
-func (r *BlogRepository) UpdateTx(db *gorm.DB, blog *models.Blog) error {
-	return db.Save(blog).Error
+// Update updates an existing blog in the database
+func (r *BlogRepository) Update(blog *models.Blog) error {
+	return r.db.Save(blog).Error
 }
 
-// DeleteByIDTx deletes a blog by its ID within a transaction
-func (r *BlogRepository) DeleteByIDTx(tx *gorm.DB, id uuid.UUID) error {
-	return tx.Where("id = ?", id).Delete(&models.Blog{}).Error
+// DeleteByID deletes a blog by its ID
+func (r *BlogRepository) DeleteByID(id uuid.UUID) error {
+	return r.db.Where("id = ?", id).Delete(&models.Blog{}).Error
 }

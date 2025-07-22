@@ -64,6 +64,45 @@ func (r *MeetingRepository) GetAllFilteredMeetings(opts utils.QueryOptions) ([]m
 	return meetings, total, err
 }
 
+// GetMeetingsByBatchSlugFiltered retrieves all meetings with pagination and filtering options
+func (r *MeetingRepository) GetMeetingsByBatchSlugFiltered(batchSlug string, opts utils.QueryOptions) ([]models.Meeting, int64, error) {
+	validSortFields := utils.GetValidColumnsFromStruct(&models.Meeting{})
+
+	sort := opts.Sort
+	if !validSortFields[sort] {
+		sort = "id"
+	}
+
+	order := opts.Order
+	if order != "asc" && order != "desc" {
+		order = "asc"
+	}
+
+	db := r.db.Model(&models.Meeting{}).
+		Joins("JOIN batches ON batches.id = meetings.batch_id").
+		Where("batches.slug = ?", batchSlug)
+
+	joinConditions := map[string]string{}
+	joinedRelations := map[string]bool{}
+
+	db = utils.ApplyFiltersWithJoins(db, "meetings", opts.Filters, validSortFields, joinConditions, joinedRelations)
+
+	if opts.Search != "" {
+		db = db.Where("title ILIKE ?", "%"+opts.Search+"%")
+	}
+
+	var total int64
+	db.Count(&total)
+
+	var meetings []models.Meeting
+	err := db.Order(fmt.Sprintf("%s %s", sort, order)).
+		Limit(opts.Limit).
+		Offset(opts.Offset).
+		Find(&meetings).Error
+
+	return meetings, total, err
+}
+
 // FindByID retrieves a meeting by its ID
 func (r *MeetingRepository) FindByID(id uuid.UUID) (*models.Meeting, error) {
 	var meeting models.Meeting
@@ -74,9 +113,19 @@ func (r *MeetingRepository) FindByID(id uuid.UUID) (*models.Meeting, error) {
 	return &meeting, nil
 }
 
-// Create creates a new purchase
+// Create creates a new meeetings
 func (r *MeetingRepository) Create(meeting *models.Meeting) error {
 	return r.db.Create(meeting).Error
+}
+
+// Update updates an existing meeting
+func (r *MeetingRepository) Update(meeting *models.Meeting) error {
+	return r.db.Save(meeting).Error
+}
+
+// DeleteByID deletes a meeting by its ID
+func (r *MeetingRepository) DeleteByID(id uuid.UUID) error {
+	return r.db.Where("id = ?", id).Delete(&models.Meeting{}).Error
 }
 
 // AddTeachers is repo for add teacher to meeting

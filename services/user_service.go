@@ -58,70 +58,63 @@ func (s *UserService) GetProfileResponseByID(userID uuid.UUID) (*dto.UserRespons
 
 // CreateUserWithProfile creates a new user with an associated profile
 func (s *UserService) CreateUserWithProfile(body *dto.CreateUserWithProfileRequest) (*dto.UserResponse, error) {
-	tx := s.db.Begin()
-
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-	defer tx.Rollback()
-
-	// Cek duplikasi
-	if !s.authRepo.IsEmailUnique(tx, body.Email) || !s.authRepo.IsPhoneUnique(tx, body.Phone) {
-		return nil, errors.New("Email atau nomor telepon sudah digunakan")
-	}
-
-	// Hash password
-	hashedPassword, err := utils.HashPassword(body.Password)
-	if err != nil {
-		return nil, err
-	}
-
-	// Mapping ke model
-	user := &models.User{
-		RoleType:   models.RoleTypeSiswa,
-		IsVerified: true,
-		Password:   hashedPassword,
-	}
-
-	if err := copier.CopyWithOption(user, body, copier.Option{IgnoreEmpty: true}); err != nil {
-		return nil, err
-	}
-
-	profile := &models.Profile{UserID: user.ID}
-	if err := copier.CopyWithOption(profile, body, copier.Option{IgnoreEmpty: true}); err != nil {
-		return nil, err
-	}
-
-	user.Profile = profile
-
-	// Simpan user
-	if err := s.userRepo.SaveUser(tx, user); err != nil {
-		return nil, err
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		return nil, err
-	}
-
-	// Fetch ulang user lengkap
-	fullUser, err := s.userRepo.FindByID(user.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Mapping ke response
 	var userResp dto.UserResponse
-	if err := copier.Copy(&userResp, fullUser); err != nil {
+
+	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
+		// Cek duplikasi
+		if !s.authRepo.WithTx(tx).IsEmailUnique(body.Email) || !s.authRepo.WithTx(tx).IsPhoneUnique(body.Phone) {
+			return errors.New("email atau nomor telepon sudah digunakan")
+		}
+
+		// Hash password
+		hashedPassword, err := utils.HashPassword(body.Password)
+		if err != nil {
+			return err
+		}
+
+		// Mapping ke model
+		user := &models.User{
+			RoleType:   models.RoleTypeSiswa,
+			IsVerified: true,
+			Password:   hashedPassword,
+		}
+		if err := copier.CopyWithOption(user, body, copier.Option{IgnoreEmpty: true}); err != nil {
+			return err
+		}
+
+		profile := &models.Profile{UserID: user.ID}
+		if err := copier.CopyWithOption(profile, body, copier.Option{IgnoreEmpty: true}); err != nil {
+			return err
+		}
+		user.Profile = profile
+
+		// Simpan user
+		if err := s.userRepo.SaveUser(tx, user); err != nil {
+			return err
+		}
+
+		// Fetch ulang user lengkap
+		fullUser, err := s.userRepo.FindByID(user.ID)
+		if err != nil {
+			return err
+		}
+
+		// Mapping ke response
+		if err := copier.Copy(&userResp, fullUser); err != nil {
+			return err
+		}
+		if fullUser.Profile != nil {
+			if err := copier.Copy(&userResp.Profile, fullUser.Profile); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
 		return nil, err
 	}
-	if fullUser.Profile != nil {
-		if err := copier.Copy(&userResp.Profile, fullUser.Profile); err != nil {
-			return nil, err
-		}
-	}
-
 	return &userResp, nil
 }
 

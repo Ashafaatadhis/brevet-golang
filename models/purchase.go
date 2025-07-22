@@ -20,6 +20,12 @@ type Purchase struct {
 	PriceID uuid.UUID `gorm:"type:uuid;not null"`
 	Price   Price     `gorm:"foreignKey:PriceID;references:ID"`
 
+	UniqueCode     int     `gorm:"not null;default:0"`                    // sementara default 0
+	TransferAmount float64 `gorm:"type:numeric(12,2);not null;default:0"` // sementara default 0.00
+
+	BuyerBankAccountName   *string `gorm:"type:varchar(100)"` // contoh: Adhis Mauliyahsa
+	BuyerBankAccountNumber *string `gorm:"type:varchar(50)"`  // contoh: 1234567890
+
 	PaymentProof *string    `gorm:"type:varchar(255)"`
 	ExpiredAt    *time.Time `gorm:"type:timestamp"`
 

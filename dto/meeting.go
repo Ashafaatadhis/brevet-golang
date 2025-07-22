@@ -26,6 +26,13 @@ type CreateMeetingRequest struct {
 	Type        models.MeetingType `json:"type" validate:"required,meeting_type"`
 }
 
+// UpdateMeetingRequest is request income
+type UpdateMeetingRequest struct {
+	Title       *string             `json:"title" validate:"omitempty"`
+	Description *string             `json:"description" validate:"omitempty"`
+	Type        *models.MeetingType `json:"type" validate:"omitempty,meeting_type"`
+}
+
 // AssignTeachersRequest AssignTeachersRequest is request income
 type AssignTeachersRequest struct {
 	TeacherIDs []uuid.UUID `json:"teacher_ids" validate:"required,dive,uuid"`

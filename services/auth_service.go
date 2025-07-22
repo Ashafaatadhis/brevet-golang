@@ -36,7 +36,7 @@ func NewAuthService(repo *repository.AuthRepository, verificationSvc *Verificati
 // Register creates a new user and profile
 func (s *AuthService) Register(tx *gorm.DB, req *dto.RegisterRequest) (*dto.RegisterResponse, error) {
 	// Validasi
-	if !s.repo.IsEmailUnique(tx, req.Email) || !s.repo.IsPhoneUnique(tx, req.Phone) {
+	if !s.repo.WithTx(tx).IsEmailUnique(req.Email) || !s.repo.WithTx(tx).IsPhoneUnique(req.Phone) {
 		return nil, errors.New("Email atau nomor telephone sudah digunakan")
 	}
 
@@ -48,7 +48,7 @@ func (s *AuthService) Register(tx *gorm.DB, req *dto.RegisterRequest) (*dto.Regi
 
 	groupVerified := req.GroupType == models.Umum
 
-	if err := s.repo.CreateUser(tx, &user); err != nil {
+	if err := s.repo.WithTx(tx).CreateUser(&user); err != nil {
 		return nil, err
 	}
 

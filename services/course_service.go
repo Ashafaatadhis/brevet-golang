@@ -44,147 +44,148 @@ func (s *CourseService) GetCourseBySlug(slug string) (*models.Course, error) {
 
 // CreateCourse creates a new course with the provided details
 func (s *CourseService) CreateCourse(body *dto.CreateCourseRequest) (*models.Course, error) {
-	tx := s.db.Begin()
-
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
+	var courseResponse models.Course
+	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
+		course := &models.Course{
+			Title:            body.Title,
+			ShortDescription: body.ShortDescription,
+			Description:      body.Description,
+			LearningOutcomes: body.LearningOutcomes,
+			Achievements:     body.Achievements,
 		}
-	}()
-	defer tx.Rollback()
 
-	course := &models.Course{
-		Title:            body.Title,
-		ShortDescription: body.ShortDescription,
-		Description:      body.Description,
-		LearningOutcomes: body.LearningOutcomes,
-		Achievements:     body.Achievements,
-	}
+		slug := utils.GenerateUniqueSlug(body.Title, s.repo)
 
-	slug := utils.GenerateUniqueSlug(body.Title, s.repo)
+		course.Slug = slug
 
-	course.Slug = slug
-
-	if err := s.repo.CreateTx(tx, course); err != nil {
-		return nil, err
-	}
-
-	var images []models.CourseImage
-	for _, input := range body.CourseImages {
-		images = append(images, models.CourseImage{
-			CourseID: course.ID,
-			ImageURL: input.ImageURL,
-		})
-	}
-
-	if err := s.repo.CreateCourseImagesBulkTx(tx, images); err != nil {
-		return nil, err
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		return nil, err
-	}
-
-	courseWithImages, err := s.repo.FindByIDWithImages(course.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	return courseWithImages, nil
-}
-
-// UpdateCourse is blabla
-func (s *CourseService) UpdateCourse(id uuid.UUID, body *dto.UpdateCourseRequest) (*models.Course, error) {
-	tx := s.db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-	defer tx.Rollback()
-
-	course, err := s.repo.FindByID(tx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	// Copy field yang tidak nil saja
-	if err := copier.CopyWithOption(course, body, copier.Option{
-		IgnoreEmpty: true,
-		DeepCopy:    true,
-	}); err != nil {
-		return nil, err
-	}
-
-	// Optional: regenerate slug kalau Title berubah
-	// if body.Title != nil {
-	// 	slug := utils.GenerateUniqueSlug(*body.Title, s.repo)
-	// 	course.Slug = slug
-	// }
-
-	if err := s.repo.UpdateTx(tx, course); err != nil {
-		return nil, err
-	}
-
-	// Ganti course_images jika dikirim
-	if body.CourseImages != nil {
-		if err := s.repo.DeleteCourseImagesByCourseID(tx, course.ID); err != nil {
-			return nil, err
+		if err := s.repo.WithTx(tx).Create(course); err != nil {
+			return err
 		}
 
 		var images []models.CourseImage
-		for _, input := range *body.CourseImages {
+		for _, input := range body.CourseImages {
 			images = append(images, models.CourseImage{
 				CourseID: course.ID,
 				ImageURL: input.ImageURL,
 			})
 		}
 
-		if err := s.repo.CreateCourseImagesBulkTx(tx, images); err != nil {
-			return nil, err
+		if err := s.repo.WithTx(tx).CreateCourseImagesBulk(images); err != nil {
+			return err
 		}
-	}
 
-	if err := tx.Commit().Error; err != nil {
+		courseWithImages, err := s.repo.WithTx(tx).FindByIDWithImages(course.ID)
+		if err != nil {
+			return err
+		}
+		courseResponse = utils.Safe(courseWithImages, models.Course{})
+		return nil
+	})
+
+	if err != nil {
 		return nil, err
 	}
+	return &courseResponse, nil
 
-	return s.repo.FindByIDWithImages(course.ID)
+}
+
+// UpdateCourse is blabla
+func (s *CourseService) UpdateCourse(id uuid.UUID, body *dto.UpdateCourseRequest) (*models.Course, error) {
+	var courseResponse models.Course
+	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
+
+		course, err := s.repo.WithTx(tx).FindByID(id)
+		if err != nil {
+			return err
+		}
+
+		// Copy field yang tidak nil saja
+		if err := copier.CopyWithOption(course, body, copier.Option{
+			IgnoreEmpty: true,
+			DeepCopy:    true,
+		}); err != nil {
+			return err
+		}
+
+		// Optional: regenerate slug kalau Title berubah
+		// if body.Title != nil {
+		// 	slug := utils.GenerateUniqueSlug(*body.Title, s.repo)
+		// 	course.Slug = slug
+		// }
+
+		if err := s.repo.WithTx(tx).Update(course); err != nil {
+			return err
+		}
+
+		// Ganti course_images jika dikirim
+		if body.CourseImages != nil {
+			if err := s.repo.WithTx(tx).DeleteCourseImagesByCourseID(course.ID); err != nil {
+				return err
+			}
+
+			var images []models.CourseImage
+			for _, input := range *body.CourseImages {
+				images = append(images, models.CourseImage{
+					CourseID: course.ID,
+					ImageURL: input.ImageURL,
+				})
+			}
+
+			if err := s.repo.WithTx(tx).CreateCourseImagesBulk(images); err != nil {
+				return err
+			}
+		}
+
+		response, err := s.repo.FindByIDWithImages(course.ID)
+		if err != nil {
+			return err
+		}
+
+		courseResponse = utils.Safe(response, models.Course{})
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return &courseResponse, nil
 }
 
 // DeleteCourse deletes a course by its ID
 func (s *CourseService) DeleteCourse(courseID uuid.UUID) error {
-	tx := s.db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-	defer tx.Rollback()
+	var imagePaths []string
 
-	// Optional: cek dulu apakah ada course-nya
-	course, err := s.repo.FindByIDWithImagesTx(tx, courseID)
+	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
+		course, err := s.repo.WithTx(tx).FindByIDWithImages(courseID)
+		if err != nil {
+			return err
+		}
+
+		// Simpan path image
+		for _, img := range course.CourseImages {
+			imagePaths = append(imagePaths, img.ImageURL)
+		}
+
+		// Hapus course dari DB
+		if err := s.repo.WithTx(tx).DeleteByID(courseID); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	// ✅ Hapus file di luar transaction (hanya jika tx berhasil)
 	if err != nil {
 		return err
 	}
 
-	// Hapus course (images akan ikut terhapus karena cascade)
-	if err := s.repo.DeleteByIDTx(tx, courseID); err != nil {
-		return err
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		return err
-	}
-
-	// Hapus file gambar
-	for _, img := range course.CourseImages {
-		err := s.fileService.DeleteFile(img.ImageURL)
-		if err != nil {
-			// Log error tapi lanjut
-			log.Errorf("Gagal hapus file %s: %v", img.ImageURL, err)
+	for _, path := range imagePaths {
+		if delErr := s.fileService.DeleteFile(path); delErr != nil {
+			log.Errorf("Gagal hapus file %s: %v", path, delErr)
 		}
 	}
 
 	return nil
+
 }

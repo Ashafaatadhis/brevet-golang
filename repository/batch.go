@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // BatchRepository is a struct that represents a batch repository
@@ -17,6 +18,18 @@ type BatchRepository struct {
 // NewBatchRepository creates a new batch repository
 func NewBatchRepository(db *gorm.DB) *BatchRepository {
 	return &BatchRepository{db: db}
+}
+
+// WithTx running with transaction
+func (r *BatchRepository) WithTx(tx *gorm.DB) *BatchRepository {
+	return &BatchRepository{db: tx}
+}
+
+// WithLock running with transaction and lock
+func (r *BatchRepository) WithLock() *BatchRepository {
+	return &BatchRepository{
+		db: r.db.Clauses(clause.Locking{Strength: "UPDATE"}),
+	}
 }
 
 // GetAllFilteredBatches retrieves all batches with pagination and filtering options
@@ -116,24 +129,14 @@ func (r *BatchRepository) IsSlugExists(slug string) bool {
 	return count > 0
 }
 
-// CreateTx inserts a new batch within a transaction
-func (r *BatchRepository) CreateTx(db *gorm.DB, batch *models.Batch) error {
-	return db.Create(batch).Error
+// Create inserts a new batch
+func (r *BatchRepository) Create(batch *models.Batch) error {
+	return r.db.Create(batch).Error
 }
 
-// UpdateTx updates an existing batch within a transaction
-func (r *BatchRepository) UpdateTx(tx *gorm.DB, batch *models.Batch) error {
-	return tx.Save(batch).Error
-}
-
-// FindByIDTx retrieves a batch by its ID
-func (r *BatchRepository) FindByIDTx(db *gorm.DB, id uuid.UUID) (*models.Batch, error) {
-	var batch models.Batch
-	err := db.First(&batch, "id = ?", id).Error
-	if err != nil {
-		return nil, err
-	}
-	return &batch, nil
+// Update updates an existing batch
+func (r *BatchRepository) Update(batch *models.Batch) error {
+	return r.db.Save(batch).Error
 }
 
 // FindByID retrieves a batch by its ID
@@ -146,9 +149,9 @@ func (r *BatchRepository) FindByID(id uuid.UUID) (*models.Batch, error) {
 	return &batch, nil
 }
 
-// DeleteByIDTx deletes a batch by its ID within a transaction
-func (r *BatchRepository) DeleteByIDTx(tx *gorm.DB, id uuid.UUID) error {
-	return tx.Where("id = ?", id).Delete(&models.Batch{}).Error
+// DeleteByID deletes a batch by its ID
+func (r *BatchRepository) DeleteByID(id uuid.UUID) error {
+	return r.db.Where("id = ?", id).Delete(&models.Batch{}).Error
 }
 
 // GetAllTeacherInBatch get all teacher in batch

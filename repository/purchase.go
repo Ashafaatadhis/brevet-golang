@@ -81,6 +81,15 @@ func (r *PurchaseRepository) HasPaid(userID uuid.UUID, batchID uuid.UUID) (bool,
 	return count > 0, err
 }
 
+// CountPaidByBatchID retrieves the count of paid purchases for a specific batch
+func (r *PurchaseRepository) CountPaidByBatchID(batchID uuid.UUID) (int64, error) {
+	var count int64
+	err := r.db.Model(&models.Purchase{}).
+		Where("batch_id = ? AND payment_status = ?", batchID, models.Paid).
+		Count(&count).Error
+	return count, err
+}
+
 // HasPurchaseWithStatus check if user has in status
 func (r *PurchaseRepository) HasPurchaseWithStatus(userID uuid.UUID, batchID uuid.UUID, statuses ...models.PaymentStatus) (bool, error) {
 	var count int64
