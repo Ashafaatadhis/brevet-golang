@@ -135,9 +135,9 @@ func (s *PurchaseService) UpdateStatusPayment(purchaseID uuid.UUID, body *dto.Up
 			return fmt.Errorf("data tidak ditemukan: %w", err)
 		}
 
-		if purchase.PaymentStatus != models.WaitingConfirmation {
-			return fmt.Errorf("status pembayaran tidak bisa diverifikasi")
-		}
+		// if purchase.PaymentStatus != models.WaitingConfirmation {
+		// 	return fmt.Errorf("status pembayaran tidak bisa diverifikasi")
+		// }
 
 		if body.PaymentStatus == models.Paid {
 			batch, err := batchRepo.FindByID(*purchase.BatchID)
