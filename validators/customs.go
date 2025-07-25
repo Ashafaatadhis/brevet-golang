@@ -160,6 +160,36 @@ func MeetingTypeValidator(fl validator.FieldLevel) bool {
 	}
 }
 
+// AssignmentTypeValidator checks if assignment value is valid
+func AssignmentTypeValidator(fl validator.FieldLevel) bool {
+	field := fl.Field()
+
+	// Kalau nil, anggap valid (tidak wajib)
+	if field.Kind() == reflect.Ptr {
+		if field.IsNil() {
+			return true
+		}
+	}
+
+	var val string
+
+	// Ambil nilai string dari pointer atau value biasa
+	if field.Kind() == reflect.Ptr {
+		val = field.Elem().String()
+	} else if field.Kind() == reflect.String {
+		val = field.String()
+	} else {
+		return false
+	}
+
+	switch models.AssignmentType(val) {
+	case models.File, models.Essay:
+		return true
+	default:
+		return false
+	}
+}
+
 // PaymentStatusValidator checks if payment status value is valid
 func PaymentStatusValidator(fl validator.FieldLevel) bool {
 	field := fl.Field()

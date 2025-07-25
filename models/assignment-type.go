@@ -17,12 +17,17 @@ const (
 
 // Scan scans the value from the database into the AssignmentType
 func (a *AssignmentType) Scan(value any) error {
-	b, ok := value.([]byte)
-	if !ok {
-		return errors.New("failed to scan AssignmentType: type assertion to []byte failed")
+
+	switch v := value.(type) {
+	case []byte:
+		*a = AssignmentType(string(v))
+		return nil
+	case string:
+		*a = AssignmentType(v)
+		return nil
 	}
-	*a = AssignmentType(string(b))
-	return nil
+	return errors.New("failed to scan AssignmentType: unsupported type")
+
 }
 
 // Value returns the value of the AssignmentType

@@ -21,6 +21,10 @@ func RegisterMeetingRoutes(r fiber.Router, db *gorm.DB) {
 	meetingService := services.NewMeetingService(meetingRepo, batchRepository, userRepository, db)
 	meetingController := controllers.NewMeetingController(meetingService, db)
 
+	assignmentRepository := repository.NewAssignmentRepository(db)
+	assignmentService := services.NewAssignmentService(assignmentRepository, meetingRepo, db)
+	assignmentController := controllers.NewAssignmentController(assignmentService, db)
+
 	r.Get("/", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin"}), meetingController.GetAllMeetings)
 	r.Get("/:id", middlewares.RequireAuth(), middlewares.RequireRole([]string{"admin"}), meetingController.GetMeetingByID)
@@ -52,5 +56,12 @@ func RegisterMeetingRoutes(r fiber.Router, db *gorm.DB) {
 		middlewares.RequireRole([]string{"admin"}),
 		meetingController.DeleteTeachersToMeeting,
 	)
+
+	// ==================================
+	// 				Assignment
+	// ==================================
+	r.Post("/:meetingID/assignments", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"admin", "guru"}),
+		middlewares.ValidateBody[dto.CreateAssignmentRequest](), assignmentController.CreateAssignment)
 
 }
