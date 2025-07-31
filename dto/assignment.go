@@ -45,3 +45,13 @@ type CreateAssignmentRequest struct {
 	EndAt           time.Time             `json:"end_at" validate:"required"`
 	AssignmentFiles []string              `json:"assignment_files" validate:"omitempty,min=1,dive,required"`
 }
+
+// UpdateAssignmentRequest represents the request structure for updating an assignment
+type UpdateAssignmentRequest struct {
+	Title           *string                `json:"title" validate:"omitempty"`
+	Description     *string                `json:"description" validate:"omitempty"`
+	Type            *models.AssignmentType `json:"type" validate:"omitempty,assignment_type"`
+	StartAt         *time.Time             `json:"start_at" validate:"omitempty"`
+	EndAt           *time.Time             `json:"end_at" validate:"omitempty"`
+	AssignmentFiles []string               `json:"assignment_files" validate:"omitempty,dive,required"`
+}

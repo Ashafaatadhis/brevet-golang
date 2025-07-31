@@ -19,12 +19,17 @@ const (
 
 // Scan implements the sql.Scanner interface
 func (s *AttendanceStatus) Scan(value any) error {
-	b, ok := value.([]byte)
-	if !ok {
-		return errors.New("failed to scan AttendanceStatus: type assertion to []byte failed")
+	switch v := value.(type) {
+	case string:
+		*s = AttendanceStatus(v)
+		return nil
+	case []byte:
+		*s = AttendanceStatus(string(v))
+		return nil
+	default:
+		return errors.New("failed to scan AttendanceStatus: unsupported type")
+
 	}
-	*s = AttendanceStatus(string(b))
-	return nil
 }
 
 // Value implements the driver.Valuer interface

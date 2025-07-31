@@ -66,9 +66,24 @@ func (r *AssignmentRepository) Create(assignment *models.Assignment) error {
 	return r.db.Create(assignment).Error
 }
 
+// Update updates an existing assignment
+func (r *AssignmentRepository) Update(assignment *models.Assignment) error {
+	return r.db.Save(assignment).Error
+}
+
+// DeleteByID deletes an assignment by its ID
+func (r *AssignmentRepository) DeleteByID(id uuid.UUID) error {
+	return r.db.Preload("AssignmentFiles").Where("id = ?", id).Delete(&models.Assignment{}).Error
+}
+
 // CreateFiles creates new assignment files
 func (r *AssignmentRepository) CreateFiles(assignmentFiles []models.AssignmentFiles) error {
 	return r.db.Create(assignmentFiles).Error
+}
+
+// DeleteFilesByAssignmentID deletes all files associated with a specific assignment
+func (r *AssignmentRepository) DeleteFilesByAssignmentID(assignmentID uuid.UUID) error {
+	return r.db.Where("assignment_id = ?", assignmentID).Delete(&models.AssignmentFiles{}).Error
 }
 
 // FindByID retrieves a meeting by its ID

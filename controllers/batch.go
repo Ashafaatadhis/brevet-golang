@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"brevet-api/dto"
+	"brevet-api/helpers"
 	"brevet-api/models"
 	"brevet-api/services"
 	"brevet-api/utils"
@@ -30,10 +31,13 @@ func NewBatchController(batchService *services.BatchService, courseService *serv
 
 // GetAllBatches retrieves a list of batches with pagination and filtering options
 func (ctrl *BatchController) GetAllBatches(c *fiber.Ctx) error {
+	log := helpers.LoggerFromCtx(c.UserContext())
+	log.Info("GetAllBatches handler called")
 	opts := utils.ParseQueryOptions(c)
 
 	batches, total, err := ctrl.batchService.GetAllFilteredBatches(opts)
 	if err != nil {
+		log.WithError(err).Error("Gagal mengambil data batch")
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch batches", err.Error())
 	}
 
@@ -47,6 +51,7 @@ func (ctrl *BatchController) GetAllBatches(c *fiber.Ctx) error {
 			IgnoreEmpty: true,
 			DeepCopy:    true,
 		}); err != nil {
+			log.WithError(err).Error("Gagal mapping batch")
 			return utils.ErrorResponse(c, 500, "Failed to map batch data", err.Error())
 		}
 
@@ -54,6 +59,7 @@ func (ctrl *BatchController) GetAllBatches(c *fiber.Ctx) error {
 			IgnoreEmpty: true,
 			DeepCopy:    true,
 		}); err != nil {
+			log.WithError(err).Error("Gagal mapping batch days")
 			return utils.ErrorResponse(c, 500, "Failed to map batch data", err.Error())
 		}
 
@@ -61,15 +67,21 @@ func (ctrl *BatchController) GetAllBatches(c *fiber.Ctx) error {
 	}
 
 	meta := utils.BuildPaginationMeta(total, opts.Limit, opts.Page)
+	log.WithField("total_batches", total).Info("Berhasil mengambil data batch")
 	return utils.SuccessWithMeta(c, fiber.StatusOK, "Batches fetched", batchesResponse, meta)
 }
 
 // GetBatchBySlug retrieves a batch by its slug (ID)
 func (ctrl *BatchController) GetBatchBySlug(c *fiber.Ctx) error {
+	log := helpers.LoggerFromCtx(c.UserContext())
+	log.Info("GetBatchBySlug handler called")
+
 	slugParam := c.Params("slug")
+	log = log.WithField("slug", slugParam)
 
 	batch, err := ctrl.batchService.GetBatchBySlug(slugParam)
 	if err != nil {
+		log.WithError(err).Warn("Batch tidak ditemukan")
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Batch Doesn't Exist", err.Error())
 	}
 
@@ -78,6 +90,7 @@ func (ctrl *BatchController) GetBatchBySlug(c *fiber.Ctx) error {
 		IgnoreEmpty: true,
 		DeepCopy:    true,
 	}); copyErr != nil {
+		log.WithError(copyErr).Error("Gagal mapping batch")
 		return utils.ErrorResponse(c, 500, "Failed to map batch data", copyErr.Error())
 	}
 
@@ -85,24 +98,33 @@ func (ctrl *BatchController) GetBatchBySlug(c *fiber.Ctx) error {
 		IgnoreEmpty: true,
 		DeepCopy:    true,
 	}); copyErr != nil {
+		log.WithError(copyErr).Error("Gagal mapping batch days")
 		return utils.ErrorResponse(c, 500, "Failed to map batch day", copyErr.Error())
 	}
-
+	log.Info("Batch berhasil diambil")
 	return utils.SuccessResponse(c, fiber.StatusOK, "Batch fetched", batchResponse)
 }
 
 // CreateBatch handles the creation of a new batch
 func (ctrl *BatchController) CreateBatch(c *fiber.Ctx) error {
+	log := helpers.LoggerFromCtx(c.UserContext())
+	log.Info("CreateBatch handler called")
 	body := c.Locals("body").(*dto.CreateBatchRequest)
+	user := c.Locals("user").(*utils.Claims)
+
+	log = log.WithField("user_id", user.UserID)
 
 	courseIDParam := c.Params("courseId")
 	courseID, err := uuid.Parse(courseIDParam)
+	log = log.WithField("course_id", courseID)
 	if err != nil {
+		log.WithError(err).Warn("UUID courseId tidak valid")
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 
 	batch, err := ctrl.batchService.CreateBatch(courseID, body)
 	if err != nil {
+		log.WithError(err).Error("Gagal membuat batch")
 		return utils.ErrorResponse(c, 400, "Gagal membuat batch", err.Error())
 	}
 
@@ -111,6 +133,7 @@ func (ctrl *BatchController) CreateBatch(c *fiber.Ctx) error {
 		IgnoreEmpty: true,
 		DeepCopy:    true,
 	}); copyErr != nil {
+		log.WithError(copyErr).Error("Gagal mapping batch")
 		return utils.ErrorResponse(c, 500, "Failed to map batch data", copyErr.Error())
 	}
 
@@ -118,24 +141,32 @@ func (ctrl *BatchController) CreateBatch(c *fiber.Ctx) error {
 		IgnoreEmpty: true,
 		DeepCopy:    true,
 	}); copyErr != nil {
+		log.WithError(copyErr).Error("Gagal mapping batch")
 		return utils.ErrorResponse(c, 500, "Failed to map batch day", copyErr.Error())
 	}
-
+	log.WithField("batch_id", batch.ID).Info("Batch berhasil dibuat")
 	return utils.SuccessResponse(c, 201, "Sukses membuat batch", batchResponse)
 }
 
 // UpdateBatch updates an existing batch with the provided details
 func (ctrl *BatchController) UpdateBatch(c *fiber.Ctx) error {
+	log := helpers.LoggerFromCtx(c.UserContext())
+	log.Info("UpdateBatch handler called")
+	user := c.Locals("user").(*utils.Claims)
 
+	log = log.WithField("user_id", user.UserID)
 	idParam := c.Params("id")
+	log = log.WithField("batch_id", idParam)
 	id, err := uuid.Parse(idParam)
 	if err != nil {
+		log.WithError(err).Warn("UUID batch tidak valid")
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 	body := c.Locals("body").(*dto.UpdateBatchRequest)
 
 	batch, err := ctrl.batchService.UpdateBatch(id, body)
 	if err != nil {
+		log.WithError(err).Error("Gagal update batch")
 		return utils.ErrorResponse(c, 400, "Failed to update batch", err.Error())
 	}
 
@@ -144,24 +175,34 @@ func (ctrl *BatchController) UpdateBatch(c *fiber.Ctx) error {
 		IgnoreEmpty: true,
 		DeepCopy:    true,
 	}); copyErr != nil {
+		log.WithError(copyErr).Error("Gagal mapping batch")
 		return utils.ErrorResponse(c, 500, "Failed to map batch data", copyErr.Error())
 	}
-
+	log.Info("Batch berhasil diupdate")
 	return utils.SuccessResponse(c, 200, "Batch updated successfully", batchResponse)
 }
 
 // DeleteBatch deletes a batch by its ID
 func (ctrl *BatchController) DeleteBatch(c *fiber.Ctx) error {
+	log := helpers.LoggerFromCtx(c.UserContext())
+	log.Info("DeleteBatch handler called")
+	user := c.Locals("user").(*utils.Claims)
+
+	log = log.WithField("user_id", user.UserID)
+
 	idParam := c.Params("id")
+	log = log.WithField("batch_id", idParam)
 	id, err := uuid.Parse(idParam)
 	if err != nil {
+		log.WithError(err).Warn("UUID batch tidak valid")
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 
 	if err := ctrl.batchService.DeleteBatch(id); err != nil {
+		log.WithError(err).Error("Gagal menghapus batch")
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to delete batch", err.Error())
 	}
-
+	log.Info("Batch berhasil dihapus")
 	return utils.SuccessResponse(c, fiber.StatusOK, "Batch deleted successfully", nil)
 }
 

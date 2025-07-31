@@ -2,6 +2,7 @@ package repository
 
 import (
 	"brevet-api/config"
+	"brevet-api/helpers"
 	"brevet-api/models"
 
 	"database/sql"
@@ -104,8 +105,6 @@ func (s *AuthRepository) GetUserByID(userID uuid.UUID) (*models.User, error) {
 		return nil, err
 	}
 
-	fmt.Println("User found:", user)
-
 	return &user, nil
 }
 
@@ -120,12 +119,15 @@ func (s *AuthRepository) GetUserByIDTx(tx *gorm.DB, userID uuid.UUID) (*models.U
 
 // CreateUserSession creates a new user session
 func (s *AuthRepository) CreateUserSession(userID uuid.UUID, refreshToken string, c *fiber.Ctx) error {
+	log := helpers.LoggerFromCtx(c.UserContext())
+
 	userAgent := c.Get("User-Agent")
 	ipAddress := c.IP()
 
 	refreshTokenExpiryStr := config.GetEnv("REFRESH_TOKEN_EXPIRY_HOURS", "24")
 	refreshTokenExpiryHours, err := strconv.Atoi(refreshTokenExpiryStr)
 	if err != nil {
+		log.WithError(err).Warn("Gagal parsing REFRESH_TOKEN_EXPIRY_HOURS, menggunakan default 24 jam")
 		refreshTokenExpiryHours = 24
 	}
 

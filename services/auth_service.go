@@ -90,6 +90,7 @@ func (s *AuthService) Register(tx *gorm.DB, req *dto.RegisterRequest) (*dto.Regi
 
 // Login authenticates a user and returns access and refresh tokens
 func (s *AuthService) Login(req *dto.LoginRequest, c *fiber.Ctx) (*dto.LoginResult, error) {
+
 	user, err := s.repo.GetUserByEmailWithProfile(req.Email)
 	if err != nil {
 		return nil, errors.New("Email tidak ditemukan")
@@ -102,6 +103,7 @@ func (s *AuthService) Login(req *dto.LoginRequest, c *fiber.Ctx) (*dto.LoginResu
 	if !user.IsVerified {
 		return nil, errors.New("Email belum diverifikasi")
 	}
+
 	accessTokenSecret := config.GetEnv("ACCESS_TOKEN_SECRET", "default-key")
 	accessTokenExpiryStr := config.GetEnv("ACCESS_TOKEN_EXPIRY_HOURS", "24")
 	accessTokenExpiryHours, err := strconv.Atoi(accessTokenExpiryStr)
