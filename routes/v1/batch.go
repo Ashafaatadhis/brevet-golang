@@ -13,19 +13,19 @@ import (
 
 // RegisterBatchRoute registers all batch-related routes
 func RegisterBatchRoute(r fiber.Router, db *gorm.DB) {
+
 	batchRepository := repository.NewBatchRepository(db)
 	userRepository := repository.NewUserRepository(db)
 	courseRepository := repository.NewCourseRepository(db)
 	fileService := services.NewFileService()
 	courseService := services.NewCourseService(courseRepository, db, fileService)
 	batchService := services.NewBatchService(batchRepository, userRepository, courseRepository, db, fileService)
-	batchController := controllers.NewBatchController(batchService, courseService, db)
 
-	// ==================================
-	// 				Meeting
-	// ==================================
-	meetingRepo := repository.NewMeetingRepository(db)
-	meetingService := services.NewMeetingService(meetingRepo, batchRepository, userRepository, db)
+	meetingRepository := repository.NewMeetingRepository(db)
+	meetingService := services.NewMeetingService(meetingRepository, batchRepository, userRepository, db)
+
+	batchController := controllers.NewBatchController(batchService, meetingService, courseService, db)
+
 	meetingController := controllers.NewMeetingController(meetingService, db)
 
 	r.Get("/", batchController.GetAllBatches)
@@ -52,9 +52,9 @@ func RegisterBatchRoute(r fiber.Router, db *gorm.DB) {
 		meetingController.CreateMeeting)
 
 	// Get All Students
-	// r.Get("/:batchSlug/students", middlewares.RequireAuth(),
-	// 	middlewares.RequireRole([]string{"admin", "guru"}),
-	// 	batchController.GetAllStudents)
+	r.Get("/:batchSlug/students", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"admin", "guru"}),
+		batchController.GetAllStudents)
 
 	// THIS IS ROUTE FOR ASSIGN TEACHER TO BATCH
 	// 	Method	Route	Deskripsi
