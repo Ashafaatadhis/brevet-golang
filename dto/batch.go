@@ -26,6 +26,17 @@ type BatchResponse struct {
 		BatchID uuid.UUID      `json:"batch_id"`
 		Day     models.DayType `json:"day"`
 	} `json:"days"`
+
+	BatchGroups []struct {
+		ID      uuid.UUID `json:"id"`
+		BatchID uuid.UUID `json:"batch_id"`
+
+		GroupType models.GroupType `json:"group_type"`
+
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+	} `json:"batch_groups"`
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 
@@ -39,12 +50,14 @@ type CreateBatchRequest struct {
 	BatchThumbnail *string           `json:"batch_thumbnail,omitempty"`
 	StartAt        time.Time         `json:"start_at" validate:"required"`
 	EndAt          time.Time         `json:"end_at" validate:"required"`
-	StartTime      string            `json:"start_time" validate:"required,datetime=15:04"`         // HH:mm
-	EndTime        string            `json:"end_time" validate:"required,datetime=15:04"`           // HH:mm
-	Days           []models.DayType  `json:"days" validate:"required,min=1,dive,required,day_type"` // dive = validasi tiap elemen array
+	StartTime      string            `json:"start_time" validate:"required,datetime=15:04"`
+	EndTime        string            `json:"end_time" validate:"required,datetime=15:04"`
+	Days           []models.DayType  `json:"days" validate:"required,min=1,dive,required,day_type"`
 	Room           string            `json:"room" validate:"required"`
 	Quota          int               `json:"quota" validate:"required,min=1"`
 	CourseType     models.CourseType `json:"course_type" validate:"required,course_type"`
+
+	GroupTypes []models.GroupType `json:"group_types" validate:"required,min=1,dive,required,group_type"`
 }
 
 // UpdateBatchRequest represents the request structure for updating a batch
@@ -60,6 +73,8 @@ type UpdateBatchRequest struct {
 	Room           *string            `json:"room,omitempty" validate:"omitempty"`
 	Quota          *int               `json:"quota,omitempty" validate:"omitempty,min=1"`
 	CourseType     *models.CourseType `json:"course_type,omitempty" validate:"omitempty,course_type"`
+
+	GroupTypes *[]models.GroupType `json:"group_types,omitempty" validate:"omitempty,min=1,dive,required,group_type"`
 }
 
 // BATCH TEACHER

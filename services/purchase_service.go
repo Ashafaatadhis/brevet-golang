@@ -84,6 +84,15 @@ func (s *PurchaseService) CreatePurchase(userID uuid.UUID, batchID uuid.UUID) (*
 			return fmt.Errorf("User belum memiliki GroupType yang valid")
 		}
 
+		// this leak exist when user group type is not verified by admin
+		allowed, err := purchaseRepo.IsGroupTypeAllowedForBatch(batchID, *user.Profile.GroupType)
+		if err != nil {
+			return fmt.Errorf("gagal validasi group type batch: %w", err)
+		}
+		if !allowed {
+			return fmt.Errorf("Batch ini tidak tersedia untuk GroupType '%s'", *user.Profile.GroupType)
+		}
+
 		// 3. Ambil harga
 		price, err := purchaseRepo.GetPriceByGroupType(user.Profile.GroupType)
 		if err != nil {

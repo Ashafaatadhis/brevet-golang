@@ -51,13 +51,13 @@ func (s *BatchService) CreateBatch(courseID uuid.UUID, body *dto.CreateBatchRequ
 	var batch models.Batch
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
-
 		// Validasi course ID
 		_, err := s.courseRepo.WithTx(tx).FindByID(courseID)
 		if err != nil {
 			return err
 		}
 
+		// Copy data dari body ke batch
 		copier.Copy(&batch, body)
 
 		slug := utils.GenerateUniqueSlug(body.Title, s.repo)
@@ -88,12 +88,23 @@ func (s *BatchService) CreateBatch(courseID uuid.UUID, body *dto.CreateBatchRequ
 				BatchID: batch.ID,
 				Day:     day,
 			}
-
 			if err := tx.Create(&batchDay).Error; err != nil {
 				return err
 			}
 		}
 
+		// 🔥 Simpan BatchGroups
+		for _, groupType := range body.GroupTypes {
+			bg := models.BatchGroup{
+				BatchID:   batch.ID,
+				GroupType: groupType,
+			}
+			if err := tx.Create(&bg).Error; err != nil {
+				return err
+			}
+		}
+
+		// Ambil data batch lengkap setelah insert
 		updated, err := s.repo.WithTx(tx).FindByID(batch.ID)
 		if err != nil {
 			return fmt.Errorf("gagal mengambil batch setelah dibuat: %w", err)
@@ -107,7 +118,6 @@ func (s *BatchService) CreateBatch(courseID uuid.UUID, body *dto.CreateBatchRequ
 		return nil, err
 	}
 	return &batch, nil
-
 }
 
 // UpdateBatch updates an existing batch with the provided details
@@ -115,14 +125,14 @@ func (s *BatchService) UpdateBatch(id uuid.UUID, body *dto.UpdateBatchRequest) (
 	var batch models.Batch
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
-		var err error
+		// Ambil batch dari database
 		batchPtr, err := s.repo.WithTx(tx).FindByID(id)
 		if err != nil {
 			return err
 		}
 		batch = utils.Safe(batchPtr, models.Batch{})
 
-		// Copy field yang tidak nil saja
+		// Copy field yang tidak nil dari request ke model
 		if err := copier.CopyWithOption(&batch, body, copier.Option{
 			IgnoreEmpty: true,
 			DeepCopy:    true,
@@ -130,13 +140,7 @@ func (s *BatchService) UpdateBatch(id uuid.UUID, body *dto.UpdateBatchRequest) (
 			return err
 		}
 
-		// Optional: regenerate slug kalau Title berubah
-		// if body.Title != nil {
-		// 	slug := utils.GenerateUniqueSlug(*body.Title, s.repo)
-		// 	batch.Slug = slug
-		// }
-
-		// Parse waktu dari string ke time.Time
+		// Parse StartTime dan EndTime
 		if body.StartTime != nil {
 			parsedStart, err := time.Parse("15:04", *body.StartTime)
 			if err != nil {
@@ -153,11 +157,12 @@ func (s *BatchService) UpdateBatch(id uuid.UUID, body *dto.UpdateBatchRequest) (
 			batch.EndTime = parsedEnd.Format("15:04")
 		}
 
+		// Simpan perubahan batch
 		if err := s.repo.WithTx(tx).Update(&batch); err != nil {
 			return err
 		}
 
-		// Update BatchDays jika diberikan
+		// Update BatchDays jika dikirim
 		if body.Days != nil {
 			if err := tx.Where("batch_id = ?", batch.ID).Delete(&models.BatchDay{}).Error; err != nil {
 				return err
@@ -172,6 +177,24 @@ func (s *BatchService) UpdateBatch(id uuid.UUID, body *dto.UpdateBatchRequest) (
 				}
 			}
 		}
+
+		// ✅ Update BatchGroups jika GroupTypes dikirim
+		if body.GroupTypes != nil {
+			if err := tx.Where("batch_id = ?", batch.ID).Delete(&models.BatchGroup{}).Error; err != nil {
+				return err
+			}
+			for _, gtype := range *body.GroupTypes {
+				batchGroup := models.BatchGroup{
+					BatchID:   batch.ID,
+					GroupType: gtype,
+				}
+				if err := tx.Create(&batchGroup).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		// Ambil data terbaru
 		updated, err := s.repo.WithTx(tx).FindByID(batch.ID)
 		if err != nil {
 			return fmt.Errorf("gagal mengambil batch setelah diupdate: %w", err)
@@ -185,7 +208,6 @@ func (s *BatchService) UpdateBatch(id uuid.UUID, body *dto.UpdateBatchRequest) (
 		return nil, err
 	}
 	return &batch, nil
-
 }
 
 // DeleteBatch deletes a batch by its ID
