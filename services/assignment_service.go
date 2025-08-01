@@ -36,6 +36,25 @@ func (s *AssignmentService) GetAllFilteredAssignments(opts utils.QueryOptions) (
 	return assignments, total, nil
 }
 
+// GetAllFilteredAssignmentsByMeetingID retrieves all assignments with pagination and filtering options
+func (s *AssignmentService) GetAllFilteredAssignmentsByMeetingID(meetingID uuid.UUID, user *utils.Claims, opts utils.QueryOptions) ([]models.Assignment, int64, error) {
+	if user.Role == string(models.RoleTypeGuru) {
+		ok, err := s.meetingRepo.IsMeetingTaughtByUser(meetingID, user.UserID)
+		if err != nil {
+			return nil, 0, err
+		}
+		if !ok {
+			return nil, 0, err
+		}
+	}
+
+	assignments, total, err := s.assignmentRepo.GetAllFilteredAssignmentsByMeetingID(meetingID, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	return assignments, total, nil
+}
+
 // GetAssignmentByID retrieves a single assignment by its ID
 func (s *AssignmentService) GetAssignmentByID(assignmentID uuid.UUID) (*models.Assignment, error) {
 	return s.assignmentRepo.FindByID(assignmentID)

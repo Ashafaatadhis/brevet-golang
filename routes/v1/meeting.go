@@ -68,6 +68,8 @@ func RegisterMeetingRoutes(r fiber.Router, db *gorm.DB) {
 	// ==================================
 	// 				Assignment
 	// ==================================
+	r.Get("/:meetingID/assignments", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"admin", "guru"}), assignmentController.GetAllAssignmentByMeetingID)
 	r.Post("/:meetingID/assignments", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin", "guru"}),
 		middlewares.ValidateBody[dto.CreateAssignmentRequest](), assignmentController.CreateAssignment)
@@ -78,4 +80,5 @@ func RegisterMeetingRoutes(r fiber.Router, db *gorm.DB) {
 	r.Put("/:meetingID/attendances/bulk", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin"}),
 		middlewares.ValidateBody[dto.BulkAttendanceRequest](), attendanceController.BulkUpsertAttendance)
+
 }

@@ -61,6 +61,44 @@ func (r *AssignmentRepository) GetAllFilteredAssignments(opts utils.QueryOptions
 	return assignments, total, err
 }
 
+// GetAllFilteredAssignmentsByMeetingID retrieves all assignments with pagination and filtering options
+func (r *AssignmentRepository) GetAllFilteredAssignmentsByMeetingID(meetingID uuid.UUID, opts utils.QueryOptions) ([]models.Assignment, int64, error) {
+	validSortFields := utils.GetValidColumnsFromStruct(&models.Assignment{})
+
+	sort := opts.Sort
+	if !validSortFields[sort] {
+		sort = "id"
+	}
+
+	order := opts.Order
+	if order != "asc" && order != "desc" {
+		order = "asc"
+	}
+
+	db := r.db.Preload("AssignmentFiles").Model(&models.Assignment{}).
+		Where("meeting_id = ?", meetingID)
+
+	joinConditions := map[string]string{}
+	joinedRelations := map[string]bool{}
+
+	db = utils.ApplyFiltersWithJoins(db, "assignments", opts.Filters, validSortFields, joinConditions, joinedRelations)
+
+	if opts.Search != "" {
+		db = db.Where("title ILIKE ?", "%"+opts.Search+"%")
+	}
+
+	var total int64
+	db.Count(&total)
+
+	var assignments []models.Assignment
+	err := db.Order(fmt.Sprintf("%s %s", sort, order)).
+		Limit(opts.Limit).
+		Offset(opts.Offset).
+		Find(&assignments).Error
+
+	return assignments, total, err
+}
+
 // Create creates a new assignment
 func (r *AssignmentRepository) Create(assignment *models.Assignment) error {
 	return r.db.Create(assignment).Error
