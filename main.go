@@ -2,6 +2,7 @@ package main
 
 import (
 	"brevet-api/config"
+	"brevet-api/middlewares"
 	"brevet-api/routes"
 	"brevet-api/scheduler"
 	"brevet-api/utils"
@@ -33,6 +34,7 @@ func main() {
 	// Middleware: logger
 	app.Use(logger.New())
 	app.Use(recover.New())
+	app.Use(middlewares.LogMiddleware())
 	// Middleware: CORS dari .env
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     config.GetEnv("ALLOWED_ORIGINS", "*"),

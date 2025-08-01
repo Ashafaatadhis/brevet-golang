@@ -14,12 +14,24 @@ import (
 // RegisterMeetingRoutes registers all meeting-related routes
 func RegisterMeetingRoutes(r fiber.Router, db *gorm.DB) {
 
+	fileService := services.NewFileService()
+
 	userRepository := repository.NewUserRepository(db)
 	batchRepository := repository.NewBatchRepository(db)
 
 	meetingRepo := repository.NewMeetingRepository(db)
 	meetingService := services.NewMeetingService(meetingRepo, batchRepository, userRepository, db)
 	meetingController := controllers.NewMeetingController(meetingService, db)
+
+	assignmentRepository := repository.NewAssignmentRepository(db)
+	assignmentService := services.NewAssignmentService(assignmentRepository, meetingRepo, fileService, db)
+	assignmentController := controllers.NewAssignmentController(assignmentService, db)
+
+	meetingRepository := repository.NewMeetingRepository(db)
+	purchaseRepository := repository.NewPurchaseRepository(db)
+	attendanceRepository := repository.NewAttendanceRepository(db)
+	attendanceService := services.NewAttendanceService(attendanceRepository, meetingRepository, purchaseRepository, db)
+	attendanceController := controllers.NewAttendanceController(attendanceService, db)
 
 	r.Get("/", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin"}), meetingController.GetAllMeetings)
@@ -53,4 +65,17 @@ func RegisterMeetingRoutes(r fiber.Router, db *gorm.DB) {
 		meetingController.DeleteTeachersToMeeting,
 	)
 
+	// ==================================
+	// 				Assignment
+	// ==================================
+	r.Post("/:meetingID/assignments", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"admin", "guru"}),
+		middlewares.ValidateBody[dto.CreateAssignmentRequest](), assignmentController.CreateAssignment)
+
+	// ==================================
+	// 				Attendance
+	// ==================================
+	r.Put("/:meetingID/attendances/bulk", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"admin"}),
+		middlewares.ValidateBody[dto.BulkAttendanceRequest](), attendanceController.BulkUpsertAttendance)
 }
