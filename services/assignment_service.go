@@ -8,6 +8,7 @@ import (
 	"brevet-api/utils"
 	"fmt"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/google/uuid"
 	"github.com/jinzhu/copier"
@@ -56,8 +57,42 @@ func (s *AssignmentService) GetAllFilteredAssignmentsByMeetingID(meetingID uuid.
 }
 
 // GetAssignmentByID retrieves a single assignment by its ID
-func (s *AssignmentService) GetAssignmentByID(assignmentID uuid.UUID) (*models.Assignment, error) {
-	return s.assignmentRepo.FindByID(assignmentID)
+func (s *AssignmentService) GetAssignmentByID(user *utils.Claims, assignmentID uuid.UUID) (*models.Assignment, error) {
+	assignment, err := s.assignmentRepo.FindByID(assignmentID)
+	if err != nil {
+		return nil, err
+	}
+
+	switch user.Role {
+	case string(models.RoleTypeAdmin):
+		// ✅ Admin bebas ambil
+		return assignment, nil
+
+	case string(models.RoleTypeGuru):
+		// 🔒 Guru hanya boleh jika ngajar di meeting terkait
+		isGuru, err := s.meetingRepo.IsUserTeachingInMeeting(user.UserID, assignment.MeetingID)
+		if err != nil {
+			return nil, err
+		}
+		if !isGuru {
+			return nil, fmt.Errorf("Anda bukan pengajar di meeting ini")
+		}
+		return assignment, nil
+
+	// case string(models.RoleTypeSiswa):
+	// 	// 🔒 Siswa hanya bisa jika sudah beli batch meeting tersebut
+	// 	isPurchased, err := s.batchRepo.IsUserPurchasedMeetingBatch(user.UserID, assignment.MeetingID)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	if !isPurchased {
+	// 		return nil, fiber.NewError(fiber.StatusForbidden, "Anda belum terdaftar di batch meeting ini")
+	// 	}
+	// 	return assignment, nil
+
+	default:
+		return nil, fiber.NewError(fiber.StatusForbidden, "Role tidak dikenali")
+	}
 }
 
 // CreateAssignment creates a new assignment with the provided details
