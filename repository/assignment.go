@@ -99,6 +99,18 @@ func (r *AssignmentRepository) GetAllFilteredAssignmentsByMeetingID(meetingID uu
 	return assignments, total, err
 }
 
+// IsUserTeachingInMeeting for know user is teacher in this meet
+func (r *MeetingRepository) IsUserTeachingInMeeting(userID, meetingID uuid.UUID) (bool, error) {
+	var count int64
+	err := r.db.Table("meeting_teachers").
+		Where("meeting_id = ? AND user_id = ?", meetingID, userID).
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 // Create creates a new assignment
 func (r *AssignmentRepository) Create(assignment *models.Assignment) error {
 	return r.db.Create(assignment).Error
