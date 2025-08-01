@@ -49,7 +49,7 @@ func (r *BatchRepository) GetAllFilteredBatches(opts utils.QueryOptions) ([]mode
 		order = "asc"
 	}
 
-	db := r.db.Preload("BatchDays").Model(&models.Batch{})
+	db := r.db.Preload("BatchDays").Preload("BatchGroups").Model(&models.Batch{})
 
 	joinConditions := map[string]string{}
 	joinedRelations := map[string]bool{}
@@ -89,7 +89,7 @@ func (r *BatchRepository) GetAllFilteredBatchesByCourseSlug(courseID uuid.UUID, 
 		order = "asc"
 	}
 
-	db := r.db.Preload("BatchDays").Model(&models.Batch{}).Where("course_id = ?", courseID)
+	db := r.db.Preload("BatchDays").Preload("BatchGroups").Model(&models.Batch{}).Where("course_id = ?", courseID)
 
 	joinConditions := map[string]string{}
 	joinedRelations := map[string]bool{}
@@ -115,7 +115,7 @@ func (r *BatchRepository) GetAllFilteredBatchesByCourseSlug(courseID uuid.UUID, 
 // GetBatchBySlug retrieves a batch by its slug
 func (r *BatchRepository) GetBatchBySlug(slug string) (*models.Batch, error) {
 	var batch models.Batch
-	err := r.db.Preload("BatchDays").First(&batch, "slug = ?", slug).Error
+	err := r.db.Preload("BatchDays").Preload("BatchGroups").First(&batch, "slug = ?", slug).Error
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func (r *BatchRepository) Update(batch *models.Batch) error {
 // FindByID retrieves a batch by its ID
 func (r *BatchRepository) FindByID(id uuid.UUID) (*models.Batch, error) {
 	var batch models.Batch
-	err := r.db.Preload("BatchDays").First(&batch, "id = ?", id).Error
+	err := r.db.Preload("BatchDays").Preload("BatchGroups").First(&batch, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -222,6 +222,7 @@ func (r *BatchRepository) GetBatchesByUserPurchaseFiltered(userID uuid.UUID, opt
 	db := r.db.
 		Joins("JOIN purchases ON purchases.batch_id = batches.id").
 		Preload("BatchDays").
+		Preload("BatchGroups").
 		Model(&models.Batch{}).
 		Where("purchases.user_id = ?", userID)
 
@@ -270,6 +271,7 @@ func (r *BatchRepository) GetBatchesByGuruMeetingRelationFiltered(guruID uuid.UU
 		Joins("JOIN meetings ON meetings.batch_id = batches.id").
 		Joins("JOIN meeting_teachers ON meeting_teachers.meeting_id = meetings.id").
 		Preload("BatchDays").
+		Preload("BatchGroups").
 		Model(&models.Batch{}).
 		Where("meeting_teachers.user_id = ?", guruID).
 		Group("batches.id")

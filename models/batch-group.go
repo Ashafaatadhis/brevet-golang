@@ -10,7 +10,7 @@ import (
 type BatchGroup struct {
 	ID      uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
 	BatchID uuid.UUID `gorm:"type:uuid;not null"`
-	Batch   Batch     `gorm:"foreignKey:BatchID;references:ID"`
+	Batch   Batch     `gorm:"foreignKey:BatchID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 
 	GroupType GroupType `gorm:"type:group_type;not null"`
 
