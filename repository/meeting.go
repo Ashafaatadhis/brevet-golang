@@ -375,30 +375,38 @@ func (r *MeetingRepository) GetMeetingsTaughtByTeacherFiltered(userID uuid.UUID,
 		order = "asc"
 	}
 
-	db := r.db.Preload("Teachers").
-		Model(&models.Meeting{}).
+	// 🔍 Subquery: cari batch.id di mana guru ngajar di salah satu meeting
+	subQuery := r.db.
+		Table("meetings").
+		Select("batch_id").
 		Joins("JOIN meeting_teachers ON meeting_teachers.meeting_id = meetings.id").
 		Joins("JOIN batches ON batches.id = meetings.batch_id").
-		Where("meeting_teachers.user_id = ?", userID).
-		Where("batches.slug = ?", batchSlug).
-		Group("meetings.id")
+		Where("batches.slug = ? AND meeting_teachers.user_id = ?", batchSlug, userID).
+		Group("batch_id")
 
-	// Dynamic filters (opsional)
+	// 🔎 Ambil semua meetings di batch tersebut
+	db := r.db.Preload("Teachers").
+		Model(&models.Meeting{}).
+		Joins("JOIN batches ON batches.id = meetings.batch_id").
+		Where("meetings.batch_id IN (?)", subQuery).
+		Where("batches.slug = ?", batchSlug)
+
+	// 🔧 Dynamic filters
 	joinConditions := map[string]string{}
 	joinedRelations := map[string]bool{}
 	db = utils.ApplyFiltersWithJoins(db, "meetings", opts.Filters, validSortFields, joinConditions, joinedRelations)
 
-	// Search by meeting title
+	// 🔍 Search by meeting title
 	if opts.Search != "" {
 		q := "%" + opts.Search + "%"
 		db = db.Where("meetings.title ILIKE ?", q)
 	}
 
-	// Count total
+	// 🔢 Total count
 	var total int64
 	db.Count(&total)
 
-	// Fetch paginated result
+	// 📦 Paginated result
 	var meetings []models.Meeting
 	err := db.
 		Order(fmt.Sprintf("meetings.%s %s", sort, order)).
