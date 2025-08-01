@@ -43,6 +43,31 @@ func (ctrl *AssignmentController) GetAllAssignments(c *fiber.Ctx) error {
 	return utils.SuccessWithMeta(c, fiber.StatusOK, "Assignments fetched", assignmentsResponse, meta)
 }
 
+// GetAllAssignmentByMeetingID retrieves a list of assignments with pagination and filtering options
+func (ctrl *AssignmentController) GetAllAssignmentByMeetingID(c *fiber.Ctx) error {
+	opts := utils.ParseQueryOptions(c)
+	meetingIDParam := c.Params("meetingID")
+	meetingID, err := uuid.Parse(meetingIDParam)
+
+	user := c.Locals("user").(*utils.Claims)
+
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
+	}
+	assignments, total, err := ctrl.assignmentService.GetAllFilteredAssignmentsByMeetingID(meetingID, user, opts)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch assignment", err.Error())
+	}
+
+	var assignmentsResponse []dto.AssignmentResponse
+	if copyErr := copier.Copy(&assignmentsResponse, assignments); copyErr != nil {
+		return utils.ErrorResponse(c, 500, "Failed to map assignment data", copyErr.Error())
+	}
+
+	meta := utils.BuildPaginationMeta(total, opts.Limit, opts.Page)
+	return utils.SuccessWithMeta(c, fiber.StatusOK, "Assignments fetched", assignmentsResponse, meta)
+}
+
 // GetAssignmentByID retrieves a single assignment by its ID
 func (ctrl *AssignmentController) GetAssignmentByID(c *fiber.Ctx) error {
 	assignmentIDParam := c.Params("assignmentID")
