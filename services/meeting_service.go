@@ -7,6 +7,7 @@ import (
 	"brevet-api/utils"
 	"fmt"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/jinzhu/copier"
 	"gorm.io/gorm"
@@ -311,4 +312,21 @@ func (s *MeetingService) GetTeachersByMeetingIDFiltered(meetingID uuid.UUID, opt
 		return nil, 0, err
 	}
 	return meetings, total, nil
+}
+
+// GetStudentsByBatchSlugFiltered for get all students by batch
+func (s *MeetingService) GetStudentsByBatchSlugFiltered(user *utils.Claims, batchSlug string, opts utils.QueryOptions) ([]models.User, int64, error) {
+	if models.RoleType(user.Role) == models.RoleTypeAdmin {
+		return s.meetingRepo.GetStudentsByBatchSlugFiltered(batchSlug, opts)
+	}
+
+	owned, err := s.meetingRepo.IsBatchOwnedByUser(user.UserID, batchSlug)
+	if err != nil {
+		return nil, 0, err
+	}
+	if !owned {
+		return nil, 0, fiber.NewError(fiber.StatusForbidden, "Anda tidak punya akses ke batch ini")
+	}
+
+	return s.meetingRepo.GetStudentsByBatchSlugFiltered(batchSlug, opts)
 }

@@ -15,17 +15,19 @@ import (
 
 // BatchController handles batch-related operations
 type BatchController struct {
-	batchService  *services.BatchService
-	courseService *services.CourseService
-	db            *gorm.DB
+	batchService   *services.BatchService
+	meetingService *services.MeetingService
+	courseService  *services.CourseService
+	db             *gorm.DB
 }
 
 // NewBatchController creates a new BatchController
-func NewBatchController(batchService *services.BatchService, courseService *services.CourseService, db *gorm.DB) *BatchController {
+func NewBatchController(batchService *services.BatchService, meetingService *services.MeetingService, courseService *services.CourseService, db *gorm.DB) *BatchController {
 	return &BatchController{
-		batchService:  batchService,
-		courseService: courseService,
-		db:            db,
+		batchService:   batchService,
+		meetingService: meetingService,
+		courseService:  courseService,
+		db:             db,
 	}
 }
 
@@ -300,25 +302,27 @@ func (ctrl *BatchController) GetMyBatches(c *fiber.Ctx) error {
 }
 
 // GetAllStudents get all students
-// func (ctrl *MeetingController) GetAllStudents(c *fiber.Ctx) error {
-// 	batchSlug := c.Params("batchSlug")
+func (ctrl *BatchController) GetAllStudents(c *fiber.Ctx) error {
+	batchSlug := c.Params("batchSlug")
 
-// 	user := c.Locals("user").(*models.User)
+	user := c.Locals("user").(*utils.Claims)
+	opts := utils.ParseQueryOptions(c)
 
-// 	students, total, err := ctrl.meetingService.GetStudentsByBatchSlugFiltered(user, batchSlug)
-// 	if err != nil {
-// 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to get students", err.Error())
-// 	}
+	var total int64
+	var err error
 
-// 	var userResponses []dto.UserResponse
-// 	if copyErr := copier.Copy(&userResponses, students); copyErr != nil {
-// 		return utils.ErrorResponse(c, 500, "Failed to map meeting data", copyErr.Error())
-// 	}
+	students, total, err := ctrl.meetingService.GetStudentsByBatchSlugFiltered(user, batchSlug, opts)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to get students", err.Error())
+	}
 
-// 	meta := utils.BuildPaginationMeta(total, opts.Limit, opts.Page)
+	var userResponses []dto.UserResponse
+	if copyErr := copier.Copy(&userResponses, students); copyErr != nil {
+		return utils.ErrorResponse(c, 500, "Failed to map meeting data", copyErr.Error())
+	}
 
-// 	return utils.SuccessWithMeta(c, fiber.StatusOK, "Meetings fetched", students, meta)
-// 	return c.JSON(fiber.Map{
-// 		"students": students,
-// 	})
-// }
+	meta := utils.BuildPaginationMeta(total, opts.Limit, opts.Page)
+
+	return utils.SuccessWithMeta(c, fiber.StatusOK, "Meetings fetched", userResponses, meta)
+
+}

@@ -255,3 +255,62 @@ func (r *MeetingRepository) GetTeachersByMeetingIDFiltered(meetingID uuid.UUID, 
 
 	return teachers, total, err
 }
+
+// GetStudentsByBatchSlugFiltered get all students by batch
+func (r *MeetingRepository) GetStudentsByBatchSlugFiltered(batchSlug string, opts utils.QueryOptions) ([]models.User, int64, error) {
+	validSortFields := utils.GetValidColumnsFromStruct(&models.User{})
+
+	sort := opts.Sort
+	if !validSortFields[sort] {
+		sort = "id"
+	}
+
+	order := opts.Order
+	if order != "asc" && order != "desc" {
+		order = "asc"
+	}
+
+	db := r.db.Preload("Profile").
+		Model(&models.User{}).
+		Joins("JOIN purchases ON purchases.user_id = users.id").
+		Joins("JOIN batches ON batches.id = purchases.batch_id").
+		Where("batches.slug = ?", batchSlug).
+		Where("users.role_type = ?", models.RoleTypeSiswa).
+		Group("users.id")
+
+	// Apply filters
+	joinConditions := map[string]string{}
+	joinedRelations := map[string]bool{}
+	db = utils.ApplyFiltersWithJoins(db, "users", opts.Filters, validSortFields, joinConditions, joinedRelations)
+
+	// Search
+	if opts.Search != "" {
+		q := "%" + opts.Search + "%"
+		db = db.Where("users.name ILIKE ? OR users.email ILIKE ?", q, q)
+	}
+
+	var total int64
+	db.Count(&total)
+
+	var students []models.User
+	err := db.
+		Order(fmt.Sprintf("users.%s %s", sort, order)).
+		Limit(opts.Limit).
+		Offset(opts.Offset).
+		Find(&students).Error
+
+	return students, total, err
+}
+
+// IsBatchOwnedByUser for get all batch by owned teacher
+func (r *MeetingRepository) IsBatchOwnedByUser(userID uuid.UUID, batchSlug string) (bool, error) {
+	var count int64
+	err := r.db.
+		Model(&models.Meeting{}).
+		Joins("JOIN meeting_teachers ON meeting_teachers.meeting_id = meetings.id").
+		Joins("JOIN batches ON batches.id = meetings.batch_id").
+		Where("meeting_teachers.user_id = ? AND batches.slug = ?", userID, batchSlug).
+		Count(&count).Error
+
+	return count > 0, err
+}

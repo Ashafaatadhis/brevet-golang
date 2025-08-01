@@ -21,7 +21,11 @@ func RegisterCourseRoutes(r fiber.Router, db *gorm.DB) {
 	batchRepository := repository.NewBatchRepository(db)
 	userRepository := repository.NewUserRepository(db)
 	batchService := services.NewBatchService(batchRepository, userRepository, courseRepository, db, fileService)
-	batchController := controllers.NewBatchController(batchService, courseService, db)
+
+	meetingRepository := repository.NewMeetingRepository(db)
+	meetingService := services.NewMeetingService(meetingRepository, batchRepository, userRepository, db)
+
+	batchController := controllers.NewBatchController(batchService, meetingService, courseService, db)
 
 	r.Get("/", courseController.GetAllCourses)
 	r.Get("/:slug", courseController.GetCourseBySlug)
