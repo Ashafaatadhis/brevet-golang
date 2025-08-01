@@ -28,9 +28,9 @@ func RegisterAssignmentRoutes(r fiber.Router, db *gorm.DB) {
 	r.Get("/:assignmentID", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin"}), assignmentController.GetAssignmentByID)
 	r.Patch("/:assignmentID", middlewares.RequireAuth(),
-		middlewares.RequireRole([]string{"admin"}), middlewares.ValidateBody[dto.UpdateAssignmentRequest](),
+		middlewares.RequireRole([]string{"admin", "guru"}), middlewares.ValidateBody[dto.UpdateAssignmentRequest](),
 		assignmentController.UpdateAssignment)
 	r.Delete("/:assignmentID", middlewares.RequireAuth(),
-		middlewares.RequireRole([]string{"admin"}), assignmentController.DeleteAssignment)
+		middlewares.RequireRole([]string{"admin", "guru"}), assignmentController.DeleteAssignment)
 
 }

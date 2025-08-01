@@ -298,3 +298,27 @@ func (ctrl *BatchController) GetMyBatches(c *fiber.Ctx) error {
 
 	return utils.SuccessWithMeta(c, fiber.StatusOK, "Batch berhasil diambil", batchesResponse, meta)
 }
+
+// GetAllStudents get all students
+// func (ctrl *MeetingController) GetAllStudents(c *fiber.Ctx) error {
+// 	batchSlug := c.Params("batchSlug")
+
+// 	user := c.Locals("user").(*models.User)
+
+// 	students, total, err := ctrl.meetingService.GetStudentsByBatchSlugFiltered(user, batchSlug)
+// 	if err != nil {
+// 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to get students", err.Error())
+// 	}
+
+// 	var userResponses []dto.UserResponse
+// 	if copyErr := copier.Copy(&userResponses, students); copyErr != nil {
+// 		return utils.ErrorResponse(c, 500, "Failed to map meeting data", copyErr.Error())
+// 	}
+
+// 	meta := utils.BuildPaginationMeta(total, opts.Limit, opts.Page)
+
+// 	return utils.SuccessWithMeta(c, fiber.StatusOK, "Meetings fetched", students, meta)
+// 	return c.JSON(fiber.Map{
+// 		"students": students,
+// 	})
+// }

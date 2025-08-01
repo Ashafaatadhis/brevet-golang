@@ -271,7 +271,7 @@ func (r *BatchRepository) GetBatchesByGuruMeetingRelationFiltered(guruID uuid.UU
 		Joins("JOIN meeting_teachers ON meeting_teachers.meeting_id = meetings.id").
 		Preload("BatchDays").
 		Model(&models.Batch{}).
-		Where("meeting_teacher.user_id = ?", guruID).
+		Where("meeting_teachers.user_id = ?", guruID).
 		Group("batches.id")
 
 	joinConditions := map[string]string{}

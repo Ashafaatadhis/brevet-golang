@@ -51,6 +51,11 @@ func RegisterBatchRoute(r fiber.Router, db *gorm.DB) {
 		middlewares.ValidateBody[dto.CreateMeetingRequest](),
 		meetingController.CreateMeeting)
 
+	// Get All Students
+	// r.Get("/:batchSlug/students", middlewares.RequireAuth(),
+	// 	middlewares.RequireRole([]string{"admin", "guru"}),
+	// 	batchController.GetAllStudents)
+
 	// THIS IS ROUTE FOR ASSIGN TEACHER TO BATCH
 	// 	Method	Route	Deskripsi
 	// POST	/batches/:batchID/teachers	Tambah teacher ke batch tertentu
