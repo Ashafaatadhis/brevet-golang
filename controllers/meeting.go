@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"brevet-api/dto"
+	"brevet-api/models"
 	"brevet-api/services"
 	"brevet-api/utils"
 
@@ -46,13 +47,26 @@ func (ctrl *MeetingController) GetAllMeetings(c *fiber.Ctx) error {
 // GetMeetingsByBatchSlug retrieves a list of meetings for a specific batch
 func (ctrl *MeetingController) GetMeetingsByBatchSlug(c *fiber.Ctx) error {
 	opts := utils.ParseQueryOptions(c)
-
+	user := c.Locals("user").(*utils.Claims)
 	batchSlug := c.Params("batchSlug")
-	meetings, total, err := ctrl.meetingService.GetMeetingsByBatchSlug(batchSlug, opts)
+
+	var meetings []models.Meeting
+	var total int64
+	var err error
+
+	switch user.Role {
+	case string(models.RoleTypeSiswa):
+		meetings, total, err = ctrl.meetingService.GetMeetingsPurchasedByUser(user.UserID, batchSlug, opts)
+	case string(models.RoleTypeGuru):
+		meetings, total, err = ctrl.meetingService.GetMeetingsTaughtByTeacher(user.UserID, batchSlug, opts)
+	case string(models.RoleTypeAdmin):
+		meetings, total, err = ctrl.meetingService.GetMeetingsByBatchSlug(batchSlug, opts)
+	default:
+		return utils.ErrorResponse(c, fiber.StatusForbidden, "Akses ditolak", "Hanya siswa dan guru yang dapat melihat meetings ini")
+	}
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch meetings", err.Error())
 	}
-
 	var meetingResponse []dto.MeetingResponse
 	if copyErr := copier.Copy(&meetingResponse, meetings); copyErr != nil {
 		return utils.ErrorResponse(c, 500, "Failed to map meeting data", copyErr.Error())
