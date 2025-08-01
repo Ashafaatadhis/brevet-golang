@@ -53,8 +53,18 @@ func (s *AssignmentService) CreateAssignment(user *utils.Claims, meetingID uuid.
 		}
 
 		// 🛡️ Access Control: hanya guru yang bersangkutan atau admin yang boleh create
-		if user.Role == string(models.RoleTypeGuru) && meeting.TeacherID != user.UserID {
-			return fmt.Errorf("forbidden: user %s not authorized to create assignment for meeting %s", user.UserID, meeting.ID)
+		// if user.Role == string(models.RoleTypeGuru) && meeting.TeacherID != user.UserID {
+		// 	return fmt.Errorf("forbidden: user %s not authorized to create assignment for meeting %s", user.UserID, meeting.ID)
+		// }
+
+		if user.Role == string(models.RoleTypeGuru) {
+			ok, err := s.meetingRepo.IsMeetingTaughtByUser(meeting.ID, user.UserID)
+			if err != nil {
+				return fmt.Errorf("failed to check meeting-teacher relation: %w", err)
+			}
+			if !ok {
+				return fmt.Errorf("forbidden: user %s is not assigned to teach meeting %s", user.UserID, meeting.ID)
+			}
 		}
 
 		assignmentPtr := &models.Assignment{

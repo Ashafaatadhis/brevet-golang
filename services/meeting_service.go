@@ -330,3 +330,22 @@ func (s *MeetingService) GetStudentsByBatchSlugFiltered(user *utils.Claims, batc
 
 	return s.meetingRepo.GetStudentsByBatchSlugFiltered(batchSlug, opts)
 }
+
+// GetMeetingsPurchasedByUser is service for get meetings where the user has purchased
+func (s *MeetingService) GetMeetingsPurchasedByUser(userID uuid.UUID, batchSlug string, opts utils.QueryOptions) ([]models.Meeting, int64, error) {
+	return s.meetingRepo.GetMeetingsPurchasedByUserFiltered(userID, batchSlug, opts)
+}
+
+// GetMeetingsTaughtByTeacher is service for get meetings where the teacher has taught
+func (s *MeetingService) GetMeetingsTaughtByTeacher(userID uuid.UUID, batchSlug string, opts utils.QueryOptions) ([]models.Meeting, int64, error) {
+	// 🔒 Validasi kepemilikan batch
+	owned, err := s.meetingRepo.IsBatchOwnedByUser(userID, batchSlug)
+	if err != nil {
+		return nil, 0, err
+	}
+	if !owned {
+		return nil, 0, fiber.NewError(fiber.StatusForbidden, "Anda tidak mengajar di batch ini")
+	}
+
+	return s.meetingRepo.GetMeetingsTaughtByTeacherFiltered(userID, batchSlug, opts)
+}

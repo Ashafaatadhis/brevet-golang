@@ -301,6 +301,43 @@ func (ctrl *BatchController) GetMyBatches(c *fiber.Ctx) error {
 	return utils.SuccessWithMeta(c, fiber.StatusOK, "Batch berhasil diambil", batchesResponse, meta)
 }
 
+// GetMyMeetings this function for mymeetings controller
+func (ctrl *BatchController) GetMyMeetings(c *fiber.Ctx) error {
+	user := c.Locals("user").(*utils.Claims)
+	batchSlug := c.Params("batchSlug")
+	opts := utils.ParseQueryOptions(c)
+
+	var meetings []models.Meeting
+	var total int64
+	var err error
+
+	switch user.Role {
+	case string(models.RoleTypeSiswa):
+		meetings, total, err = ctrl.meetingService.GetMeetingsPurchasedByUser(user.UserID, batchSlug, opts)
+	case string(models.RoleTypeGuru):
+		meetings, total, err = ctrl.meetingService.GetMeetingsTaughtByTeacher(user.UserID, batchSlug, opts)
+	default:
+		return utils.ErrorResponse(c, fiber.StatusForbidden, "Akses ditolak", "Hanya siswa dan guru yang dapat melihat meetings ini")
+	}
+
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal mengambil data batch", err.Error())
+	}
+
+	var meetingsResponse []dto.MeetingResponse
+
+	if err := copier.CopyWithOption(&meetingsResponse, meetings, copier.Option{
+		IgnoreEmpty: true,
+		DeepCopy:    true,
+	}); err != nil {
+		return utils.ErrorResponse(c, 500, "Failed to map meeting data", err.Error())
+	}
+
+	meta := utils.BuildPaginationMeta(total, opts.Limit, opts.Page)
+
+	return utils.SuccessWithMeta(c, fiber.StatusOK, "Batch berhasil diambil", meetingsResponse, meta)
+}
+
 // GetAllStudents get all students
 func (ctrl *BatchController) GetAllStudents(c *fiber.Ctx) error {
 	batchSlug := c.Params("batchSlug")
