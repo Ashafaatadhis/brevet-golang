@@ -44,7 +44,7 @@ func RegisterBatchRoute(r fiber.Router, db *gorm.DB) {
 	)
 
 	r.Get("/:batchSlug/meetings", middlewares.RequireAuth(),
-		middlewares.RequireRole([]string{"admin"}),
+		middlewares.RequireRole([]string{"admin", "siswa", "guru"}),
 		meetingController.GetMeetingsByBatchSlug)
 	r.Post("/:batchID/meetings", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin"}),

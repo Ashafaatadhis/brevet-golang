@@ -331,7 +331,7 @@ func (r *MeetingRepository) GetMeetingsPurchasedByUserFiltered(userID uuid.UUID,
 
 	// JOIN ke purchases, dan preload relasi
 
-	db := r.db.
+	db := r.db.Preload("Teachers").
 		Model(&models.Meeting{}).
 		Joins("JOIN batches ON batches.id = meetings.batch_id").
 		Joins("JOIN purchases ON purchases.batch_id = batches.id").
@@ -375,7 +375,7 @@ func (r *MeetingRepository) GetMeetingsTaughtByTeacherFiltered(userID uuid.UUID,
 		order = "asc"
 	}
 
-	db := r.db.
+	db := r.db.Preload("Teachers").
 		Model(&models.Meeting{}).
 		Joins("JOIN meeting_teachers ON meeting_teachers.meeting_id = meetings.id").
 		Joins("JOIN batches ON batches.id = meetings.batch_id").

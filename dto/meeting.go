@@ -15,6 +15,8 @@ type MeetingResponse struct {
 	Description string             `json:"description"`
 	Type        models.MeetingType `json:"meeting_type"`
 
+	Teachers []UserResponse `json:"teachers"`
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
