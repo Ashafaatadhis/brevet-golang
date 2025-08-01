@@ -76,7 +76,9 @@ func (ctrl *AssignmentController) GetAssignmentByID(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 
-	assignment, err := ctrl.assignmentService.GetAssignmentByID(assignmentID)
+	user := c.Locals("user").(*utils.Claims)
+
+	assignment, err := ctrl.assignmentService.GetAssignmentByID(user, assignmentID)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Assignment not found", err.Error())
 	}
