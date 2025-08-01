@@ -136,3 +136,18 @@ func (r *PurchaseRepository) FindByID(id uuid.UUID) (*models.Purchase, error) {
 	}
 	return &purchase, nil
 }
+
+// IsGroupTypeAllowedForBatch for checking group type
+func (r *PurchaseRepository) IsGroupTypeAllowedForBatch(batchID uuid.UUID, groupType models.GroupType) (bool, error) {
+	var count int64
+	err := r.db.
+		Model(&models.BatchGroup{}).
+		Where("batch_id = ? AND group_type = ?", batchID, groupType).
+		Count(&count).Error
+
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
