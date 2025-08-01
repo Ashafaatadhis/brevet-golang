@@ -142,8 +142,17 @@ func (s *AssignmentService) UpdateAssignment(user *utils.Claims, assignmentID uu
 		}
 
 		// 🛡️ Access Control: hanya guru pemilik atau admin yang bisa update
-		if user.Role == string(models.RoleTypeGuru) && assignment.TeacherID != user.UserID {
-			return fmt.Errorf("forbidden: user %s not authorized to update assignment %s", user.UserID, assignment.ID)
+		// if user.Role == string(models.RoleTypeGuru) && assignment.TeacherID != user.UserID {
+		// 	return fmt.Errorf("forbidden: user %s not authorized to update assignment %s", user.UserID, assignment.ID)
+		// }
+		if user.Role == string(models.RoleTypeGuru) {
+			ok, err := s.meetingRepo.IsMeetingTaughtByUser(assignment.MeetingID, user.UserID)
+			if err != nil {
+				return fmt.Errorf("failed to check meeting-teacher relation: %w", err)
+			}
+			if !ok {
+				return fmt.Errorf("forbidden: user %s is not assigned to teach meeting %s", user.UserID, assignment.MeetingID)
+			}
 		}
 
 		// Copy field yang tidak nil saja
@@ -207,8 +216,17 @@ func (s *AssignmentService) DeleteAssignment(user *utils.Claims, assignmentID uu
 		}
 
 		// 🛡️ Access Control
-		if user.Role == string(models.RoleTypeGuru) && assignmentRsp.TeacherID != user.UserID {
-			return fmt.Errorf("forbidden: user %s not authorized to delete assignment %s", user.UserID, assignmentRsp.ID)
+		// if user.Role == string(models.RoleTypeGuru) && assignmentRsp.TeacherID != user.UserID {
+		// 	return fmt.Errorf("forbidden: user %s not authorized to delete assignment %s", user.UserID, assignmentRsp.ID)
+		// }
+		if user.Role == string(models.RoleTypeGuru) {
+			ok, err := s.meetingRepo.IsMeetingTaughtByUser(assignmentRsp.MeetingID, user.UserID)
+			if err != nil {
+				return fmt.Errorf("failed to check meeting-teacher relation: %w", err)
+			}
+			if !ok {
+				return fmt.Errorf("forbidden: user %s is not assigned to teach meeting %s", user.UserID, assignmentRsp.MeetingID)
+			}
 		}
 
 		assignment = utils.Safe(assignmentRsp, models.Assignment{})
