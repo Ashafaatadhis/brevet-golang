@@ -66,6 +66,8 @@ func RegisterMeRoutes(r fiber.Router, db *gorm.DB) {
 
 	r.Get("/batches", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"guru", "siswa"}), batchController.GetMyBatches)
+	r.Get("/batches/:batchSlug/meetings", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"guru", "siswa"}), batchController.GetMyMeetings)
 	// r.Get("/batches", middlewares.RequireAuth(),
 	// 	middlewares.RequireRole([]string{"guru", "siswa"}), batchController.GetMyBatchesByID)
 }
