@@ -17,9 +17,11 @@ func RegisterAssignmentRoutes(r fiber.Router, db *gorm.DB) {
 
 	fileService := services.NewFileService()
 
+	purchaseRepo := repository.NewPurchaseRepository(db)
+
 	meetingRepo := repository.NewMeetingRepository(db)
 	assignmentRepository := repository.NewAssignmentRepository(db)
-	assignmentService := services.NewAssignmentService(assignmentRepository, meetingRepo, fileService, db)
+	assignmentService := services.NewAssignmentService(assignmentRepository, meetingRepo, purchaseRepo, fileService, db)
 
 	assignmentController := controllers.NewAssignmentController(assignmentService, db)
 

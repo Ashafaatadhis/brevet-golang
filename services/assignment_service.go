@@ -19,13 +19,14 @@ import (
 type AssignmentService struct {
 	assignmentRepo *repository.AssignmentRepository
 	meetingRepo    *repository.MeetingRepository
+	purchaseRepo   *repository.PurchaseRepository
 	fileService    *FileService
 	db             *gorm.DB
 }
 
 // NewAssignmentService creates a new instance of AssignmentService
-func NewAssignmentService(assignmentRepository *repository.AssignmentRepository, meetingRepository *repository.MeetingRepository, fileService *FileService, db *gorm.DB) *AssignmentService {
-	return &AssignmentService{assignmentRepo: assignmentRepository, meetingRepo: meetingRepository, fileService: fileService, db: db}
+func NewAssignmentService(assignmentRepository *repository.AssignmentRepository, meetingRepository *repository.MeetingRepository, purchaseRepo *repository.PurchaseRepository, fileService *FileService, db *gorm.DB) *AssignmentService {
+	return &AssignmentService{assignmentRepo: assignmentRepository, meetingRepo: meetingRepository, purchaseRepo: purchaseRepo, fileService: fileService, db: db}
 }
 
 // GetAllFilteredAssignments retrieves all assignments with pagination and filtering options
@@ -79,16 +80,20 @@ func (s *AssignmentService) GetAssignmentByID(user *utils.Claims, assignmentID u
 		}
 		return assignment, nil
 
-	// case string(models.RoleTypeSiswa):
-	// 	// 🔒 Siswa hanya bisa jika sudah beli batch meeting tersebut
-	// 	isPurchased, err := s.batchRepo.IsUserPurchasedMeetingBatch(user.UserID, assignment.MeetingID)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	if !isPurchased {
-	// 		return nil, fiber.NewError(fiber.StatusForbidden, "Anda belum terdaftar di batch meeting ini")
-	// 	}
-	// 	return assignment, nil
+	case string(models.RoleTypeSiswa):
+		meeting, err := s.meetingRepo.FindByID(assignment.MeetingID)
+		if err != nil {
+			return nil, err
+		}
+		// 🔒 Siswa hanya bisa jika sudah beli batch meeting tersebut
+		isPurchased, err := s.purchaseRepo.HasPaid(user.UserID, meeting.BatchID)
+		if err != nil {
+			return nil, err
+		}
+		if !isPurchased {
+			return nil, fiber.NewError(fiber.StatusForbidden, "Anda belum terdaftar di batch meeting ini")
+		}
+		return assignment, nil
 
 	default:
 		return nil, fiber.NewError(fiber.StatusForbidden, "Role tidak dikenali")

@@ -20,11 +20,12 @@ func RegisterMeetingRoutes(r fiber.Router, db *gorm.DB) {
 	batchRepository := repository.NewBatchRepository(db)
 
 	meetingRepo := repository.NewMeetingRepository(db)
-	meetingService := services.NewMeetingService(meetingRepo, batchRepository, userRepository, db)
+	purchaseRepo := repository.NewPurchaseRepository(db)
+	meetingService := services.NewMeetingService(meetingRepo, batchRepository, purchaseRepo, userRepository, db)
 	meetingController := controllers.NewMeetingController(meetingService, db)
 
 	assignmentRepository := repository.NewAssignmentRepository(db)
-	assignmentService := services.NewAssignmentService(assignmentRepository, meetingRepo, fileService, db)
+	assignmentService := services.NewAssignmentService(assignmentRepository, meetingRepo, purchaseRepo, fileService, db)
 	assignmentController := controllers.NewAssignmentController(assignmentService, db)
 
 	meetingRepository := repository.NewMeetingRepository(db)
