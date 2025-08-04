@@ -15,15 +15,16 @@ import (
 
 // MeetingService provides methods for managing meetings
 type MeetingService struct {
-	meetingRepo *repository.MeetingRepository
-	batchRepo   *repository.BatchRepository
-	userRepo    *repository.UserRepository
-	db          *gorm.DB
+	meetingRepo  *repository.MeetingRepository
+	batchRepo    *repository.BatchRepository
+	purchaseRepo *repository.PurchaseRepository
+	userRepo     *repository.UserRepository
+	db           *gorm.DB
 }
 
 // NewMeetingService creates a new instance of MeetingService
-func NewMeetingService(meetingRepo *repository.MeetingRepository, batchRepo *repository.BatchRepository, userRepo *repository.UserRepository, db *gorm.DB) *MeetingService {
-	return &MeetingService{meetingRepo: meetingRepo, batchRepo: batchRepo, userRepo: userRepo, db: db}
+func NewMeetingService(meetingRepo *repository.MeetingRepository, batchRepo *repository.BatchRepository, purchaseRepo *repository.PurchaseRepository, userRepo *repository.UserRepository, db *gorm.DB) *MeetingService {
+	return &MeetingService{meetingRepo: meetingRepo, batchRepo: batchRepo, purchaseRepo: purchaseRepo, userRepo: userRepo, db: db}
 }
 
 // GetAllFilteredMeetings retrieves all meetings with pagination and filtering options
@@ -333,7 +334,20 @@ func (s *MeetingService) GetStudentsByBatchSlugFiltered(user *utils.Claims, batc
 
 // GetMeetingsPurchasedByUser is service for get meetings where the user has purchased
 func (s *MeetingService) GetMeetingsPurchasedByUser(userID uuid.UUID, batchSlug string, opts utils.QueryOptions) ([]models.Meeting, int64, error) {
-	return s.meetingRepo.GetMeetingsPurchasedByUserFiltered(userID, batchSlug, opts)
+	batch, err := s.batchRepo.GetBatchBySlug(batchSlug)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	hasPaid, err := s.purchaseRepo.HasPaid(userID, batch.ID)
+	if err != nil {
+		return nil, 0, err
+	}
+	if !hasPaid {
+		return nil, 0, fiber.NewError(fiber.StatusForbidden, "Anda belum membeli batch ini")
+	}
+
+	return s.meetingRepo.GetMeetingsByBatchSlugFiltered(batchSlug, opts)
 }
 
 // GetMeetingsTaughtByTeacher is service for get meetings where the teacher has taught
@@ -347,5 +361,5 @@ func (s *MeetingService) GetMeetingsTaughtByTeacher(userID uuid.UUID, batchSlug 
 		return nil, 0, fiber.NewError(fiber.StatusForbidden, "Anda tidak mengajar di batch ini")
 	}
 
-	return s.meetingRepo.GetMeetingsTaughtByTeacherFiltered(userID, batchSlug, opts)
+	return s.meetingRepo.GetMeetingsByBatchSlugFiltered(batchSlug, opts)
 }

@@ -41,7 +41,7 @@ func (r *MeetingRepository) GetAllFilteredMeetings(opts utils.QueryOptions) ([]m
 		order = "asc"
 	}
 
-	db := r.db.Model(&models.Meeting{})
+	db := r.db.Preload("Assignments").Model(&models.Meeting{})
 
 	joinConditions := map[string]string{}
 	joinedRelations := map[string]bool{}
@@ -78,7 +78,7 @@ func (r *MeetingRepository) GetMeetingsByBatchSlugFiltered(batchSlug string, opt
 		order = "asc"
 	}
 
-	db := r.db.Model(&models.Meeting{}).
+	db := r.db.Preload("Assignments").Model(&models.Meeting{}).
 		Joins("JOIN batches ON batches.id = meetings.batch_id").
 		Where("batches.slug = ?", batchSlug)
 
@@ -106,7 +106,7 @@ func (r *MeetingRepository) GetMeetingsByBatchSlugFiltered(batchSlug string, opt
 // FindByID retrieves a meeting by its ID
 func (r *MeetingRepository) FindByID(id uuid.UUID) (*models.Meeting, error) {
 	var meeting models.Meeting
-	err := r.db.First(&meeting, "id = ?", id).Error
+	err := r.db.Preload("Assignments").First(&meeting, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -313,97 +313,6 @@ func (r *MeetingRepository) IsBatchOwnedByUser(userID uuid.UUID, batchSlug strin
 		Count(&count).Error
 
 	return count > 0, err
-}
-
-// GetMeetingsPurchasedByUserFiltered for get
-func (r *MeetingRepository) GetMeetingsPurchasedByUserFiltered(userID uuid.UUID, batchSlug string, opts utils.QueryOptions) ([]models.Meeting, int64, error) {
-	validSortFields := utils.GetValidColumnsFromStruct(&models.Meeting{})
-
-	sort := opts.Sort
-	if !validSortFields[sort] {
-		sort = "id"
-	}
-
-	order := opts.Order
-	if order != "asc" && order != "desc" {
-		order = "asc"
-	}
-
-	// JOIN ke purchases, dan preload relasi
-
-	db := r.db.Preload("Teachers").
-		Model(&models.Meeting{}).
-		Joins("JOIN batches ON batches.id = meetings.batch_id").
-		Joins("JOIN purchases ON purchases.batch_id = batches.id").
-		Where("purchases.user_id = ?", userID)
-
-	joinConditions := map[string]string{}
-	joinedRelations := map[string]bool{}
-
-	// Apply dynamic filter (dari query param)
-	db = utils.ApplyFiltersWithJoins(db, "batches", opts.Filters, validSortFields, joinConditions, joinedRelations)
-
-	// Search by title (opsional)
-	if opts.Search != "" {
-		db = db.Where("batches.title ILIKE ?", "%"+opts.Search+"%")
-	}
-
-	var total int64
-	db.Count(&total)
-
-	var meeting []models.Meeting
-	err := db.
-		Order(fmt.Sprintf("meetings.%s %s", sort, order)).
-		Limit(opts.Limit).
-		Offset(opts.Offset).
-		Find(&meeting).Error
-
-	return meeting, total, err
-}
-
-// GetMeetingsTaughtByTeacherFiltered for get
-func (r *MeetingRepository) GetMeetingsTaughtByTeacherFiltered(userID uuid.UUID, batchSlug string, opts utils.QueryOptions) ([]models.Meeting, int64, error) {
-	validSortFields := utils.GetValidColumnsFromStruct(&models.Meeting{})
-
-	sort := opts.Sort
-	if !validSortFields[sort] {
-		sort = "id"
-	}
-
-	order := opts.Order
-	if order != "asc" && order != "desc" {
-		order = "asc"
-	}
-
-	db := r.db.
-		Model(&models.Meeting{}).
-		Joins("JOIN batches ON batches.id = meetings.batch_id").
-		Where("batches.slug = ?", batchSlug).
-		Preload("Teachers")
-
-	// 🔧 Dynamic filters
-	joinConditions := map[string]string{}
-	joinedRelations := map[string]bool{}
-	db = utils.ApplyFiltersWithJoins(db, "meetings", opts.Filters, validSortFields, joinConditions, joinedRelations)
-
-	// 🔍 Search by title
-	if opts.Search != "" {
-		db = db.Where("meetings.title ILIKE ?", "%"+opts.Search+"%")
-	}
-
-	// 🔢 Hitung total
-	var total int64
-	db.Count(&total)
-
-	// 📦 Ambil hasil paginasi
-	var meetings []models.Meeting
-	err := db.
-		Order(fmt.Sprintf("meetings.%s %s", sort, order)).
-		Limit(opts.Limit).
-		Offset(opts.Offset).
-		Find(&meetings).Error
-
-	return meetings, total, err
 }
 
 // IsMeetingTaughtByUser for get taught
