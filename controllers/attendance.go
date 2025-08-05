@@ -43,6 +43,25 @@ func (ctrl *AttendanceController) GetAllAttendances(c *fiber.Ctx) error {
 	return utils.SuccessWithMeta(c, fiber.StatusOK, "Attendances fetched", attendanceResponses, meta)
 }
 
+// GetAllAttendancesByBatchSlug retrieves a list of attendance records with pagination and filtering
+func (ctrl *AttendanceController) GetAllAttendancesByBatchSlug(c *fiber.Ctx) error {
+	opts := utils.ParseQueryOptions(c)
+	batchSlug := c.Params("batchSlug")
+
+	attendances, total, err := ctrl.attendanceService.GetAllFilteredAttendancesByBatchSlug(batchSlug, opts)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch attendances", err.Error())
+	}
+
+	var attendanceResponses []dto.AttendanceResponse
+	if copyErr := copier.Copy(&attendanceResponses, attendances); copyErr != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to map attendance data", copyErr.Error())
+	}
+
+	meta := utils.BuildPaginationMeta(total, opts.Limit, opts.Page)
+	return utils.SuccessWithMeta(c, fiber.StatusOK, "Attendances fetched", attendanceResponses, meta)
+}
+
 // GetAttendanceByID retrieves a single attendance record by its ID
 func (ctrl *AttendanceController) GetAttendanceByID(c *fiber.Ctx) error {
 	attendanceIDParam := c.Params("attendanceID")

@@ -34,6 +34,15 @@ func (s *AttendanceServices) GetAllFilteredAttendances(opts utils.QueryOptions) 
 	return attendances, total, nil
 }
 
+// GetAllFilteredAttendancesByBatchSlug retrieves all attendances with pagination and filtering options
+func (s *AttendanceServices) GetAllFilteredAttendancesByBatchSlug(batchSlug string, opts utils.QueryOptions) ([]models.Attendance, int64, error) {
+	attendances, total, err := s.attendanceRepo.GetAllFilteredAttendancesByBatchSlug(batchSlug, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	return attendances, total, nil
+}
+
 // GetAttendanceByID retrieves a single attendance by its ID
 func (s *AttendanceServices) GetAttendanceByID(attendanceID uuid.UUID) (*models.Attendance, error) {
 	return s.attendanceRepo.FindByID(attendanceID)

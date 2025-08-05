@@ -74,5 +74,7 @@ func RegisterBatchRoute(r fiber.Router, db *gorm.DB) {
 	r.Put("/:batchID/attendances/bulk", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin"}),
 		middlewares.ValidateBody[dto.BulkAttendanceRequest](), attendanceController.BulkUpsertAttendance)
+	r.Get("/:batchSlug/attendances", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"admin"}), attendanceController.GetAllAttendancesByBatchSlug)
 
 }
