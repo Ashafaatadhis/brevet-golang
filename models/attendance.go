@@ -8,11 +8,11 @@ import (
 
 // Attendance is a struct that represents a attendance
 type Attendance struct {
-	ID        uuid.UUID        `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
-	MeetingID uuid.UUID        `gorm:"type:uuid;not null;uniqueIndex:idx_meeting_user"`
-	UserID    uuid.UUID        `gorm:"type:uuid;not null;uniqueIndex:idx_meeting_user"`
-	Status    AttendanceStatus `gorm:"type:attendance_status;not null"`
-	Note      *string          `gorm:"type:text"`
+	ID        uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
+	MeetingID uuid.UUID `gorm:"type:uuid;not null;uniqueIndex:idx_meeting_user"`
+	UserID    uuid.UUID `gorm:"type:uuid;not null;uniqueIndex:idx_meeting_user"`
+	IsPresent bool      `gorm:"not null;default:false"`
+	Note      *string   `gorm:"type:text"`
 
 	UpdatedBy uuid.UUID `gorm:"type:uuid;not null"`
 	CreatedAt time.Time

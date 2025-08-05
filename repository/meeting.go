@@ -109,6 +109,18 @@ func (r *MeetingRepository) GetMeetingsByBatchSlugFiltered(batchSlug string, opt
 	return meetings, total, err
 }
 
+// GetMeetingsByBatchID retrieves all meetings belonging to a specific batch ID
+func (r *MeetingRepository) GetMeetingsByBatchID(batchID uuid.UUID) ([]models.Meeting, error) {
+	var meetings []models.Meeting
+	err := r.db.
+		Where("batch_id = ?", batchID).
+		Find(&meetings).Error
+	if err != nil {
+		return nil, err
+	}
+	return meetings, nil
+}
+
 // FindByID retrieves a meeting by its ID
 func (r *MeetingRepository) FindByID(id uuid.UUID) (*models.Meeting, error) {
 	var meeting models.Meeting

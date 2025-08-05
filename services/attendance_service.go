@@ -40,45 +40,49 @@ func (s *AttendanceServices) GetAttendanceByID(attendanceID uuid.UUID) (*models.
 }
 
 // BulkUpsertAttendance for bulk attendance services
-func (s *AttendanceServices) BulkUpsertAttendance(user *utils.Claims, meetingID uuid.UUID, req *dto.BulkAttendanceRequest) ([]models.Attendance, error) {
+func (s *AttendanceServices) BulkUpsertAttendance(user *utils.Claims, batchID uuid.UUID, req *dto.BulkAttendanceRequest) ([]models.Attendance, error) {
 	var results []models.Attendance
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
-		meeting, err := s.meetingRepo.WithTx(tx).FindByID(meetingID)
+		meetings, err := s.meetingRepo.WithTx(tx).GetMeetingsByBatchID(batchID)
 		if err != nil {
-			return fmt.Errorf("Meeting not found")
+			return fmt.Errorf("failed to fetch meetings for batch: %w", err)
+		}
+
+		validMeetings := make(map[uuid.UUID]bool)
+		for _, m := range meetings {
+			validMeetings[m.ID] = true
 		}
 
 		for _, item := range req.Attendances {
-			hasPaid, err := s.purchaseRepo.WithTx(tx).HasPaid(item.UserID, meeting.BatchID)
+			if !validMeetings[item.MeetingID] {
+				return fmt.Errorf("Invalid meeting ID %s for batch", item.MeetingID)
+			}
+
+			hasPaid, err := s.purchaseRepo.WithTx(tx).HasPaid(item.UserID, batchID)
 			if err != nil {
 				return fmt.Errorf("Failed to check payment for user %s: %w", item.UserID, err)
 			}
-
 			if !hasPaid {
 				return fmt.Errorf("User %s has not purchased the batch", item.UserID)
 			}
 
-			existing, err := s.attendanceRepo.WithTx(tx).GetByMeetingAndUser(meetingID, item.UserID)
-
+			existing, err := s.attendanceRepo.WithTx(tx).GetByMeetingAndUser(item.MeetingID, item.UserID)
 			if err == nil && existing != nil {
-				// Update
-				existing.Status = item.Status
+				existing.IsPresent = item.IsPresent
 				existing.Note = item.Note
 				existing.UpdatedBy = user.UserID
 
-				if err := s.attendanceRepo.WithTx(tx).UpdateByMeetingAndUser(meetingID, item.UserID, existing); err != nil {
+				if err := s.attendanceRepo.WithTx(tx).UpdateByMeetingAndUser(item.MeetingID, item.UserID, existing); err != nil {
 					return err
 				}
 				results = append(results, *existing)
 			} else {
-				// Create
 				newAttendance := &models.Attendance{
-					MeetingID: meetingID,
+					MeetingID: item.MeetingID,
 					UserID:    item.UserID,
-					Status:    item.Status,
+					IsPresent: item.IsPresent,
 					Note:      item.Note,
-
 					UpdatedBy: user.UserID,
 				}
 				if err := s.attendanceRepo.WithTx(tx).Create(newAttendance); err != nil {
@@ -87,12 +91,12 @@ func (s *AttendanceServices) BulkUpsertAttendance(user *utils.Claims, meetingID 
 				results = append(results, *newAttendance)
 			}
 		}
+
 		return nil
 	})
 
 	if err != nil {
 		return nil, err
 	}
-
 	return results, nil
 }

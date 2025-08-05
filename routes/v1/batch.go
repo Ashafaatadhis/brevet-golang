@@ -29,6 +29,11 @@ func RegisterBatchRoute(r fiber.Router, db *gorm.DB) {
 
 	meetingController := controllers.NewMeetingController(meetingService, db)
 
+	purchaseRepository := repository.NewPurchaseRepository(db)
+	attendanceRepository := repository.NewAttendanceRepository(db)
+	attendanceService := services.NewAttendanceService(attendanceRepository, meetingRepository, purchaseRepository, db)
+	attendanceController := controllers.NewAttendanceController(attendanceService, db)
+
 	r.Get("/", batchController.GetAllBatches)
 	r.Get("/:slug", batchController.GetBatchBySlug)
 	// POST /v1/courses/:courseId/batches
@@ -62,5 +67,12 @@ func RegisterBatchRoute(r fiber.Router, db *gorm.DB) {
 	// POST	/batches/:batchID/teachers	Tambah teacher ke batch tertentu
 	// GET	/batches/:batchID/teachers	List semua teacher dalam satu batch
 	// DELETE	/batches/:batchID/teachers/:userID	Hapus teacher tertentu dari
+
+	// ==================================
+	// 				Attendance
+	// ==================================
+	r.Put("/:batchID/attendances/bulk", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"admin"}),
+		middlewares.ValidateBody[dto.BulkAttendanceRequest](), attendanceController.BulkUpsertAttendance)
 
 }
