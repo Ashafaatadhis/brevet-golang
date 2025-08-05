@@ -41,7 +41,7 @@ func (r *MeetingRepository) GetAllFilteredMeetings(opts utils.QueryOptions) ([]m
 		order = "asc"
 	}
 
-	db := r.db.Preload("Teachers").Preload("Assignments").Preload("Assignments.AssignmentFiles", func(db *gorm.DB) *gorm.DB {
+	db := r.db.Preload("Teachers").Preload("Materials").Preload("Assignments").Preload("Assignments.AssignmentFiles", func(db *gorm.DB) *gorm.DB {
 		return db.Order("assignment_files.created_at ASC") // urut berdasarkan waktu upload paling awal
 	}).
 		Model(&models.Meeting{})
@@ -81,7 +81,7 @@ func (r *MeetingRepository) GetMeetingsByBatchSlugFiltered(batchSlug string, opt
 		order = "asc"
 	}
 
-	db := r.db.Preload("Teachers").Preload("Assignments").Preload("Assignments.AssignmentFiles", func(db *gorm.DB) *gorm.DB {
+	db := r.db.Preload("Teachers").Preload("Materials").Preload("Assignments").Preload("Assignments.AssignmentFiles", func(db *gorm.DB) *gorm.DB {
 		return db.Order("assignment_files.created_at ASC")
 	}).
 		Model(&models.Meeting{}).
@@ -112,7 +112,7 @@ func (r *MeetingRepository) GetMeetingsByBatchSlugFiltered(batchSlug string, opt
 // FindByID retrieves a meeting by its ID
 func (r *MeetingRepository) FindByID(id uuid.UUID) (*models.Meeting, error) {
 	var meeting models.Meeting
-	err := r.db.Preload("Teachers").Preload("Assignments").Preload("Assignments.AssignmentFiles", func(db *gorm.DB) *gorm.DB {
+	err := r.db.Preload("Teachers").Preload("Materials").Preload("Assignments").Preload("Assignments.AssignmentFiles", func(db *gorm.DB) *gorm.DB {
 		return db.Order("assignment_files.created_at ASC") // urut berdasarkan waktu upload paling awal
 	}).
 		First(&meeting, "id = ?", id).Error

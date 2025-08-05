@@ -62,7 +62,7 @@ func main() {
 		// &models.BatchGroup{},
 		// &models.BatchTeacher{},
 		// &models.GroupDaysBatch{},
-		// &models.Meeting{},
+		&models.Meeting{},
 		// &models.Purchase{},
 		// &models.SubmissionFile{},
 		&models.Material{},
