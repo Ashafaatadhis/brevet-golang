@@ -17,6 +17,7 @@ type MeetingResponse struct {
 
 	Teachers    []UserResponse       `json:"teachers"`
 	Assignments []AssignmentResponse `json:"assignments"`
+	Materials   []MaterialResponse   `json:"materials"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
