@@ -28,6 +28,10 @@ func RegisterMeetingRoutes(r fiber.Router, db *gorm.DB) {
 	assignmentService := services.NewAssignmentService(assignmentRepository, meetingRepo, purchaseRepo, fileService, db)
 	assignmentController := controllers.NewAssignmentController(assignmentService, db)
 
+	materialRepository := repository.NewMaterialRepository(db)
+	materialService := services.NewMaterialService(materialRepository, meetingRepo, purchaseRepo, fileService, db)
+	materialController := controllers.NewMaterialController(materialService, db)
+
 	meetingRepository := repository.NewMeetingRepository(db)
 	purchaseRepository := repository.NewPurchaseRepository(db)
 	attendanceRepository := repository.NewAttendanceRepository(db)
@@ -74,6 +78,15 @@ func RegisterMeetingRoutes(r fiber.Router, db *gorm.DB) {
 	r.Post("/:meetingID/assignments", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin", "guru"}),
 		middlewares.ValidateBody[dto.CreateAssignmentRequest](), assignmentController.CreateAssignment)
+
+	// ==================================
+	// 				Material
+	// ==================================
+	r.Get("/:meetingID/materials", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"admin", "guru"}), materialController.GetAllMaterials)
+	r.Post("/:meetingID/materials", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"admin", "guru"}),
+		middlewares.ValidateBody[dto.CreateMaterialRequest](), materialController.CreateMaterial)
 
 	// ==================================
 	// 				Attendance
