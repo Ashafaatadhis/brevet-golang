@@ -88,7 +88,7 @@ func (r *AttendanceRepository) UpdateByMeetingAndUser(meetingID, userID uuid.UUI
 		Model(&models.Attendance{}).
 		Where("meeting_id = ? AND user_id = ?", meetingID, userID).
 		Updates(map[string]any{
-			"status":     update.Status,
+			"is_present": update.IsPresent,
 			"note":       update.Note,
 			"updated_by": update.UpdatedBy,
 		}).Error

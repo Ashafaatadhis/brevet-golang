@@ -69,12 +69,12 @@ func (ctrl *AttendanceController) BulkUpsertAttendance(c *fiber.Ctx) error {
 	user := c.Locals("user").(*utils.Claims)
 	body := c.Locals("body").(*dto.BulkAttendanceRequest)
 
-	meetingID, err := uuid.Parse(c.Params("meetingID"))
+	batchID, err := uuid.Parse(c.Params("batchID"))
 	if err != nil {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid meeting ID", err.Error())
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid batch ID", err.Error())
 	}
 
-	results, err := ctrl.attendanceService.BulkUpsertAttendance(user, meetingID, body)
+	results, err := ctrl.attendanceService.BulkUpsertAttendance(user, batchID, body)
 	if err != nil {
 		return utils.ErrorResponse(c, 400, "Failed to save attendances", err.Error())
 	}

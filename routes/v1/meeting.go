@@ -32,12 +32,6 @@ func RegisterMeetingRoutes(r fiber.Router, db *gorm.DB) {
 	materialService := services.NewMaterialService(materialRepository, meetingRepo, purchaseRepo, fileService, db)
 	materialController := controllers.NewMaterialController(materialService, db)
 
-	meetingRepository := repository.NewMeetingRepository(db)
-	purchaseRepository := repository.NewPurchaseRepository(db)
-	attendanceRepository := repository.NewAttendanceRepository(db)
-	attendanceService := services.NewAttendanceService(attendanceRepository, meetingRepository, purchaseRepository, db)
-	attendanceController := controllers.NewAttendanceController(attendanceService, db)
-
 	r.Get("/", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin"}), meetingController.GetAllMeetings)
 	r.Get("/:id", middlewares.RequireAuth(), middlewares.RequireRole([]string{"admin"}), meetingController.GetMeetingByID)
@@ -83,16 +77,9 @@ func RegisterMeetingRoutes(r fiber.Router, db *gorm.DB) {
 	// 				Material
 	// ==================================
 	r.Get("/:meetingID/materials", middlewares.RequireAuth(),
-		middlewares.RequireRole([]string{"admin", "guru"}), materialController.GetAllMaterials)
+		middlewares.RequireRole([]string{"admin", "guru"}), materialController.GetAllMaterialByMeetingID)
 	r.Post("/:meetingID/materials", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin", "guru"}),
 		middlewares.ValidateBody[dto.CreateMaterialRequest](), materialController.CreateMaterial)
-
-	// ==================================
-	// 				Attendance
-	// ==================================
-	r.Put("/:meetingID/attendances/bulk", middlewares.RequireAuth(),
-		middlewares.RequireRole([]string{"admin"}),
-		middlewares.ValidateBody[dto.BulkAttendanceRequest](), attendanceController.BulkUpsertAttendance)
 
 }
