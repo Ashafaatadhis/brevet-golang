@@ -46,7 +46,9 @@ func (r *AssignmentRepository) GetAllFilteredAssignments(opts utils.QueryOptions
 	db = utils.ApplyFiltersWithJoins(db, "assignments", opts.Filters, validSortFields, joinConditions, joinedRelations)
 
 	if opts.Search != "" {
-		db = db.Where("title ILIKE ?", "%"+opts.Search+"%")
+		// Join ke meetings agar bisa search by meetings.title
+		db = db.Joins("LEFT JOIN meetings ON meetings.id = assignments.meeting_id")
+		db = db.Where("assignments.title ILIKE ? OR meetings.title ILIKE ?", "%"+opts.Search+"%", "%"+opts.Search+"%")
 	}
 
 	var total int64
@@ -84,7 +86,9 @@ func (r *AssignmentRepository) GetAllFilteredAssignmentsByMeetingID(meetingID uu
 	db = utils.ApplyFiltersWithJoins(db, "assignments", opts.Filters, validSortFields, joinConditions, joinedRelations)
 
 	if opts.Search != "" {
-		db = db.Where("title ILIKE ?", "%"+opts.Search+"%")
+		// Join ke meetings agar bisa search by meetings.title
+		db = db.Joins("LEFT JOIN meetings ON meetings.id = assignments.meeting_id")
+		db = db.Where("assignments.title ILIKE ? OR meetings.title ILIKE ?", "%"+opts.Search+"%", "%"+opts.Search+"%")
 	}
 
 	var total int64

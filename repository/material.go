@@ -46,7 +46,8 @@ func (r *MaterialRepository) GetAllFilteredMaterial(opts utils.QueryOptions) ([]
 	db = utils.ApplyFiltersWithJoins(db, "materials", opts.Filters, validSortFields, joinConditions, joinedRelations)
 
 	if opts.Search != "" {
-		db = db.Where("title ILIKE ?", "%"+opts.Search+"%")
+		db = db.Joins("LEFT JOIN meetings ON meetings.id = materials.meeting_id")
+		db = db.Where("materials.title ILIKE ? OR meetings.title ILIKE ?", "%"+opts.Search+"%", "%"+opts.Search+"%")
 	}
 
 	var total int64
@@ -84,7 +85,8 @@ func (r *MaterialRepository) GetAllFilteredMaterialsByMeetingID(meetingID uuid.U
 	db = utils.ApplyFiltersWithJoins(db, "materials", opts.Filters, validSortFields, joinConditions, joinedRelations)
 
 	if opts.Search != "" {
-		db = db.Where("title ILIKE ?", "%"+opts.Search+"%")
+		db = db.Joins("LEFT JOIN meetings ON meetings.id = materials.meeting_id")
+		db = db.Where("materials.title ILIKE ? OR meetings.title ILIKE ?", "%"+opts.Search+"%", "%"+opts.Search+"%")
 	}
 
 	var total int64
