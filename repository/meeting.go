@@ -41,7 +41,7 @@ func (r *MeetingRepository) GetAllFilteredMeetings(opts utils.QueryOptions) ([]m
 		order = "asc"
 	}
 
-	db := r.db.Preload("Assignments").Model(&models.Meeting{})
+	db := r.db.Preload("Teachers").Preload("Assignments").Model(&models.Meeting{})
 
 	joinConditions := map[string]string{}
 	joinedRelations := map[string]bool{}
@@ -78,7 +78,7 @@ func (r *MeetingRepository) GetMeetingsByBatchSlugFiltered(batchSlug string, opt
 		order = "asc"
 	}
 
-	db := r.db.Preload("Assignments").Model(&models.Meeting{}).
+	db := r.db.Preload("Teachers").Preload("Assignments").Model(&models.Meeting{}).
 		Joins("JOIN batches ON batches.id = meetings.batch_id").
 		Where("batches.slug = ?", batchSlug)
 
@@ -106,7 +106,7 @@ func (r *MeetingRepository) GetMeetingsByBatchSlugFiltered(batchSlug string, opt
 // FindByID retrieves a meeting by its ID
 func (r *MeetingRepository) FindByID(id uuid.UUID) (*models.Meeting, error) {
 	var meeting models.Meeting
-	err := r.db.Preload("Assignments").First(&meeting, "id = ?", id).Error
+	err := r.db.Preload("Teachers").Preload("Assignments").First(&meeting, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
