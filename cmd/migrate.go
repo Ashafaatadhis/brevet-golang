@@ -54,7 +54,7 @@ func main() {
 		// &models.Profile{},
 		// &models.Course{},
 		// &models.Batch{},
-		&models.Assignment{},
+		// &models.Assignment{},
 		// &models.AssignmentFiles{},
 		// &models.AssignmentGrade{},
 		// &models.AssignmentSubmission{},
@@ -62,9 +62,10 @@ func main() {
 		// &models.BatchGroup{},
 		// &models.BatchTeacher{},
 		// &models.GroupDaysBatch{},
-		&models.Meeting{},
-	// &models.Purchase{},
-	// &models.SubmissionFile{},
+		// &models.Meeting{},
+		// &models.Purchase{},
+		// &models.SubmissionFile{},
+		&models.Material{},
 	)
 	if err != nil {
 		log.Fatal("Migration failed:", err)

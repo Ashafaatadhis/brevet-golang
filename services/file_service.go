@@ -5,6 +5,7 @@ import (
 	"brevet-api/utils"
 	"fmt"
 	"mime/multipart"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -66,6 +67,17 @@ func (s *FileService) SaveFile(ctx *fiber.Ctx, file *multipart.FileHeader, locat
 
 // DeleteFile deletes a file from the server after validating the path
 func (s *FileService) DeleteFile(cleanPath string) error {
+	// Deteksi jika cleanPath adalah URL (misalnya https://example.com/uploads/...)
+	if strings.HasPrefix(cleanPath, "http://") || strings.HasPrefix(cleanPath, "https://") {
+		parsed, err := url.Parse(cleanPath)
+		if err != nil {
+			return fmt.Errorf("URL tidak valid: %w", err)
+		}
+		// Ambil hanya path lokal dari URL
+		cleanPath = parsed.Path // hasil: /uploads/xxx/yyy.pdf
+	}
+
+	// Pastikan tidak ada path absolut dari luar
 	targetPath, err := utils.IsSafeDeletePath(filepath.Clean(cleanPath))
 	if err != nil {
 		return fmt.Errorf("Gagal verifikasi path: %w", err)
@@ -74,6 +86,7 @@ func (s *FileService) DeleteFile(cleanPath string) error {
 		return fmt.Errorf("File path tidak valid")
 	}
 
+	// Hapus file
 	if err := os.Remove(targetPath); err != nil {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("File tidak ditemukan")
