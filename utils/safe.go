@@ -16,3 +16,11 @@ func SafeNil[T any](ptr *T) *T {
 	val := *ptr
 	return &val
 }
+
+// SafeString is a utility function
+func SafeString(ptr *string, zero string) string {
+	if ptr == nil {
+		return zero
+	}
+	return *ptr
+}

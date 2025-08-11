@@ -10,9 +10,9 @@ import (
 type Purchase struct {
 	ID            uuid.UUID     `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
 	PaymentStatus PaymentStatus `gorm:"type:payment_status;not null"`
-
-	UserID *uuid.UUID `gorm:"type:uuid"`
-	User   *User      `gorm:"foreignKey:UserID;references:ID;constraint:OnDelete:SET NULL"`
+	InvoiceNumber int           `gorm:"unique;not null;autoIncrement"`
+	UserID        *uuid.UUID    `gorm:"type:uuid"`
+	User          *User         `gorm:"foreignKey:UserID;references:ID;constraint:OnDelete:SET NULL"`
 
 	BatchID *uuid.UUID `gorm:"type:uuid"`
 	Batch   *Batch     `gorm:"foreignKey:BatchID;references:ID;constraint:OnDelete:SET NULL"`
