@@ -21,6 +21,12 @@ FROM debian:bullseye-slim
 
 # Install LibreOffice + fonts
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common \
+    gnupg && \
+    echo "deb http://deb.debian.org/debian bullseye main contrib non-free" > /etc/apt/sources.list && \
+    echo "deb http://deb.debian.org/debian-security bullseye-security main contrib non-free" >> /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
     libreoffice-core \
     libreoffice-writer \
     libreoffice-common \
