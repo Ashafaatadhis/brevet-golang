@@ -27,6 +27,9 @@ WORKDIR /root/
 # Copy binary dari stage builder
 COPY --from=builder /app/app .
 
+# Copy folder templates supaya tersedia di container
+COPY --from=builder /app/templates ./templates
+
 # Jalankan binary
 CMD ["./app"]
 
