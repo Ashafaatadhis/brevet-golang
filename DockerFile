@@ -1,10 +1,10 @@
 # build stage
-FROM golang:1.24-alpine AS builder
+FROM golang:1.24 AS builder
 
 WORKDIR /app
 
-# Install git  
-RUN apk add --no-cache git
+# Install git
+RUN apt-get update && apt-get install -y --no-install-recommends git
 
 # Copy go.mod dan go.sum
 COPY go.mod go.sum ./
@@ -17,21 +17,26 @@ COPY . .
 RUN go build -o app ./main.go
 
 # production stage
-FROM alpine:latest
+FROM debian:bullseye-slim
 
-# Optional: Install ca-certificates kalau aplikasi butuh HTTPS client
-RUN apk add --no-cache ca-certificates
+# Install LibreOffice + fonts
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libreoffice-core \
+    libreoffice-writer \
+    libreoffice-common \
+    fonts-dejavu \
+    ca-certificates && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /root/
 
 # Copy binary dari stage builder
 COPY --from=builder /app/app .
 
-# Copy folder templates supaya tersedia di container
+# Copy folder templates
 COPY --from=builder /app/templates ./templates
 
 # Jalankan binary
 CMD ["./app"]
 
-# Expose port  
 EXPOSE 8083
