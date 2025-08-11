@@ -134,7 +134,18 @@ func (s *PurchaseService) generateAndSendReceipt(purchase *models.Purchase) erro
 	if runtime.GOOS == "windows" {
 		cmd = exec.Command("soffice", "--headless", "--convert-to", "pdf", outputDocx, "--outdir", uniqueFolder)
 	} else {
-		cmd = exec.Command("libreoffice", "--headless", "--convert-to", "pdf", outputDocx, "--outdir", uniqueFolder)
+		cmd = exec.Command(
+			"libreoffice",
+			"--headless",
+			"--convert-to", "pdf:writer_pdf_Export",
+			outputDocx,
+			"--outdir", uniqueFolder,
+		)
+		cmd.Env = append(os.Environ(),
+			"SAL_USE_VCLPLUGIN=gen",
+			"LANG=en_US.UTF-8",
+		)
+
 	}
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("convert pdf gagal: %w", err)
