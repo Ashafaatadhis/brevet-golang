@@ -109,6 +109,8 @@ func (s *PurchaseService) generateAndSendReceipt(purchase *models.Purchase) erro
 	if err := os.MkdirAll(uniqueFolder, 0755); err != nil {
 		return fmt.Errorf("gagal buat folder temp: %w", err)
 	}
+
+	fmt.Println(tempDir, "LOLO")
 	// Pastikan folder dan isinya dihapus setelah selesai
 	defer os.RemoveAll(uniqueFolder)
 
