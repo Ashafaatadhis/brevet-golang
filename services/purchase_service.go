@@ -2,14 +2,23 @@ package services
 
 import (
 	"brevet-api/dto"
+	"brevet-api/helpers"
 	"brevet-api/models"
 	"brevet-api/repository"
+	"os"
+	"path/filepath"
+	"runtime"
+
 	"brevet-api/utils"
 	"errors"
 	"fmt"
+	"log"
+	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nguyenthenguyen/docx"
 	"gorm.io/gorm"
 )
 
@@ -18,12 +27,13 @@ type PurchaseService struct {
 	purchaseRepo *repository.PurchaseRepository
 	userRepo     *repository.UserRepository
 	batchRepo    *repository.BatchRepository
+	emailService *EmailService
 	db           *gorm.DB
 }
 
 // NewPurchaseService creates a new instance of PurchaseService
-func NewPurchaseService(purchaseRepository *repository.PurchaseRepository, batchRepo *repository.BatchRepository, db *gorm.DB) *PurchaseService {
-	return &PurchaseService{purchaseRepo: purchaseRepository, batchRepo: batchRepo, db: db}
+func NewPurchaseService(purchaseRepository *repository.PurchaseRepository, batchRepo *repository.BatchRepository, emailService *EmailService, db *gorm.DB) *PurchaseService {
+	return &PurchaseService{purchaseRepo: purchaseRepository, batchRepo: batchRepo, emailService: emailService, db: db}
 }
 
 // GetAllFilteredPurchases retrieves all purchases with pagination and filtering options
@@ -47,6 +57,107 @@ func (s *PurchaseService) GetPurchaseByID(id uuid.UUID) (*models.Purchase, error
 // HasPaid is for check user has paid or not
 func (s *PurchaseService) HasPaid(userID uuid.UUID, batchID uuid.UUID) (bool, error) {
 	return s.purchaseRepo.HasPaid(userID, batchID)
+}
+
+func (s *PurchaseService) generateAndSendReceipt(purchase *models.Purchase) error {
+	// 1. Siapkan data placeholder
+	total := int(purchase.TransferAmount) + purchase.UniqueCode
+	var nama, npm, kelas, atasNama string
+
+	if purchase.User != nil {
+		nama = purchase.User.Name
+		if purchase.User.Profile != nil {
+			if purchase.User.Profile.NIM.Valid {
+				npm = purchase.User.Profile.NIM.String
+			} else {
+				npm = "-"
+			}
+			if purchase.User.Profile.GroupType != nil {
+				kelas = helpers.FormatGroupType(string(*purchase.User.Profile.GroupType))
+			} else {
+				kelas = "-"
+			}
+		} else {
+			npm = "-"
+			kelas = "-"
+		}
+	} else {
+		nama = "-"
+		npm = "-"
+		kelas = "-"
+	}
+
+	if purchase.BuyerBankAccountName != nil {
+		atasNama = *purchase.BuyerBankAccountName
+	} else {
+		atasNama = "-"
+	}
+
+	data := map[string]string{
+		"{{NOMOR}}":     fmt.Sprintf("%07d", purchase.InvoiceNumber),
+		"{{NAMA}}":      nama,
+		"{{NPM}}":       npm,
+		"{{KELAS}}":     kelas,
+		"{{JUMLAH}}":    fmt.Sprintf("%s", helpers.FormatWithDot(total)),
+		"{{ATASNAMA}}":  atasNama,
+		"{{TERBILANG}}": strings.TrimSpace(helpers.NumToString(int(total))) + " Rupiah",
+	}
+
+	// Buat folder temp unik untuk simpan file ini
+	tempDir := os.TempDir()
+	uniqueFolder := filepath.Join(tempDir, "kwitansi-"+uuid.New().String())
+	if err := os.MkdirAll(uniqueFolder, 0755); err != nil {
+		return fmt.Errorf("gagal buat folder temp: %w", err)
+	}
+	// Pastikan folder dan isinya dihapus setelah selesai
+	defer os.RemoveAll(uniqueFolder)
+
+	// Baca template dan replace placeholder
+	r, err := docx.ReadDocxFile("templates/contoh_blanko.docx")
+	if err != nil {
+		return fmt.Errorf("baca template gagal: %w", err)
+	}
+	doc := r.Editable()
+	for k, v := range data {
+		doc.Replace(k, v, -1)
+	}
+
+	outputDocx := filepath.Join(uniqueFolder, fmt.Sprintf("kwitansi_%07d.docx", purchase.InvoiceNumber))
+	if err := doc.WriteToFile(outputDocx); err != nil {
+		return fmt.Errorf("simpan docx gagal: %w", err)
+	}
+
+	// Convert DOCX ke PDF
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("soffice", "--headless", "--convert-to", "pdf", outputDocx, "--outdir", uniqueFolder)
+	} else {
+		cmd = exec.Command("libreoffice", "--headless", "--convert-to", "pdf", outputDocx, "--outdir", uniqueFolder)
+	}
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("convert pdf gagal: %w", err)
+	}
+
+	outputPDF := strings.Replace(outputDocx, ".docx", ".pdf", 1)
+
+	// Kirim email dengan attachment PDF
+	var email string
+	if purchase.User != nil {
+		email = purchase.User.Email
+	}
+	if email == "" {
+		return fmt.Errorf("email user tidak tersedia")
+	}
+	if err := s.emailService.SendWithAttachment(
+		email,
+		"Kwitansi Pembayaran",
+		"Terima kasih, pembayaran Anda telah diterima. Terlampir kwitansi.",
+		outputPDF,
+	); err != nil {
+		return fmt.Errorf("kirim email gagal: %w", err)
+	}
+
+	return nil
 }
 
 // GetPaidBatchIDs for get all batch where user has paid
@@ -162,6 +273,12 @@ func (s *PurchaseService) UpdateStatusPayment(purchaseID uuid.UUID, body *dto.Up
 			if int(count) >= batch.Quota {
 				return fmt.Errorf("kuota batch sudah penuh")
 			}
+
+			go func(purchase *models.Purchase) {
+				if err := s.generateAndSendReceipt(purchase); err != nil {
+					log.Printf("gagal mengirim kwitansi: %v", err)
+				}
+			}(purchase)
 		}
 
 		purchase.PaymentStatus = body.PaymentStatus

@@ -63,7 +63,7 @@ func (r *PurchaseRepository) GetAllFilteredPurchases(opts utils.QueryOptions) ([
 // GetPurchaseByID is for get purchase by id
 func (r *PurchaseRepository) GetPurchaseByID(id uuid.UUID) (*models.Purchase, error) {
 	var purchase models.Purchase
-	err := r.db.Preload("User").
+	err := r.db.Preload("User").Preload("User.Profile").
 		Preload("Batch").
 		Preload("Price").First(&purchase, "id = ?", id).Error
 	if err != nil {

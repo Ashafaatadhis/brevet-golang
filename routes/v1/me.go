@@ -40,8 +40,12 @@ func RegisterMeRoutes(r fiber.Router, db *gorm.DB) {
 	meetingService := services.NewMeetingService(meetingRepository, batchRepository, purchaseRepo, userRepository, db)
 
 	batchController := controllers.NewBatchController(batchService, meetingService, courseService, db)
+	emailService, err := services.NewEmailServiceFromEnv()
+	if err != nil {
+		panic(err)
+	}
 
-	purchaseService := services.NewPurchaseService(purchaseRepo, batchRepository, db)
+	purchaseService := services.NewPurchaseService(purchaseRepo, batchRepository, emailService, db)
 	purchaseController := controllers.NewPurchaseController(purchaseService, db)
 
 	r.Get("/", middlewares.RequireAuth(), userController.GetProfile)

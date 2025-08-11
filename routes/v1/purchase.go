@@ -16,7 +16,12 @@ func RegisterPurchaseRoutes(r fiber.Router, db *gorm.DB) {
 
 	purchaseRepo := repository.NewPurchaseRepository(db)
 	batchRepo := repository.NewBatchRepository(db)
-	purchaseService := services.NewPurchaseService(purchaseRepo, batchRepo, db)
+	emailService, err := services.NewEmailServiceFromEnv()
+	if err != nil {
+		panic(err)
+	}
+
+	purchaseService := services.NewPurchaseService(purchaseRepo, batchRepo, emailService, db)
 	purchaseController := controllers.NewPurchaseController(purchaseService, db)
 
 	r.Get("/", middlewares.RequireAuth(),
