@@ -13,6 +13,9 @@ RUN go build -o app ./main.go
 # production stage
 FROM debian:bullseye-slim
 
+ENV SAL_USE_VCLPLUGIN=gen \
+    SAL_FORCEDPI=120
+
 # Install LibreOffice + deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-core \
