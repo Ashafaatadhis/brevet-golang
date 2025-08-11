@@ -141,10 +141,6 @@ func (s *PurchaseService) generateAndSendReceipt(purchase *models.Purchase) erro
 			outputDocx,
 			"--outdir", uniqueFolder,
 		)
-		cmd.Env = append(os.Environ(),
-			"SAL_USE_VCLPLUGIN=gen",
-			"LANG=en_US.UTF-8",
-		)
 
 	}
 	if err := cmd.Run(); err != nil {
