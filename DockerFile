@@ -2,50 +2,34 @@
 FROM golang:1.24-bullseye AS builder
 
 WORKDIR /app
-
-# Install git
 RUN apt-get update && apt-get install -y --no-install-recommends git
 
-# Copy go.mod dan go.sum
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy seluruh source code
 COPY . .
-
-# Build aplikasi
 RUN go build -o app ./main.go
 
 # production stage
 FROM debian:bullseye-slim
 
-# Install LibreOffice + fonts
+# Install LibreOffice + deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    software-properties-common \
-    gnupg && \
-    echo "deb http://deb.debian.org/debian bullseye main contrib non-free" > /etc/apt/sources.list && \
-    echo "deb http://deb.debian.org/debian-security bullseye-security main contrib non-free" >> /etc/apt/sources.list && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
     libreoffice-core \
     libreoffice-writer \
     libreoffice-common \
     fonts-dejavu \
     fontconfig \
-    ttf-mscorefonts-installer \
     ca-certificates && \
-    fc-cache -f -v && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Copy Calibri fonts (pastikan ada di folder fonts/)
+COPY fonts/*.ttf /usr/share/fonts/truetype/msttcorefonts/
+RUN fc-cache -f -v
+
 WORKDIR /root/
-
-# Copy binary dari stage builder
 COPY --from=builder /app/app .
-
-# Copy folder templates
 COPY --from=builder /app/templates ./templates
 
-# Jalankan binary
 CMD ["./app"]
-
 EXPOSE 8083
