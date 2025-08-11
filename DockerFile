@@ -25,7 +25,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-writer \
     libreoffice-common \
     fonts-dejavu \
+    fontconfig \
+    ttf-mscorefonts-installer \
     ca-certificates && \
+    fc-cache -f -v && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /root/
