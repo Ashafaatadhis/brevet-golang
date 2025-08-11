@@ -110,7 +110,7 @@ func (s *PurchaseService) generateAndSendReceipt(purchase *models.Purchase) erro
 		return fmt.Errorf("gagal buat folder temp: %w", err)
 	}
 
-	fmt.Println(tempDir, "ee33")
+	fmt.Println(tempDir, "www333")
 	// Pastikan folder dan isinya dihapus setelah selesai
 	defer os.RemoveAll(uniqueFolder)
 
