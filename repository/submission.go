@@ -172,3 +172,14 @@ func (r *SubmissionRepository) UpsertGrade(grade models.AssignmentGrade) (models
 	}
 	return existing, nil
 }
+
+// CountCompletedByBatchUser for count completed submission by batch id and user id
+func (r *SubmissionRepository) CountCompletedByBatchUser(batchID, userID uuid.UUID) (int64, error) {
+	var count int64
+	err := r.db.Model(&models.AssignmentSubmission{}).
+		Joins("JOIN assignments ON assignments.id = assignment_submissions.assignment_id").
+		Joins("JOIN meetings ON meetings.id = assignments.meeting_id").
+		Where("meetings.batch_id = ? AND assignment_submissions.user_id = ?", batchID, userID).
+		Count(&count).Error
+	return count, err
+}
