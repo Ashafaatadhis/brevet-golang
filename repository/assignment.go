@@ -149,3 +149,28 @@ func (r *AssignmentRepository) FindByID(id uuid.UUID) (*models.Assignment, error
 	}
 	return &assignment, nil
 }
+
+// GetBatchIDByAssignmentID get batch
+func (r *AssignmentRepository) GetBatchIDByAssignmentID(assignmentID uuid.UUID) (uuid.UUID, error) {
+	var assignment models.Assignment
+	err := r.db.Preload("Meeting").
+		First(&assignment, "id = ?", assignmentID).Error
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	return assignment.Meeting.BatchID, nil
+}
+
+// GetBatchByAssignmentID ambil batch dari assignment
+func (r *AssignmentRepository) GetBatchByAssignmentID(assignmentID uuid.UUID) (models.Batch, error) {
+	var assignment models.Assignment
+	err := r.db.
+		Preload("Meeting.Batch").
+		First(&assignment, "id = ?", assignmentID).Error
+	if err != nil {
+		return models.Batch{}, err
+	}
+
+	return assignment.Meeting.Batch, nil
+}

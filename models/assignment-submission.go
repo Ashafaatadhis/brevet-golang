@@ -20,6 +20,7 @@ type AssignmentSubmission struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	Assignment Assignment `gorm:"foreignKey:AssignmentID;references:ID"` // Relasi ke Assignment
-	User       User       `gorm:"foreignKey:UserID;references:ID"`       // Relasi ke User
+	Assignment      Assignment       `gorm:"foreignKey:AssignmentID;references:ID"` // Relasi ke Assignment
+	User            User             `gorm:"foreignKey:UserID;references:ID"`       // Relasi ke User
+	SubmissionFiles []SubmissionFile `gorm:"foreignKey:AssignmentSubmissionID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 }

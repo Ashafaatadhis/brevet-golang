@@ -35,4 +35,24 @@ func RegisterAssignmentRoutes(r fiber.Router, db *gorm.DB) {
 	r.Delete("/:assignmentID", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin", "guru"}), assignmentController.DeleteAssignment)
 
+	// ==================================
+	// 				Submissions
+	// ==================================
+	submissionRepository := repository.NewSubmissionRepository(db)
+	meetingRepository := repository.NewMeetingRepository(db)
+	emailService, err := services.NewEmailServiceFromEnv()
+	if err != nil {
+		panic(err)
+	}
+	batchRepository := repository.NewBatchRepository(db)
+	purchaseService := services.NewPurchaseService(purchaseRepo, batchRepository, emailService, db)
+	submissionService := services.NewSubmissionService(submissionRepository, assignmentRepository, meetingRepository, purchaseService, fileService, db)
+	submissionController := controllers.NewSubmissionController(submissionService, db)
+	r.Get("/:assignmentID/submissions", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"siswa", "guru"}), submissionController.GetAllSubmissionByAssignmentID)
+
+	r.Post("/:assignmentID/submissions", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"siswa"}), middlewares.ValidateBody[dto.CreateSubmissionRequest](),
+		submissionController.CreateSubmission)
+
 }

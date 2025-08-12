@@ -1,0 +1,174 @@
+package repository
+
+import (
+	"brevet-api/models"
+	"brevet-api/utils"
+	"errors"
+	"fmt"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+)
+
+// SubmissionRepository provides methods for managing submissions
+type SubmissionRepository struct {
+	db *gorm.DB
+}
+
+// NewSubmissionRepository creates a new submissions repository
+func NewSubmissionRepository(db *gorm.DB) *SubmissionRepository {
+	return &SubmissionRepository{db: db}
+}
+
+// WithTx running with transaction
+func (r *SubmissionRepository) WithTx(tx *gorm.DB) *SubmissionRepository {
+	return &SubmissionRepository{db: tx}
+}
+
+// GetAllByAssignment for get all guru
+func (r *SubmissionRepository) GetAllByAssignment(assignmentID uuid.UUID, userID *uuid.UUID, opts utils.QueryOptions) ([]models.AssignmentSubmission, int64, error) {
+	validSortFields := utils.GetValidColumnsFromStruct(&models.AssignmentSubmission{})
+
+	sort := opts.Sort
+	if !validSortFields[sort] {
+		sort = "created_at"
+	}
+
+	order := opts.Order
+	if order != "asc" && order != "desc" {
+		order = "desc"
+	}
+
+	db := r.db.Preload("SubmissionFiles").
+		Where("assignment_id = ?", assignmentID).
+		Model(&models.AssignmentSubmission{})
+
+	// Filter user_id kalau dikasih
+	if userID != nil {
+		db = db.Where("user_id = ?", *userID)
+	}
+
+	db = utils.ApplyFiltersWithJoins(db, "assignment_submissions", opts.Filters, validSortFields, map[string]string{}, map[string]bool{})
+
+	var total int64
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var submissions []models.AssignmentSubmission
+	err := db.Order(fmt.Sprintf("%s %s", sort, order)).
+		Limit(opts.Limit).
+		Offset(opts.Offset).
+		Find(&submissions).Error
+
+	return submissions, total, err
+}
+
+// GetByIDAssignmentUser for get
+func (r *SubmissionRepository) GetByIDAssignmentUser(submissionID, assignmentID, userID uuid.UUID) (models.AssignmentSubmission, error) {
+	var submission models.AssignmentSubmission
+	err := r.db.Preload("SubmissionFiles").
+		Where("id = ? AND assignment_id = ? AND user_id = ?", submissionID, assignmentID, userID).
+		First(&submission).Error
+
+	return submission, err
+}
+
+// Create is for create assignment_submissions
+func (r *SubmissionRepository) Create(submission *models.AssignmentSubmission) error {
+	return r.db.Create(submission).Error
+}
+
+// CreateSubmissionFiles for create submission_files
+func (r *SubmissionRepository) CreateSubmissionFiles(files []models.SubmissionFile) error {
+	return r.db.Create(&files).Error
+}
+
+// GetByAssignmentUser is get submission by assignment id and user id
+func (r *SubmissionRepository) GetByAssignmentUser(assignmentID, userID uuid.UUID) (models.AssignmentSubmission, error) {
+	var submission models.AssignmentSubmission
+	err := r.db.Where("assignment_id = ? AND user_id = ?", assignmentID, userID).First(&submission).Error
+	return submission, err
+}
+
+// FindByID get submission by id with preload submissionFiles
+func (r *SubmissionRepository) FindByID(id uuid.UUID) (models.AssignmentSubmission, error) {
+	var submission models.AssignmentSubmission
+	err := r.db.Preload("SubmissionFiles").Where("id = ?", id).First(&submission).Error
+	return submission, err
+}
+
+// Update for update
+func (r *SubmissionRepository) Update(submission *models.AssignmentSubmission) error {
+	return r.db.Save(submission).Error
+}
+
+// DeleteFilesBySubmissionID deletes file submission by assignment_submission_id
+func (r *SubmissionRepository) DeleteFilesBySubmissionID(submissionID uuid.UUID) error {
+	return r.db.Where("assignment_submission_id = ?", submissionID).Delete(&models.SubmissionFile{}).Error
+}
+
+// CreateFiles is create files
+func (r *SubmissionRepository) CreateFiles(files []models.SubmissionFile) error {
+	return r.db.Create(&files).Error
+}
+
+// DeleteByID deletes a submission by its ID
+func (r *SubmissionRepository) DeleteByID(id uuid.UUID) error {
+	return r.db.
+		Where("id = ?", id).
+		Delete(&models.AssignmentSubmission{}).
+		Error
+}
+
+// GetByIDUser get submission by id and user id
+func (r *SubmissionRepository) GetByIDUser(submissionID, userID uuid.UUID) (*models.AssignmentSubmission, error) {
+	var submission models.AssignmentSubmission
+	err := r.db.
+		Preload("SubmissionFiles").
+		Where("id = ? AND user_id = ?", submissionID, userID).
+		First(&submission).Error
+	if err != nil {
+		return nil, err
+	}
+	return &submission, nil
+}
+
+// GetGradeBySubmissionID repo get grade by submission id
+func (r *SubmissionRepository) GetGradeBySubmissionID(submissionID uuid.UUID) (*models.AssignmentGrade, error) {
+	var grade models.AssignmentGrade
+	err := r.db.Preload("GradedByUser").
+		Where("assignment_submission_id = ?", submissionID).
+		First(&grade).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &grade, nil
+}
+
+// UpsertGrade for upsert
+func (r *SubmissionRepository) UpsertGrade(grade models.AssignmentGrade) (models.AssignmentGrade, error) {
+	var existing models.AssignmentGrade
+	err := r.db.Where("assignment_submission_id = ?", grade.AssignmentSubmissionID).First(&existing).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		// Insert baru
+		if err := r.db.Create(&grade).Error; err != nil {
+			return models.AssignmentGrade{}, err
+		}
+		return grade, nil
+	} else if err != nil {
+		return models.AssignmentGrade{}, err
+	}
+
+	// Update kalau sudah ada
+	existing.Grade = grade.Grade
+	existing.Feedback = grade.Feedback
+	existing.GradedBy = grade.GradedBy
+
+	if err := r.db.Save(&existing).Error; err != nil {
+		return models.AssignmentGrade{}, err
+	}
+	return existing, nil
+}
