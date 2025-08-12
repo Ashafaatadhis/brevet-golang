@@ -363,3 +363,21 @@ func (ctrl *BatchController) GetAllStudents(c *fiber.Ctx) error {
 	return utils.SuccessWithMeta(c, fiber.StatusOK, "Meetings fetched", userResponses, meta)
 
 }
+
+// GetProgress for get progress
+func (ctrl *BatchController) GetProgress(c *fiber.Ctx) error {
+	user := c.Locals("user").(*utils.Claims)
+	batchID, err := uuid.Parse(c.Params("batchID"))
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid batch ID", err.Error())
+	}
+
+	progress, err := ctrl.batchService.CalculateProgress(batchID, user.UserID)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to get progress", err.Error())
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Progress fetched successfully", fiber.Map{
+		"progress_percent": progress,
+	})
+}

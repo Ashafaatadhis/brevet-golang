@@ -174,3 +174,13 @@ func (r *AssignmentRepository) GetBatchByAssignmentID(assignmentID uuid.UUID) (m
 
 	return assignment.Meeting.Batch, nil
 }
+
+// CountByBatchID for count assignment by batch id
+func (r *AssignmentRepository) CountByBatchID(batchID uuid.UUID) (int64, error) {
+	var count int64
+	err := r.db.Model(&models.Assignment{}).
+		Joins("JOIN meetings ON meetings.id = assignments.meeting_id").
+		Where("meetings.batch_id = ?", batchID).
+		Count(&count).Error
+	return count, err
+}

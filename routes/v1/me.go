@@ -32,9 +32,12 @@ func RegisterMeRoutes(r fiber.Router, db *gorm.DB) {
 	// ========================
 	batchRepository := repository.NewBatchRepository(db)
 	courseRepository := repository.NewCourseRepository(db)
+	assignmentRepository := repository.NewAssignmentRepository(db)
+	submissionRepository := repository.NewSubmissionRepository(db)
 	fileService := services.NewFileService()
 	courseService := services.NewCourseService(courseRepository, db, fileService)
-	batchService := services.NewBatchService(batchRepository, userRepository, courseRepository, db, fileService)
+
+	batchService := services.NewBatchService(batchRepository, userRepository, courseRepository, assignmentRepository, submissionRepository, db, fileService)
 	meetingRepository := repository.NewMeetingRepository(db)
 	purchaseRepo := repository.NewPurchaseRepository(db)
 	meetingService := services.NewMeetingService(meetingRepository, batchRepository, purchaseRepo, userRepository, db)
@@ -70,6 +73,9 @@ func RegisterMeRoutes(r fiber.Router, db *gorm.DB) {
 
 	r.Get("/batches", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"guru", "siswa"}), batchController.GetMyBatches)
+
+	r.Get("/batches/:batchID/progress", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"siswa"}), batchController.GetProgress)
 
 	// r.Get("/batches", middlewares.RequireAuth(),
 	// 	middlewares.RequireRole([]string{"guru", "siswa"}), batchController.GetMyBatchesByID)

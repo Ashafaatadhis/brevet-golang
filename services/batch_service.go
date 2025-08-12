@@ -16,16 +16,19 @@ import (
 
 // BatchService provides methods for managing batches
 type BatchService struct {
-	repo        *repository.BatchRepository
-	userRepo    *repository.UserRepository
-	courseRepo  *repository.CourseRepository
-	db          *gorm.DB
-	fileService *FileService
+	repo           *repository.BatchRepository
+	userRepo       *repository.UserRepository
+	courseRepo     *repository.CourseRepository
+	assignmentRepo *repository.AssignmentRepository
+	submissionRepo *repository.SubmissionRepository
+	db             *gorm.DB
+	fileService    *FileService
 }
 
 // NewBatchService creates a new instance of BatchService
-func NewBatchService(repo *repository.BatchRepository, userRepo *repository.UserRepository, courseRepo *repository.CourseRepository, db *gorm.DB, fileService *FileService) *BatchService {
-	return &BatchService{repo: repo, userRepo: userRepo, courseRepo: courseRepo, db: db, fileService: fileService}
+func NewBatchService(repo *repository.BatchRepository, userRepo *repository.UserRepository, courseRepo *repository.CourseRepository, assignmentRepo *repository.AssignmentRepository,
+	submissionRepo *repository.SubmissionRepository, db *gorm.DB, fileService *FileService) *BatchService {
+	return &BatchService{repo: repo, userRepo: userRepo, courseRepo: courseRepo, assignmentRepo: assignmentRepo, submissionRepo: submissionRepo, db: db, fileService: fileService}
 }
 
 // GetAllFilteredBatches retrieves all batches with pagination and filtering options
@@ -264,4 +267,26 @@ func (s *BatchService) GetBatchesPurchasedByUser(userID uuid.UUID, opts utils.Qu
 // GetBatchesTaughtByGuru is service for get batches where teacher was taughted
 func (s *BatchService) GetBatchesTaughtByGuru(guruID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error) {
 	return s.repo.GetBatchesByGuruMeetingRelationFiltered(guruID, opts)
+}
+
+// CalculateProgress service calculate progress
+func (s *BatchService) CalculateProgress(batchID, userID uuid.UUID) (float64, error) {
+	// Hitung total assignment di batch
+	totalAssignments, err := s.assignmentRepo.CountByBatchID(batchID)
+	if err != nil {
+		return 0, err
+	}
+	if totalAssignments == 0 {
+		return 0, nil // biar ga bagi nol
+	}
+
+	// Hitung total submission user yg sudah dikumpulkan di batch tsb
+	completedSubmissions, err := s.submissionRepo.CountCompletedByBatchUser(batchID, userID)
+	if err != nil {
+		return 0, err
+	}
+
+	// Hitung persentase progress
+	progress := (float64(completedSubmissions) / float64(totalAssignments)) * 100
+	return progress, nil
 }
