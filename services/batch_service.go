@@ -17,7 +17,7 @@ import (
 // BatchService provides methods for managing batches
 type BatchService struct {
 	repo           *repository.BatchRepository
-	userRepo       *repository.UserRepository
+	userRepo       repository.IUserTXRepository
 	courseRepo     *repository.CourseRepository
 	assignmentRepo *repository.AssignmentRepository
 	submissionRepo *repository.SubmissionRepository
@@ -26,7 +26,7 @@ type BatchService struct {
 }
 
 // NewBatchService creates a new instance of BatchService
-func NewBatchService(repo *repository.BatchRepository, userRepo *repository.UserRepository, courseRepo *repository.CourseRepository, assignmentRepo *repository.AssignmentRepository,
+func NewBatchService(repo *repository.BatchRepository, userRepo repository.IUserTXRepository, courseRepo *repository.CourseRepository, assignmentRepo *repository.AssignmentRepository,
 	submissionRepo *repository.SubmissionRepository, db *gorm.DB, fileService *FileService) *BatchService {
 	return &BatchService{repo: repo, userRepo: userRepo, courseRepo: courseRepo, assignmentRepo: assignmentRepo, submissionRepo: submissionRepo, db: db, fileService: fileService}
 }

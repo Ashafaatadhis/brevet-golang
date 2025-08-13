@@ -18,12 +18,12 @@ type MeetingService struct {
 	meetingRepo  *repository.MeetingRepository
 	batchRepo    *repository.BatchRepository
 	purchaseRepo *repository.PurchaseRepository
-	userRepo     *repository.UserRepository
+	userRepo     repository.IUserTXRepository
 	db           *gorm.DB
 }
 
 // NewMeetingService creates a new instance of MeetingService
-func NewMeetingService(meetingRepo *repository.MeetingRepository, batchRepo *repository.BatchRepository, purchaseRepo *repository.PurchaseRepository, userRepo *repository.UserRepository, db *gorm.DB) *MeetingService {
+func NewMeetingService(meetingRepo *repository.MeetingRepository, batchRepo *repository.BatchRepository, purchaseRepo *repository.PurchaseRepository, userRepo repository.IUserTXRepository, db *gorm.DB) *MeetingService {
 	return &MeetingService{meetingRepo: meetingRepo, batchRepo: batchRepo, purchaseRepo: purchaseRepo, userRepo: userRepo, db: db}
 }
 

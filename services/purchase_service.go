@@ -196,7 +196,7 @@ func (s *PurchaseService) CreatePurchase(userID uuid.UUID, batchID uuid.UUID) (*
 		}
 
 		// 2. Ambil user
-		user, err := userRepo.WithTx(tx).FindByID(userID)
+		user, err := userRepo.FindByID(userID)
 		if err != nil {
 			return fmt.Errorf("User tidak ditemukan: %w", err)
 		}

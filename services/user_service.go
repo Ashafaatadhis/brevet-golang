@@ -14,13 +14,13 @@ import (
 
 // UserService is a struct that represents a user service
 type UserService struct {
-	userRepo *repository.UserRepository
+	userRepo repository.IUserTXRepository
 	db       *gorm.DB
 	authRepo *repository.AuthRepository
 }
 
 // NewUserService creates a new user service
-func NewUserService(userRepo *repository.UserRepository, db *gorm.DB, authRepo *repository.AuthRepository) *UserService {
+func NewUserService(userRepo repository.IUserTXRepository, db *gorm.DB, authRepo *repository.AuthRepository) *UserService {
 	return &UserService{userRepo: userRepo, db: db, authRepo: authRepo}
 }
 
@@ -93,6 +93,7 @@ func (s *UserService) CreateUserWithProfile(body *dto.CreateUserWithProfileReque
 		}
 
 		profile.UserID = user.ID
+
 		// Create profile setelah user
 		if err := s.userRepo.WithTx(tx).CreateProfile(profile); err != nil {
 			return err
