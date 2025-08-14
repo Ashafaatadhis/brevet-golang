@@ -5,6 +5,7 @@ import (
 	"brevet-api/models"
 	"brevet-api/repository"
 	"brevet-api/utils"
+	"context"
 	"fmt"
 	"time"
 
@@ -14,26 +15,40 @@ import (
 	"gorm.io/gorm"
 )
 
+// IBatchService interface
+type IBatchService interface {
+	GetAllFilteredBatches(ctx context.Context, opts utils.QueryOptions) ([]models.Batch, int64, error)
+	GetBatchBySlug(ctx context.Context, slug string) (*models.Batch, error)
+	CreateBatch(ctx context.Context, courseID uuid.UUID, body *dto.CreateBatchRequest) (*models.Batch, error)
+	UpdateBatch(ctx context.Context, id uuid.UUID, body *dto.UpdateBatchRequest) (*models.Batch, error)
+	DeleteBatch(ctx context.Context, batchID uuid.UUID) error
+	GetBatchByCourseSlug(ctx context.Context, courseID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error)
+	GetBatchesPurchasedByUser(ctx context.Context, userID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error)
+	GetBatchesTaughtByGuru(ctx context.Context, guruID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error)
+	CalculateProgress(ctx context.Context, batchID, userID uuid.UUID) (float64, error)
+}
+
 // BatchService provides methods for managing batches
 type BatchService struct {
-	repo           *repository.BatchRepository
-	userRepo       repository.IUserTXRepository
-	courseRepo     *repository.CourseRepository
-	assignmentRepo *repository.AssignmentRepository
-	submissionRepo *repository.SubmissionRepository
+	repo           repository.IBatchRepository
+	userRepo       repository.IUserRepository
+	courseRepo     repository.ICourseRepository
+	assignmentRepo repository.IAssignmentRepository
+	submissionRepo repository.ISubmisssionRepository
 	db             *gorm.DB
-	fileService    *FileService
+	fileService    IFileService
 }
 
 // NewBatchService creates a new instance of BatchService
-func NewBatchService(repo *repository.BatchRepository, userRepo repository.IUserTXRepository, courseRepo *repository.CourseRepository, assignmentRepo *repository.AssignmentRepository,
-	submissionRepo *repository.SubmissionRepository, db *gorm.DB, fileService *FileService) *BatchService {
+func NewBatchService(repo repository.IBatchRepository, userRepo repository.IUserRepository, courseRepo repository.ICourseRepository,
+	assignmentRepo repository.IAssignmentRepository,
+	submissionRepo repository.ISubmisssionRepository, db *gorm.DB, fileService IFileService) IBatchService {
 	return &BatchService{repo: repo, userRepo: userRepo, courseRepo: courseRepo, assignmentRepo: assignmentRepo, submissionRepo: submissionRepo, db: db, fileService: fileService}
 }
 
 // GetAllFilteredBatches retrieves all batches with pagination and filtering options
-func (s *BatchService) GetAllFilteredBatches(opts utils.QueryOptions) ([]models.Batch, int64, error) {
-	batches, total, err := s.repo.GetAllFilteredBatches(opts)
+func (s *BatchService) GetAllFilteredBatches(ctx context.Context, opts utils.QueryOptions) ([]models.Batch, int64, error) {
+	batches, total, err := s.repo.GetAllFilteredBatches(ctx, opts)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -41,8 +56,8 @@ func (s *BatchService) GetAllFilteredBatches(opts utils.QueryOptions) ([]models.
 }
 
 // GetBatchBySlug retrieves a batch by its slug
-func (s *BatchService) GetBatchBySlug(slug string) (*models.Batch, error) {
-	batch, err := s.repo.GetBatchBySlug(slug)
+func (s *BatchService) GetBatchBySlug(ctx context.Context, slug string) (*models.Batch, error) {
+	batch, err := s.repo.GetBatchBySlug(ctx, slug)
 	if err != nil {
 		return nil, err
 	}
@@ -50,12 +65,12 @@ func (s *BatchService) GetBatchBySlug(slug string) (*models.Batch, error) {
 }
 
 // CreateBatch creates a new batch with the provided details
-func (s *BatchService) CreateBatch(courseID uuid.UUID, body *dto.CreateBatchRequest) (*models.Batch, error) {
+func (s *BatchService) CreateBatch(ctx context.Context, courseID uuid.UUID, body *dto.CreateBatchRequest) (*models.Batch, error) {
 	var batch models.Batch
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
 		// Validasi course ID
-		_, err := s.courseRepo.WithTx(tx).FindByID(courseID)
+		_, err := s.courseRepo.WithTx(tx).FindByID(ctx, courseID)
 		if err != nil {
 			return err
 		}
@@ -63,7 +78,7 @@ func (s *BatchService) CreateBatch(courseID uuid.UUID, body *dto.CreateBatchRequ
 		// Copy data dari body ke batch
 		copier.Copy(&batch, body)
 
-		slug := utils.GenerateUniqueSlug(body.Title, s.repo)
+		slug := utils.GenerateUniqueSlug(ctx, body.Title, s.repo)
 
 		// Parse waktu dari string ke time.Time
 		parsedStart, err := time.Parse("15:04", body.StartTime)
@@ -81,7 +96,7 @@ func (s *BatchService) CreateBatch(courseID uuid.UUID, body *dto.CreateBatchRequ
 		batch.EndTime = parsedEnd.Format("15:04")
 
 		// Simpan batch utama
-		if err := s.repo.WithTx(tx).Create(&batch); err != nil {
+		if err := s.repo.WithTx(tx).Create(ctx, &batch); err != nil {
 			return err
 		}
 
@@ -91,7 +106,7 @@ func (s *BatchService) CreateBatch(courseID uuid.UUID, body *dto.CreateBatchRequ
 				BatchID: batch.ID,
 				Day:     day,
 			}
-			if err := tx.Create(&batchDay).Error; err != nil {
+			if err := tx.WithContext(ctx).Create(&batchDay).Error; err != nil {
 				return err
 			}
 		}
@@ -102,13 +117,13 @@ func (s *BatchService) CreateBatch(courseID uuid.UUID, body *dto.CreateBatchRequ
 				BatchID:   batch.ID,
 				GroupType: groupType,
 			}
-			if err := tx.Create(&bg).Error; err != nil {
+			if err := tx.WithContext(ctx).Create(&bg).Error; err != nil {
 				return err
 			}
 		}
 
 		// Ambil data batch lengkap setelah insert
-		updated, err := s.repo.WithTx(tx).FindByID(batch.ID)
+		updated, err := s.repo.WithTx(tx).FindByID(ctx, batch.ID)
 		if err != nil {
 			return fmt.Errorf("gagal mengambil batch setelah dibuat: %w", err)
 		}
@@ -124,12 +139,12 @@ func (s *BatchService) CreateBatch(courseID uuid.UUID, body *dto.CreateBatchRequ
 }
 
 // UpdateBatch updates an existing batch with the provided details
-func (s *BatchService) UpdateBatch(id uuid.UUID, body *dto.UpdateBatchRequest) (*models.Batch, error) {
+func (s *BatchService) UpdateBatch(ctx context.Context, id uuid.UUID, body *dto.UpdateBatchRequest) (*models.Batch, error) {
 	var batch models.Batch
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
 		// Ambil batch dari database
-		batchPtr, err := s.repo.WithTx(tx).FindByID(id)
+		batchPtr, err := s.repo.WithTx(tx).FindByID(ctx, id)
 		if err != nil {
 			return err
 		}
@@ -161,13 +176,13 @@ func (s *BatchService) UpdateBatch(id uuid.UUID, body *dto.UpdateBatchRequest) (
 		}
 
 		// Simpan perubahan batch
-		if err := s.repo.WithTx(tx).Update(&batch); err != nil {
+		if err := s.repo.WithTx(tx).Update(ctx, &batch); err != nil {
 			return err
 		}
 
 		// Update BatchDays jika dikirim
 		if body.Days != nil {
-			if err := tx.Where("batch_id = ?", batch.ID).Delete(&models.BatchDay{}).Error; err != nil {
+			if err := tx.WithContext(ctx).Where("batch_id = ?", batch.ID).Delete(&models.BatchDay{}).Error; err != nil {
 				return err
 			}
 			for _, day := range *body.Days {
@@ -175,7 +190,7 @@ func (s *BatchService) UpdateBatch(id uuid.UUID, body *dto.UpdateBatchRequest) (
 					BatchID: batch.ID,
 					Day:     day,
 				}
-				if err := tx.Create(&batchDay).Error; err != nil {
+				if err := tx.WithContext(ctx).Create(&batchDay).Error; err != nil {
 					return err
 				}
 			}
@@ -183,7 +198,7 @@ func (s *BatchService) UpdateBatch(id uuid.UUID, body *dto.UpdateBatchRequest) (
 
 		// ✅ Update BatchGroups jika GroupTypes dikirim
 		if body.GroupTypes != nil {
-			if err := tx.Where("batch_id = ?", batch.ID).Delete(&models.BatchGroup{}).Error; err != nil {
+			if err := tx.WithContext(ctx).Where("batch_id = ?", batch.ID).Delete(&models.BatchGroup{}).Error; err != nil {
 				return err
 			}
 			for _, gtype := range *body.GroupTypes {
@@ -191,14 +206,14 @@ func (s *BatchService) UpdateBatch(id uuid.UUID, body *dto.UpdateBatchRequest) (
 					BatchID:   batch.ID,
 					GroupType: gtype,
 				}
-				if err := tx.Create(&batchGroup).Error; err != nil {
+				if err := tx.WithContext(ctx).Create(&batchGroup).Error; err != nil {
 					return err
 				}
 			}
 		}
 
 		// Ambil data terbaru
-		updated, err := s.repo.WithTx(tx).FindByID(batch.ID)
+		updated, err := s.repo.WithTx(tx).FindByID(ctx, batch.ID)
 		if err != nil {
 			return fmt.Errorf("gagal mengambil batch setelah diupdate: %w", err)
 		}
@@ -214,11 +229,11 @@ func (s *BatchService) UpdateBatch(id uuid.UUID, body *dto.UpdateBatchRequest) (
 }
 
 // DeleteBatch deletes a batch by its ID
-func (s *BatchService) DeleteBatch(batchID uuid.UUID) error {
+func (s *BatchService) DeleteBatch(ctx context.Context, batchID uuid.UUID) error {
 	var batch models.Batch
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
 		var err error
-		batchRsp, err := s.repo.WithTx(tx).FindByID(batchID)
+		batchRsp, err := s.repo.WithTx(tx).FindByID(ctx, batchID)
 		if err != nil {
 			return err
 		}
@@ -230,7 +245,7 @@ func (s *BatchService) DeleteBatch(batchID uuid.UUID) error {
 		batch = utils.Safe(batchRsp, models.Batch{})
 
 		// Hapus batch (images akan ikut terhapus karena cascade)
-		if err := s.repo.WithTx(tx).DeleteByID(batchID); err != nil {
+		if err := s.repo.WithTx(tx).DeleteByID(ctx, batchID); err != nil {
 			return err
 		}
 
@@ -251,8 +266,8 @@ func (s *BatchService) DeleteBatch(batchID uuid.UUID) error {
 }
 
 // GetBatchByCourseSlug is function for get all batches by course slug
-func (s *BatchService) GetBatchByCourseSlug(courseID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error) {
-	batches, total, err := s.repo.GetAllFilteredBatchesByCourseSlug(courseID, opts)
+func (s *BatchService) GetBatchByCourseSlug(ctx context.Context, courseID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error) {
+	batches, total, err := s.repo.GetAllFilteredBatchesByCourseSlug(ctx, courseID, opts)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -260,19 +275,19 @@ func (s *BatchService) GetBatchByCourseSlug(courseID uuid.UUID, opts utils.Query
 }
 
 // GetBatchesPurchasedByUser is service for get batches where the user has purchased
-func (s *BatchService) GetBatchesPurchasedByUser(userID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error) {
-	return s.repo.GetBatchesByUserPurchaseFiltered(userID, opts)
+func (s *BatchService) GetBatchesPurchasedByUser(ctx context.Context, userID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error) {
+	return s.repo.GetBatchesByUserPurchaseFiltered(ctx, userID, opts)
 }
 
 // GetBatchesTaughtByGuru is service for get batches where teacher was taughted
-func (s *BatchService) GetBatchesTaughtByGuru(guruID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error) {
-	return s.repo.GetBatchesByGuruMeetingRelationFiltered(guruID, opts)
+func (s *BatchService) GetBatchesTaughtByGuru(ctx context.Context, guruID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error) {
+	return s.repo.GetBatchesByGuruMeetingRelationFiltered(ctx, guruID, opts)
 }
 
 // CalculateProgress service calculate progress
-func (s *BatchService) CalculateProgress(batchID, userID uuid.UUID) (float64, error) {
+func (s *BatchService) CalculateProgress(ctx context.Context, batchID, userID uuid.UUID) (float64, error) {
 	// Hitung total assignment di batch
-	totalAssignments, err := s.assignmentRepo.CountByBatchID(batchID)
+	totalAssignments, err := s.assignmentRepo.CountByBatchID(ctx, batchID)
 	if err != nil {
 		return 0, err
 	}
@@ -281,7 +296,7 @@ func (s *BatchService) CalculateProgress(batchID, userID uuid.UUID) (float64, er
 	}
 
 	// Hitung total submission user yg sudah dikumpulkan di batch tsb
-	completedSubmissions, err := s.submissionRepo.CountCompletedByBatchUser(batchID, userID)
+	completedSubmissions, err := s.submissionRepo.CountCompletedByBatchUser(ctx, batchID, userID)
 	if err != nil {
 		return 0, err
 	}

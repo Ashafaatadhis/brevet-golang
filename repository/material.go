@@ -3,11 +3,23 @@ package repository
 import (
 	"brevet-api/models"
 	"brevet-api/utils"
+	"context"
 	"fmt"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+// IMaterialRepository interface
+type IMaterialRepository interface {
+	WithTx(tx *gorm.DB) IMaterialRepository
+	GetAllFilteredMaterial(ctx context.Context, opts utils.QueryOptions) ([]models.Material, int64, error)
+	GetAllFilteredMaterialsByMeetingID(ctx context.Context, meetingID uuid.UUID, opts utils.QueryOptions) ([]models.Material, int64, error)
+	Create(ctx context.Context, assignment *models.Material) error
+	Update(ctx context.Context, assignment *models.Material) error
+	DeleteByID(ctx context.Context, id uuid.UUID) error
+	FindByID(ctx context.Context, id uuid.UUID) (*models.Material, error)
+}
 
 // MaterialRepository is init struct
 type MaterialRepository struct {
@@ -15,17 +27,17 @@ type MaterialRepository struct {
 }
 
 // NewMaterialRepository creates a new material repository
-func NewMaterialRepository(db *gorm.DB) *MaterialRepository {
+func NewMaterialRepository(db *gorm.DB) IMaterialRepository {
 	return &MaterialRepository{db: db}
 }
 
 // WithTx running with transaction
-func (r *MaterialRepository) WithTx(tx *gorm.DB) *MaterialRepository {
+func (r *MaterialRepository) WithTx(tx *gorm.DB) IMaterialRepository {
 	return &MaterialRepository{db: tx}
 }
 
 // GetAllFilteredMaterial retrieves all Material with pagination and filtering options
-func (r *MaterialRepository) GetAllFilteredMaterial(opts utils.QueryOptions) ([]models.Material, int64, error) {
+func (r *MaterialRepository) GetAllFilteredMaterial(ctx context.Context, opts utils.QueryOptions) ([]models.Material, int64, error) {
 	validSortFields := utils.GetValidColumnsFromStruct(&models.Material{})
 
 	sort := opts.Sort
@@ -38,7 +50,7 @@ func (r *MaterialRepository) GetAllFilteredMaterial(opts utils.QueryOptions) ([]
 		order = "asc"
 	}
 
-	db := r.db.Model(&models.Material{})
+	db := r.db.WithContext(ctx).Model(&models.Material{})
 
 	joinConditions := map[string]string{}
 	joinedRelations := map[string]bool{}
@@ -63,7 +75,7 @@ func (r *MaterialRepository) GetAllFilteredMaterial(opts utils.QueryOptions) ([]
 }
 
 // GetAllFilteredMaterialsByMeetingID retrieves all materials with pagination and filtering options
-func (r *MaterialRepository) GetAllFilteredMaterialsByMeetingID(meetingID uuid.UUID, opts utils.QueryOptions) ([]models.Material, int64, error) {
+func (r *MaterialRepository) GetAllFilteredMaterialsByMeetingID(ctx context.Context, meetingID uuid.UUID, opts utils.QueryOptions) ([]models.Material, int64, error) {
 	validSortFields := utils.GetValidColumnsFromStruct(&models.Material{})
 
 	sort := opts.Sort
@@ -76,7 +88,7 @@ func (r *MaterialRepository) GetAllFilteredMaterialsByMeetingID(meetingID uuid.U
 		order = "asc"
 	}
 
-	db := r.db.Model(&models.Material{}).
+	db := r.db.WithContext(ctx).Model(&models.Material{}).
 		Where("meeting_id = ?", meetingID)
 
 	joinConditions := map[string]string{}
@@ -102,24 +114,24 @@ func (r *MaterialRepository) GetAllFilteredMaterialsByMeetingID(meetingID uuid.U
 }
 
 // Create creates a new material
-func (r *MaterialRepository) Create(assignment *models.Material) error {
-	return r.db.Create(assignment).Error
+func (r *MaterialRepository) Create(ctx context.Context, assignment *models.Material) error {
+	return r.db.WithContext(ctx).Create(assignment).Error
 }
 
 // Update updates an existing material
-func (r *MaterialRepository) Update(assignment *models.Material) error {
-	return r.db.Save(assignment).Error
+func (r *MaterialRepository) Update(ctx context.Context, assignment *models.Material) error {
+	return r.db.WithContext(ctx).Save(assignment).Error
 }
 
 // DeleteByID deletes an material by its ID
-func (r *MaterialRepository) DeleteByID(id uuid.UUID) error {
-	return r.db.Where("id = ?", id).Delete(&models.Material{}).Error
+func (r *MaterialRepository) DeleteByID(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&models.Material{}).Error
 }
 
 // FindByID retrieves a meeting by its ID
-func (r *MaterialRepository) FindByID(id uuid.UUID) (*models.Material, error) {
+func (r *MaterialRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Material, error) {
 	var material models.Material
-	err := r.db.First(&material, "id = ?", id).Error
+	err := r.db.WithContext(ctx).First(&material, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}

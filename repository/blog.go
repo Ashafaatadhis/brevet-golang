@@ -3,11 +3,24 @@ package repository
 import (
 	"brevet-api/models"
 	"brevet-api/utils"
+	"context"
 	"fmt"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+// IBlogRepository interface
+type IBlogRepository interface {
+	WithTx(tx *gorm.DB) IBlogRepository
+	GetAllFilteredBlogs(ctx context.Context, opts utils.QueryOptions) ([]models.Blog, int64, error)
+	GetBlogBySlug(ctx context.Context, slug string) (*models.Blog, error)
+	IsSlugExists(ctx context.Context, slug string) bool
+	Create(ctx context.Context, blog *models.Blog) error
+	FindByID(ctx context.Context, id uuid.UUID) (*models.Blog, error)
+	Update(ctx context.Context, blog *models.Blog) error
+	DeleteByID(ctx context.Context, id uuid.UUID) error
+}
 
 // BlogRepository is a struct that represents a blog repository
 type BlogRepository struct {
@@ -15,21 +28,18 @@ type BlogRepository struct {
 }
 
 // NewBlogRepository creates a new blog repository
-func NewBlogRepository(db *gorm.DB) *BlogRepository {
+func NewBlogRepository(db *gorm.DB) IBlogRepository {
 	return &BlogRepository{db: db}
 }
 
 // WithTx running with transaction
-func (r *BlogRepository) WithTx(tx *gorm.DB) *BlogRepository {
+func (r *BlogRepository) WithTx(tx *gorm.DB) IBlogRepository {
 	return &BlogRepository{db: tx}
 }
 
 // GetAllFilteredBlogs retrieves all blogs with pagination and filtering options
-func (r *BlogRepository) GetAllFilteredBlogs(opts utils.QueryOptions) ([]models.Blog, int64, error) {
-	validSortFields, err := utils.GetValidColumns(r.db, &models.Blog{})
-	if err != nil {
-		return nil, 0, err
-	}
+func (r *BlogRepository) GetAllFilteredBlogs(ctx context.Context, opts utils.QueryOptions) ([]models.Blog, int64, error) {
+	validSortFields := utils.GetValidColumnsFromStruct(&models.Blog{})
 
 	sort := opts.Sort
 	if !validSortFields[sort] {
@@ -41,7 +51,7 @@ func (r *BlogRepository) GetAllFilteredBlogs(opts utils.QueryOptions) ([]models.
 		order = "asc"
 	}
 
-	db := r.db.Model(&models.Blog{})
+	db := r.db.WithContext(ctx).Model(&models.Blog{})
 
 	joinConditions := map[string]string{}
 	joinedRelations := map[string]bool{}
@@ -56,7 +66,7 @@ func (r *BlogRepository) GetAllFilteredBlogs(opts utils.QueryOptions) ([]models.
 	db.Count(&total)
 
 	var blogs []models.Blog
-	err = db.Order(fmt.Sprintf("%s %s", sort, order)).
+	err := db.Order(fmt.Sprintf("%s %s", sort, order)).
 		Limit(opts.Limit).
 		Offset(opts.Offset).
 		Find(&blogs).Error
@@ -65,9 +75,9 @@ func (r *BlogRepository) GetAllFilteredBlogs(opts utils.QueryOptions) ([]models.
 }
 
 // GetBlogBySlug retrieves a blog by its slug
-func (r *BlogRepository) GetBlogBySlug(slug string) (*models.Blog, error) {
+func (r *BlogRepository) GetBlogBySlug(ctx context.Context, slug string) (*models.Blog, error) {
 	var blog models.Blog
-	err := r.db.First(&blog, "slug = ?", slug).Error
+	err := r.db.WithContext(ctx).First(&blog, "slug = ?", slug).Error
 	if err != nil {
 		return nil, err
 	}
@@ -75,21 +85,21 @@ func (r *BlogRepository) GetBlogBySlug(slug string) (*models.Blog, error) {
 }
 
 // IsSlugExists checks if a course slug already exists in the database
-func (r *BlogRepository) IsSlugExists(slug string) bool {
+func (r *BlogRepository) IsSlugExists(ctx context.Context, slug string) bool {
 	var count int64
-	r.db.Model(&models.Blog{}).Where("slug = ?", slug).Count(&count)
+	r.db.WithContext(ctx).Model(&models.Blog{}).Where("slug = ?", slug).Count(&count)
 	return count > 0
 }
 
 // Create creates a new blog in the database
-func (r *BlogRepository) Create(blog *models.Blog) error {
-	return r.db.Create(blog).Error
+func (r *BlogRepository) Create(ctx context.Context, blog *models.Blog) error {
+	return r.db.WithContext(ctx).Create(blog).Error
 }
 
 // FindByID retrieves a blog by its ID
-func (r *BlogRepository) FindByID(id uuid.UUID) (*models.Blog, error) {
+func (r *BlogRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Blog, error) {
 	var blog models.Blog
-	err := r.db.First(&blog, "id = ?", id).Error
+	err := r.db.WithContext(ctx).First(&blog, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -97,11 +107,11 @@ func (r *BlogRepository) FindByID(id uuid.UUID) (*models.Blog, error) {
 }
 
 // Update updates an existing blog in the database
-func (r *BlogRepository) Update(blog *models.Blog) error {
-	return r.db.Save(blog).Error
+func (r *BlogRepository) Update(ctx context.Context, blog *models.Blog) error {
+	return r.db.WithContext(ctx).Save(blog).Error
 }
 
 // DeleteByID deletes a blog by its ID
-func (r *BlogRepository) DeleteByID(id uuid.UUID) error {
-	return r.db.Where("id = ?", id).Delete(&models.Blog{}).Error
+func (r *BlogRepository) DeleteByID(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&models.Blog{}).Error
 }

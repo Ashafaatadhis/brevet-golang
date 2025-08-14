@@ -15,14 +15,14 @@ import (
 
 // BatchController handles batch-related operations
 type BatchController struct {
-	batchService   *services.BatchService
-	meetingService *services.MeetingService
-	courseService  *services.CourseService
+	batchService   services.IBatchService
+	meetingService services.IMeetingService
+	courseService  services.ICourseService
 	db             *gorm.DB
 }
 
 // NewBatchController creates a new BatchController
-func NewBatchController(batchService *services.BatchService, meetingService *services.MeetingService, courseService *services.CourseService, db *gorm.DB) *BatchController {
+func NewBatchController(batchService services.IBatchService, meetingService services.IMeetingService, courseService services.ICourseService, db *gorm.DB) *BatchController {
 	return &BatchController{
 		batchService:   batchService,
 		meetingService: meetingService,
@@ -33,11 +33,12 @@ func NewBatchController(batchService *services.BatchService, meetingService *ser
 
 // GetAllBatches retrieves a list of batches with pagination and filtering options
 func (ctrl *BatchController) GetAllBatches(c *fiber.Ctx) error {
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 	log.Info("GetAllBatches handler called")
 	opts := utils.ParseQueryOptions(c)
 
-	batches, total, err := ctrl.batchService.GetAllFilteredBatches(opts)
+	batches, total, err := ctrl.batchService.GetAllFilteredBatches(ctx, opts)
 	if err != nil {
 		log.WithError(err).Error("Gagal mengambil data batch")
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch batches", err.Error())
@@ -75,13 +76,14 @@ func (ctrl *BatchController) GetAllBatches(c *fiber.Ctx) error {
 
 // GetBatchBySlug retrieves a batch by its slug (ID)
 func (ctrl *BatchController) GetBatchBySlug(c *fiber.Ctx) error {
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 	log.Info("GetBatchBySlug handler called")
 
 	slugParam := c.Params("slug")
 	log = log.WithField("slug", slugParam)
 
-	batch, err := ctrl.batchService.GetBatchBySlug(slugParam)
+	batch, err := ctrl.batchService.GetBatchBySlug(ctx, slugParam)
 	if err != nil {
 		log.WithError(err).Warn("Batch tidak ditemukan")
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Batch Doesn't Exist", err.Error())
@@ -109,7 +111,8 @@ func (ctrl *BatchController) GetBatchBySlug(c *fiber.Ctx) error {
 
 // CreateBatch handles the creation of a new batch
 func (ctrl *BatchController) CreateBatch(c *fiber.Ctx) error {
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 	log.Info("CreateBatch handler called")
 	body := c.Locals("body").(*dto.CreateBatchRequest)
 	user := c.Locals("user").(*utils.Claims)
@@ -124,7 +127,7 @@ func (ctrl *BatchController) CreateBatch(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 
-	batch, err := ctrl.batchService.CreateBatch(courseID, body)
+	batch, err := ctrl.batchService.CreateBatch(ctx, courseID, body)
 	if err != nil {
 		log.WithError(err).Error("Gagal membuat batch")
 		return utils.ErrorResponse(c, 400, "Gagal membuat batch", err.Error())
@@ -152,7 +155,8 @@ func (ctrl *BatchController) CreateBatch(c *fiber.Ctx) error {
 
 // UpdateBatch updates an existing batch with the provided details
 func (ctrl *BatchController) UpdateBatch(c *fiber.Ctx) error {
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 	log.Info("UpdateBatch handler called")
 	user := c.Locals("user").(*utils.Claims)
 
@@ -166,7 +170,7 @@ func (ctrl *BatchController) UpdateBatch(c *fiber.Ctx) error {
 	}
 	body := c.Locals("body").(*dto.UpdateBatchRequest)
 
-	batch, err := ctrl.batchService.UpdateBatch(id, body)
+	batch, err := ctrl.batchService.UpdateBatch(ctx, id, body)
 	if err != nil {
 		log.WithError(err).Error("Gagal update batch")
 		return utils.ErrorResponse(c, 400, "Failed to update batch", err.Error())
@@ -186,7 +190,8 @@ func (ctrl *BatchController) UpdateBatch(c *fiber.Ctx) error {
 
 // DeleteBatch deletes a batch by its ID
 func (ctrl *BatchController) DeleteBatch(c *fiber.Ctx) error {
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 	log.Info("DeleteBatch handler called")
 	user := c.Locals("user").(*utils.Claims)
 
@@ -200,7 +205,7 @@ func (ctrl *BatchController) DeleteBatch(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 
-	if err := ctrl.batchService.DeleteBatch(id); err != nil {
+	if err := ctrl.batchService.DeleteBatch(ctx, id); err != nil {
 		log.WithError(err).Error("Gagal menghapus batch")
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to delete batch", err.Error())
 	}
@@ -210,16 +215,18 @@ func (ctrl *BatchController) DeleteBatch(c *fiber.Ctx) error {
 
 // GetBatchByCourseSlug this function for get batch by course slug
 func (ctrl *BatchController) GetBatchByCourseSlug(c *fiber.Ctx) error {
+	ctx := c.UserContext()
+
 	courseSlug := c.Params("courseSlug")
 
 	opts := utils.ParseQueryOptions(c)
 
-	course, err := ctrl.courseService.GetCourseBySlug(courseSlug)
+	course, err := ctrl.courseService.GetCourseBySlug(ctx, courseSlug)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Course not found", err.Error())
 	}
 
-	batches, total, err := ctrl.batchService.GetBatchByCourseSlug(course.ID, opts)
+	batches, total, err := ctrl.batchService.GetBatchByCourseSlug(ctx, course.ID, opts)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch teachers", err.Error())
 	}
@@ -253,6 +260,8 @@ func (ctrl *BatchController) GetBatchByCourseSlug(c *fiber.Ctx) error {
 
 // GetMyBatches this function for mybatches controller
 func (ctrl *BatchController) GetMyBatches(c *fiber.Ctx) error {
+	ctx := c.UserContext()
+
 	user := c.Locals("user").(*utils.Claims)
 	opts := utils.ParseQueryOptions(c)
 
@@ -262,9 +271,9 @@ func (ctrl *BatchController) GetMyBatches(c *fiber.Ctx) error {
 
 	switch user.Role {
 	case string(models.RoleTypeSiswa):
-		batches, total, err = ctrl.batchService.GetBatchesPurchasedByUser(user.UserID, opts)
+		batches, total, err = ctrl.batchService.GetBatchesPurchasedByUser(ctx, user.UserID, opts)
 	case string(models.RoleTypeGuru):
-		batches, total, err = ctrl.batchService.GetBatchesTaughtByGuru(user.UserID, opts)
+		batches, total, err = ctrl.batchService.GetBatchesTaughtByGuru(ctx, user.UserID, opts)
 	default:
 		return utils.ErrorResponse(c, fiber.StatusForbidden, "Akses ditolak", "Hanya siswa dan guru yang dapat melihat batch ini")
 	}
@@ -303,6 +312,8 @@ func (ctrl *BatchController) GetMyBatches(c *fiber.Ctx) error {
 
 // GetMyMeetings this function for mymeetings controller
 func (ctrl *BatchController) GetMyMeetings(c *fiber.Ctx) error {
+	ctx := c.UserContext()
+
 	user := c.Locals("user").(*utils.Claims)
 	batchSlug := c.Params("batchSlug")
 	opts := utils.ParseQueryOptions(c)
@@ -313,9 +324,9 @@ func (ctrl *BatchController) GetMyMeetings(c *fiber.Ctx) error {
 
 	switch user.Role {
 	case string(models.RoleTypeSiswa):
-		meetings, total, err = ctrl.meetingService.GetMeetingsPurchasedByUser(user.UserID, batchSlug, opts)
+		meetings, total, err = ctrl.meetingService.GetMeetingsPurchasedByUser(ctx, user.UserID, batchSlug, opts)
 	case string(models.RoleTypeGuru):
-		meetings, total, err = ctrl.meetingService.GetMeetingsTaughtByTeacher(user.UserID, batchSlug, opts)
+		meetings, total, err = ctrl.meetingService.GetMeetingsTaughtByTeacher(ctx, user.UserID, batchSlug, opts)
 	default:
 		return utils.ErrorResponse(c, fiber.StatusForbidden, "Akses ditolak", "Hanya siswa dan guru yang dapat melihat meetings ini")
 	}
@@ -340,6 +351,8 @@ func (ctrl *BatchController) GetMyMeetings(c *fiber.Ctx) error {
 
 // GetAllStudents get all students
 func (ctrl *BatchController) GetAllStudents(c *fiber.Ctx) error {
+	ctx := c.UserContext()
+
 	batchSlug := c.Params("batchSlug")
 
 	user := c.Locals("user").(*utils.Claims)
@@ -348,7 +361,7 @@ func (ctrl *BatchController) GetAllStudents(c *fiber.Ctx) error {
 	var total int64
 	var err error
 
-	students, total, err := ctrl.meetingService.GetStudentsByBatchSlugFiltered(user, batchSlug, opts)
+	students, total, err := ctrl.meetingService.GetStudentsByBatchSlugFiltered(ctx, user, batchSlug, opts)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to get students", err.Error())
 	}
@@ -366,13 +379,15 @@ func (ctrl *BatchController) GetAllStudents(c *fiber.Ctx) error {
 
 // GetProgress for get progress
 func (ctrl *BatchController) GetProgress(c *fiber.Ctx) error {
+	ctx := c.UserContext()
+
 	user := c.Locals("user").(*utils.Claims)
 	batchID, err := uuid.Parse(c.Params("batchID"))
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid batch ID", err.Error())
 	}
 
-	progress, err := ctrl.batchService.CalculateProgress(batchID, user.UserID)
+	progress, err := ctrl.batchService.CalculateProgress(ctx, batchID, user.UserID)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to get progress", err.Error())
 	}

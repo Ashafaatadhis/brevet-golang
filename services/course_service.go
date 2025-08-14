@@ -5,6 +5,7 @@ import (
 	"brevet-api/models"
 	"brevet-api/repository"
 	"brevet-api/utils"
+	"context"
 
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/google/uuid"
@@ -12,21 +13,30 @@ import (
 	"gorm.io/gorm"
 )
 
+// ICourseService interface
+type ICourseService interface {
+	GetAllFilteredCourses(ctx context.Context, opts utils.QueryOptions) ([]models.Course, int64, error)
+	GetCourseBySlug(ctx context.Context, slug string) (*models.Course, error)
+	CreateCourse(ctx context.Context, body *dto.CreateCourseRequest) (*models.Course, error)
+	UpdateCourse(ctx context.Context, id uuid.UUID, body *dto.UpdateCourseRequest) (*models.Course, error)
+	DeleteCourse(ctx context.Context, courseID uuid.UUID) error
+}
+
 // CourseService provides methods for managing courses
 type CourseService struct {
-	repo        *repository.CourseRepository
+	repo        repository.ICourseRepository
 	db          *gorm.DB
-	fileService *FileService
+	fileService IFileService
 }
 
 // NewCourseService creates a new instance of CourseService
-func NewCourseService(repo *repository.CourseRepository, db *gorm.DB, fileService *FileService) *CourseService {
+func NewCourseService(repo repository.ICourseRepository, db *gorm.DB, fileService IFileService) ICourseService {
 	return &CourseService{repo: repo, db: db, fileService: fileService}
 }
 
 // GetAllFilteredCourses retrieves all courses with pagination and filtering options
-func (s *CourseService) GetAllFilteredCourses(opts utils.QueryOptions) ([]models.Course, int64, error) {
-	courses, total, err := s.repo.GetAllFilteredCourses(opts)
+func (s *CourseService) GetAllFilteredCourses(ctx context.Context, opts utils.QueryOptions) ([]models.Course, int64, error) {
+	courses, total, err := s.repo.GetAllFilteredCourses(ctx, opts)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -34,8 +44,8 @@ func (s *CourseService) GetAllFilteredCourses(opts utils.QueryOptions) ([]models
 }
 
 // GetCourseBySlug retrieves a course by its slug
-func (s *CourseService) GetCourseBySlug(slug string) (*models.Course, error) {
-	course, err := s.repo.GetCourseBySlug(slug)
+func (s *CourseService) GetCourseBySlug(ctx context.Context, slug string) (*models.Course, error) {
+	course, err := s.repo.GetCourseBySlug(ctx, slug)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +53,7 @@ func (s *CourseService) GetCourseBySlug(slug string) (*models.Course, error) {
 }
 
 // CreateCourse creates a new course with the provided details
-func (s *CourseService) CreateCourse(body *dto.CreateCourseRequest) (*models.Course, error) {
+func (s *CourseService) CreateCourse(ctx context.Context, body *dto.CreateCourseRequest) (*models.Course, error) {
 	var courseResponse models.Course
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
 		course := &models.Course{
@@ -54,11 +64,11 @@ func (s *CourseService) CreateCourse(body *dto.CreateCourseRequest) (*models.Cou
 			Achievements:     body.Achievements,
 		}
 
-		slug := utils.GenerateUniqueSlug(body.Title, s.repo)
+		slug := utils.GenerateUniqueSlug(ctx, body.Title, s.repo)
 
 		course.Slug = slug
 
-		if err := s.repo.WithTx(tx).Create(course); err != nil {
+		if err := s.repo.WithTx(tx).Create(ctx, course); err != nil {
 			return err
 		}
 
@@ -70,11 +80,11 @@ func (s *CourseService) CreateCourse(body *dto.CreateCourseRequest) (*models.Cou
 			})
 		}
 
-		if err := s.repo.WithTx(tx).CreateCourseImagesBulk(images); err != nil {
+		if err := s.repo.WithTx(tx).CreateCourseImagesBulk(ctx, images); err != nil {
 			return err
 		}
 
-		courseWithImages, err := s.repo.WithTx(tx).FindByIDWithImages(course.ID)
+		courseWithImages, err := s.repo.WithTx(tx).FindByIDWithImages(ctx, course.ID)
 		if err != nil {
 			return err
 		}
@@ -90,11 +100,11 @@ func (s *CourseService) CreateCourse(body *dto.CreateCourseRequest) (*models.Cou
 }
 
 // UpdateCourse is blabla
-func (s *CourseService) UpdateCourse(id uuid.UUID, body *dto.UpdateCourseRequest) (*models.Course, error) {
+func (s *CourseService) UpdateCourse(ctx context.Context, id uuid.UUID, body *dto.UpdateCourseRequest) (*models.Course, error) {
 	var courseResponse models.Course
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
 
-		course, err := s.repo.WithTx(tx).FindByID(id)
+		course, err := s.repo.WithTx(tx).FindByID(ctx, id)
 		if err != nil {
 			return err
 		}
@@ -113,13 +123,13 @@ func (s *CourseService) UpdateCourse(id uuid.UUID, body *dto.UpdateCourseRequest
 		// 	course.Slug = slug
 		// }
 
-		if err := s.repo.WithTx(tx).Update(course); err != nil {
+		if err := s.repo.WithTx(tx).Update(ctx, course); err != nil {
 			return err
 		}
 
 		// Ganti course_images jika dikirim
 		if body.CourseImages != nil {
-			if err := s.repo.WithTx(tx).DeleteCourseImagesByCourseID(course.ID); err != nil {
+			if err := s.repo.WithTx(tx).DeleteCourseImagesByCourseID(ctx, course.ID); err != nil {
 				return err
 			}
 
@@ -131,12 +141,12 @@ func (s *CourseService) UpdateCourse(id uuid.UUID, body *dto.UpdateCourseRequest
 				})
 			}
 
-			if err := s.repo.WithTx(tx).CreateCourseImagesBulk(images); err != nil {
+			if err := s.repo.WithTx(tx).CreateCourseImagesBulk(ctx, images); err != nil {
 				return err
 			}
 		}
 
-		response, err := s.repo.FindByIDWithImages(course.ID)
+		response, err := s.repo.FindByIDWithImages(ctx, course.ID)
 		if err != nil {
 			return err
 		}
@@ -153,11 +163,11 @@ func (s *CourseService) UpdateCourse(id uuid.UUID, body *dto.UpdateCourseRequest
 }
 
 // DeleteCourse deletes a course by its ID
-func (s *CourseService) DeleteCourse(courseID uuid.UUID) error {
+func (s *CourseService) DeleteCourse(ctx context.Context, courseID uuid.UUID) error {
 	var imagePaths []string
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
-		course, err := s.repo.WithTx(tx).FindByIDWithImages(courseID)
+		course, err := s.repo.WithTx(tx).FindByIDWithImages(ctx, courseID)
 		if err != nil {
 			return err
 		}
@@ -168,7 +178,7 @@ func (s *CourseService) DeleteCourse(courseID uuid.UUID) error {
 		}
 
 		// Hapus course dari DB
-		if err := s.repo.WithTx(tx).DeleteByID(courseID); err != nil {
+		if err := s.repo.WithTx(tx).DeleteByID(ctx, courseID); err != nil {
 			return err
 		}
 

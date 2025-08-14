@@ -13,6 +13,7 @@ import (
 
 // IUserRepository interfacee
 type IUserRepository interface {
+	WithTx(tx *gorm.DB) IUserRepository
 	FindAllFiltered(ctx context.Context, opts utils.QueryOptions) ([]models.User, int64, error)
 	FindByID(ctx context.Context, userID uuid.UUID) (*models.User, error)
 	FindByIDs(ctx context.Context, userIDs []uuid.UUID) ([]models.User, error)
@@ -24,19 +25,13 @@ type IUserRepository interface {
 	DeleteUser(ctx context.Context, userID uuid.UUID) error
 }
 
-// IUserTXRepository interface
-type IUserTXRepository interface {
-	IUserRepository
-	WithTx(tx *gorm.DB) IUserRepository
-}
-
 // UserRepository is a struct that represents a user repository
 type UserRepository struct {
 	db *gorm.DB
 }
 
 // NewUserRepository creates a new user repository
-func NewUserRepository(db *gorm.DB) IUserTXRepository {
+func NewUserRepository(db *gorm.DB) IUserRepository {
 	return &UserRepository{db: db}
 }
 

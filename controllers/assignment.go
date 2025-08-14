@@ -13,12 +13,12 @@ import (
 
 // AssignmentController handles purchase-related operations
 type AssignmentController struct {
-	assignmentService *services.AssignmentService
+	assignmentService services.IAssignmentService
 	db                *gorm.DB
 }
 
 // NewAssignmentController creates a new instance of AssignmentController
-func NewAssignmentController(assignmentService *services.AssignmentService, db *gorm.DB) *AssignmentController {
+func NewAssignmentController(assignmentService services.IAssignmentService, db *gorm.DB) *AssignmentController {
 	return &AssignmentController{
 		assignmentService: assignmentService,
 		db:                db,
@@ -27,9 +27,10 @@ func NewAssignmentController(assignmentService *services.AssignmentService, db *
 
 // GetAllAssignments retrieves a list of assignments with pagination and filtering options
 func (ctrl *AssignmentController) GetAllAssignments(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	opts := utils.ParseQueryOptions(c)
 
-	assignments, total, err := ctrl.assignmentService.GetAllFilteredAssignments(opts)
+	assignments, total, err := ctrl.assignmentService.GetAllFilteredAssignments(ctx, opts)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch purchases", err.Error())
 	}
@@ -45,6 +46,7 @@ func (ctrl *AssignmentController) GetAllAssignments(c *fiber.Ctx) error {
 
 // GetAllAssignmentByMeetingID retrieves a list of assignments with pagination and filtering options
 func (ctrl *AssignmentController) GetAllAssignmentByMeetingID(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	opts := utils.ParseQueryOptions(c)
 	meetingIDParam := c.Params("meetingID")
 	meetingID, err := uuid.Parse(meetingIDParam)
@@ -54,7 +56,7 @@ func (ctrl *AssignmentController) GetAllAssignmentByMeetingID(c *fiber.Ctx) erro
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
-	assignments, total, err := ctrl.assignmentService.GetAllFilteredAssignmentsByMeetingID(meetingID, user, opts)
+	assignments, total, err := ctrl.assignmentService.GetAllFilteredAssignmentsByMeetingID(ctx, meetingID, user, opts)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch assignment", err.Error())
 	}
@@ -70,6 +72,7 @@ func (ctrl *AssignmentController) GetAllAssignmentByMeetingID(c *fiber.Ctx) erro
 
 // GetAssignmentByID retrieves a single assignment by its ID
 func (ctrl *AssignmentController) GetAssignmentByID(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	assignmentIDParam := c.Params("assignmentID")
 	assignmentID, err := uuid.Parse(assignmentIDParam)
 	if err != nil {
@@ -78,7 +81,7 @@ func (ctrl *AssignmentController) GetAssignmentByID(c *fiber.Ctx) error {
 
 	user := c.Locals("user").(*utils.Claims)
 
-	assignment, err := ctrl.assignmentService.GetAssignmentByID(user, assignmentID)
+	assignment, err := ctrl.assignmentService.GetAssignmentByID(ctx, user, assignmentID)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Assignment not found", err.Error())
 	}
@@ -93,6 +96,7 @@ func (ctrl *AssignmentController) GetAssignmentByID(c *fiber.Ctx) error {
 
 // CreateAssignment creates a new assignment with the provided details
 func (ctrl *AssignmentController) CreateAssignment(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	body := c.Locals("body").(*dto.CreateAssignmentRequest)
 	user := c.Locals("user").(*utils.Claims)
 
@@ -102,7 +106,7 @@ func (ctrl *AssignmentController) CreateAssignment(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 
-	assignment, err := ctrl.assignmentService.CreateAssignment(user, meetingID, body)
+	assignment, err := ctrl.assignmentService.CreateAssignment(ctx, user, meetingID, body)
 	if err != nil {
 		return utils.ErrorResponse(c, 400, "Failed to create assignment", err.Error())
 	}
@@ -117,6 +121,7 @@ func (ctrl *AssignmentController) CreateAssignment(c *fiber.Ctx) error {
 
 // UpdateAssignment updates an existing assignment and its files
 func (ctrl *AssignmentController) UpdateAssignment(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	body := c.Locals("body").(*dto.UpdateAssignmentRequest)
 	user := c.Locals("user").(*utils.Claims)
 
@@ -126,7 +131,7 @@ func (ctrl *AssignmentController) UpdateAssignment(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 
-	assignment, err := ctrl.assignmentService.UpdateAssignment(user, assignmentID, body)
+	assignment, err := ctrl.assignmentService.UpdateAssignment(ctx, user, assignmentID, body)
 	if err != nil {
 		return utils.ErrorResponse(c, 400, "Failed to update assignment", err.Error())
 	}
@@ -141,6 +146,7 @@ func (ctrl *AssignmentController) UpdateAssignment(c *fiber.Ctx) error {
 
 // DeleteAssignment deletes an existing assignment and its related files
 func (ctrl *AssignmentController) DeleteAssignment(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	user := c.Locals("user").(*utils.Claims)
 
 	assignmentIDParam := c.Params("assignmentID")
@@ -149,7 +155,7 @@ func (ctrl *AssignmentController) DeleteAssignment(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 
-	if err := ctrl.assignmentService.DeleteAssignment(user, assignmentID); err != nil {
+	if err := ctrl.assignmentService.DeleteAssignment(ctx, user, assignmentID); err != nil {
 		return utils.ErrorResponse(c, 400, "Failed to delete assignment", err.Error())
 	}
 

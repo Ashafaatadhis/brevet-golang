@@ -14,12 +14,12 @@ import (
 
 // MeetingController handles meeting-related operations
 type MeetingController struct {
-	meetingService *services.MeetingService
+	meetingService services.IMeetingService
 	db             *gorm.DB
 }
 
 // NewMeetingController creates a new NewMeetingController
-func NewMeetingController(meetingService *services.MeetingService, db *gorm.DB) *MeetingController {
+func NewMeetingController(meetingService services.IMeetingService, db *gorm.DB) *MeetingController {
 	return &MeetingController{
 		meetingService: meetingService,
 		db:             db,
@@ -28,9 +28,10 @@ func NewMeetingController(meetingService *services.MeetingService, db *gorm.DB) 
 
 // GetAllMeetings retrieves a list of meetings with pagination and filtering options
 func (ctrl *MeetingController) GetAllMeetings(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	opts := utils.ParseQueryOptions(c)
 
-	meetings, total, err := ctrl.meetingService.GetAllFilteredMeetings(opts)
+	meetings, total, err := ctrl.meetingService.GetAllFilteredMeetings(ctx, opts)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch meetings", err.Error())
 	}
@@ -46,6 +47,7 @@ func (ctrl *MeetingController) GetAllMeetings(c *fiber.Ctx) error {
 
 // GetMeetingsByBatchSlug retrieves a list of meetings for a specific batch
 func (ctrl *MeetingController) GetMeetingsByBatchSlug(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	opts := utils.ParseQueryOptions(c)
 	user := c.Locals("user").(*utils.Claims)
 	batchSlug := c.Params("batchSlug")
@@ -56,11 +58,11 @@ func (ctrl *MeetingController) GetMeetingsByBatchSlug(c *fiber.Ctx) error {
 
 	switch user.Role {
 	case string(models.RoleTypeSiswa):
-		meetings, total, err = ctrl.meetingService.GetMeetingsPurchasedByUser(user.UserID, batchSlug, opts)
+		meetings, total, err = ctrl.meetingService.GetMeetingsPurchasedByUser(ctx, user.UserID, batchSlug, opts)
 	case string(models.RoleTypeGuru):
-		meetings, total, err = ctrl.meetingService.GetMeetingsTaughtByTeacher(user.UserID, batchSlug, opts)
+		meetings, total, err = ctrl.meetingService.GetMeetingsTaughtByTeacher(ctx, user.UserID, batchSlug, opts)
 	case string(models.RoleTypeAdmin):
-		meetings, total, err = ctrl.meetingService.GetMeetingsByBatchSlug(batchSlug, opts)
+		meetings, total, err = ctrl.meetingService.GetMeetingsByBatchSlug(ctx, batchSlug, opts)
 	default:
 		return utils.ErrorResponse(c, fiber.StatusForbidden, "Akses ditolak", "Hanya siswa dan guru yang dapat melihat meetings ini")
 	}
@@ -78,13 +80,14 @@ func (ctrl *MeetingController) GetMeetingsByBatchSlug(c *fiber.Ctx) error {
 
 // GetMeetingByID is controller that retrieves meeting by them id
 func (ctrl *MeetingController) GetMeetingByID(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	idParam := c.Params("id")
 	id, err := uuid.Parse(idParam)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 
-	meeting, err := ctrl.meetingService.GetMeetingByID(id)
+	meeting, err := ctrl.meetingService.GetMeetingByID(ctx, id)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Meeting Doesn't Exist", err.Error())
 	}
@@ -99,6 +102,7 @@ func (ctrl *MeetingController) GetMeetingByID(c *fiber.Ctx) error {
 
 // CreateMeeting is for create meeting
 func (ctrl *MeetingController) CreateMeeting(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	body := c.Locals("body").(*dto.CreateMeetingRequest)
 	idParam := c.Params("batchID")
 	id, err := uuid.Parse(idParam)
@@ -106,7 +110,7 @@ func (ctrl *MeetingController) CreateMeeting(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 
-	meeting, err := ctrl.meetingService.CreateMeeting(id, body)
+	meeting, err := ctrl.meetingService.CreateMeeting(ctx, id, body)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to create meeting", err.Error())
 	}
@@ -121,6 +125,7 @@ func (ctrl *MeetingController) CreateMeeting(c *fiber.Ctx) error {
 
 // UpdateMeeting is for update meeting
 func (ctrl *MeetingController) UpdateMeeting(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	body := c.Locals("body").(*dto.UpdateMeetingRequest)
 
 	idParam := c.Params("id")
@@ -129,7 +134,7 @@ func (ctrl *MeetingController) UpdateMeeting(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 
-	meeting, err := ctrl.meetingService.UpdateMeeting(id, body)
+	meeting, err := ctrl.meetingService.UpdateMeeting(ctx, id, body)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to update meeting", err.Error())
 	}
@@ -144,13 +149,14 @@ func (ctrl *MeetingController) UpdateMeeting(c *fiber.Ctx) error {
 
 // DeleteMeeting deletes a meeting by its ID
 func (ctrl *MeetingController) DeleteMeeting(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	idParam := c.Params("id")
 	id, err := uuid.Parse(idParam)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 
-	if err := ctrl.meetingService.DeleteMeeting(id); err != nil {
+	if err := ctrl.meetingService.DeleteMeeting(ctx, id); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to delete meeting", err.Error())
 	}
 
@@ -159,6 +165,7 @@ func (ctrl *MeetingController) DeleteMeeting(c *fiber.Ctx) error {
 
 // AddTeachersToMeeting is function to add teacher to meeting
 func (ctrl *MeetingController) AddTeachersToMeeting(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	body := c.Locals("body").(*dto.AssignTeachersRequest)
 	meetingIDParam := c.Params("meetingID")
 	meetingID, err := uuid.Parse(meetingIDParam)
@@ -166,7 +173,7 @@ func (ctrl *MeetingController) AddTeachersToMeeting(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid meeting ID", err.Error())
 	}
 
-	meeting, err := ctrl.meetingService.AddTeachersToMeeting(meetingID, body)
+	meeting, err := ctrl.meetingService.AddTeachersToMeeting(ctx, meetingID, body)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal menambahkan guru ke meeting", err.Error())
 	}
@@ -181,6 +188,7 @@ func (ctrl *MeetingController) AddTeachersToMeeting(c *fiber.Ctx) error {
 
 // UpdateTeachersToMeeting is function to update teacher to meeting
 func (ctrl *MeetingController) UpdateTeachersToMeeting(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	body := c.Locals("body").(*dto.AssignTeachersRequest)
 	meetingIDParam := c.Params("meetingID")
 	meetingID, err := uuid.Parse(meetingIDParam)
@@ -188,7 +196,7 @@ func (ctrl *MeetingController) UpdateTeachersToMeeting(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid meeting ID", err.Error())
 	}
 
-	meeting, err := ctrl.meetingService.UpdateTeachersInMeeting(meetingID, body)
+	meeting, err := ctrl.meetingService.UpdateTeachersInMeeting(ctx, meetingID, body)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal mengupdate guru ke meeting", err.Error())
 	}
@@ -203,7 +211,7 @@ func (ctrl *MeetingController) UpdateTeachersToMeeting(c *fiber.Ctx) error {
 
 // DeleteTeachersToMeeting is function to delete teacher to meeting
 func (ctrl *MeetingController) DeleteTeachersToMeeting(c *fiber.Ctx) error {
-
+	ctx := c.UserContext()
 	meetingIDParam := c.Params("meetingID")
 	meetingID, err := uuid.Parse(meetingIDParam)
 	if err != nil {
@@ -216,7 +224,7 @@ func (ctrl *MeetingController) DeleteTeachersToMeeting(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid teacher ID", err.Error())
 	}
 
-	meeting, err := ctrl.meetingService.RemoveTeachersFromMeeting(meetingID, teacherID)
+	meeting, err := ctrl.meetingService.RemoveTeachersFromMeeting(ctx, meetingID, teacherID)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal mengupdate guru ke meeting", err.Error())
 	}
@@ -231,6 +239,7 @@ func (ctrl *MeetingController) DeleteTeachersToMeeting(c *fiber.Ctx) error {
 
 // GetTeachersByMeetingIDFiltered controller that get teachers by meta such a pagination
 func (ctrl *MeetingController) GetTeachersByMeetingIDFiltered(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	opts := utils.ParseQueryOptions(c)
 	meetingIDParam := c.Params("meetingID")
 	meetingID, err := uuid.Parse(meetingIDParam)
@@ -238,7 +247,7 @@ func (ctrl *MeetingController) GetTeachersByMeetingIDFiltered(c *fiber.Ctx) erro
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid meeting ID", err.Error())
 	}
 
-	teachers, total, err := ctrl.meetingService.GetTeachersByMeetingIDFiltered(meetingID, opts)
+	teachers, total, err := ctrl.meetingService.GetTeachersByMeetingIDFiltered(ctx, meetingID, opts)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch teachers", err.Error())
 	}

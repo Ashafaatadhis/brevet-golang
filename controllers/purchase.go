@@ -14,12 +14,12 @@ import (
 
 // PurchaseController handles purchase-related operations
 type PurchaseController struct {
-	purchaseService *services.PurchaseService
+	purchaseService services.IPurchaseService
 	db              *gorm.DB
 }
 
 // NewPurchaseController creates a new NewPurchaseController
-func NewPurchaseController(purchaseService *services.PurchaseService, db *gorm.DB) *PurchaseController {
+func NewPurchaseController(purchaseService services.IPurchaseService, db *gorm.DB) *PurchaseController {
 	return &PurchaseController{
 		purchaseService: purchaseService,
 		db:              db,
@@ -28,9 +28,10 @@ func NewPurchaseController(purchaseService *services.PurchaseService, db *gorm.D
 
 // GetAllPurchases retrieves a list of purchases with pagination and filtering options
 func (ctrl *PurchaseController) GetAllPurchases(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	opts := utils.ParseQueryOptions(c)
 
-	purchases, total, err := ctrl.purchaseService.GetAllFilteredPurchases(opts)
+	purchases, total, err := ctrl.purchaseService.GetAllFilteredPurchases(ctx, opts)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch purchases", err.Error())
 	}
@@ -46,6 +47,7 @@ func (ctrl *PurchaseController) GetAllPurchases(c *fiber.Ctx) error {
 
 // GetMyPurchase retrieves a list of purchases with pagination and filtering options
 func (ctrl *PurchaseController) GetMyPurchase(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	opts := utils.ParseQueryOptions(c)
 	user := c.Locals("user").(*utils.Claims)
 
@@ -54,7 +56,7 @@ func (ctrl *PurchaseController) GetMyPurchase(c *fiber.Ctx) error {
 		opts.Filters["user_id"] = user.UserID.String()
 	}
 
-	purchases, total, err := ctrl.purchaseService.GetAllFilteredPurchases(opts)
+	purchases, total, err := ctrl.purchaseService.GetAllFilteredPurchases(ctx, opts)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch purchases", err.Error())
 	}
@@ -70,7 +72,7 @@ func (ctrl *PurchaseController) GetMyPurchase(c *fiber.Ctx) error {
 
 // GetMyPurchaseByID retrieves a course by its slug (ID)
 func (ctrl *PurchaseController) GetMyPurchaseByID(c *fiber.Ctx) error {
-
+	ctx := c.UserContext()
 	user := c.Locals("user").(*utils.Claims)
 
 	idParam := c.Params("id")
@@ -80,7 +82,7 @@ func (ctrl *PurchaseController) GetMyPurchaseByID(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 
-	purchase, err := ctrl.purchaseService.GetPurchaseByID(id)
+	purchase, err := ctrl.purchaseService.GetPurchaseByID(ctx, id)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Purchase Doesn't Exist", err.Error())
 	}
@@ -100,6 +102,7 @@ func (ctrl *PurchaseController) GetMyPurchaseByID(c *fiber.Ctx) error {
 
 // GetPurchaseByID retrieves a course by its slug (ID)
 func (ctrl *PurchaseController) GetPurchaseByID(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	idParam := c.Params("id")
 	id, err := uuid.Parse(idParam)
 
@@ -107,7 +110,7 @@ func (ctrl *PurchaseController) GetPurchaseByID(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 
-	purchase, err := ctrl.purchaseService.GetPurchaseByID(id)
+	purchase, err := ctrl.purchaseService.GetPurchaseByID(ctx, id)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Purchase Doesn't Exist", err.Error())
 	}
@@ -122,10 +125,11 @@ func (ctrl *PurchaseController) GetPurchaseByID(c *fiber.Ctx) error {
 
 // CreatePurchase creates a new purchase
 func (ctrl *PurchaseController) CreatePurchase(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	body := c.Locals("body").(*dto.CreatePurchase)
 	user := c.Locals("user").(*utils.Claims)
 
-	purchase, err := ctrl.purchaseService.CreatePurchase(user.UserID, body.BatchID)
+	purchase, err := ctrl.purchaseService.CreatePurchase(ctx, user.UserID, body.BatchID)
 	if err != nil {
 		return utils.ErrorResponse(c, 400, "Failed to create purchase", err.Error())
 	}
@@ -140,6 +144,7 @@ func (ctrl *PurchaseController) CreatePurchase(c *fiber.Ctx) error {
 
 // UpdateStatusPayment untuk verify pembayaran
 func (ctrl *PurchaseController) UpdateStatusPayment(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	idParam := c.Params("id")
 	id, err := uuid.Parse(idParam)
 	if err != nil {
@@ -148,7 +153,7 @@ func (ctrl *PurchaseController) UpdateStatusPayment(c *fiber.Ctx) error {
 
 	body := c.Locals("body").(*dto.UpdateStatusPayment)
 
-	purchase, err := ctrl.purchaseService.UpdateStatusPayment(id, body)
+	purchase, err := ctrl.purchaseService.UpdateStatusPayment(ctx, id, body)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Gagal verifikasi pembayaran", err.Error())
 	}
@@ -163,6 +168,7 @@ func (ctrl *PurchaseController) UpdateStatusPayment(c *fiber.Ctx) error {
 
 // Pay is controller for paying purchase
 func (ctrl *PurchaseController) Pay(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	body := c.Locals("body").(*dto.PayPurchaseRequest)
 	user := c.Locals("user").(*utils.Claims)
 	purchaseIDStr := c.Params("id")
@@ -173,7 +179,7 @@ func (ctrl *PurchaseController) Pay(c *fiber.Ctx) error {
 	}
 
 	// Panggil service untuk proses bayar
-	purchase, err := ctrl.purchaseService.PayPurchase(user.UserID, purchaseID, body)
+	purchase, err := ctrl.purchaseService.PayPurchase(ctx, user.UserID, purchaseID, body)
 	if err != nil {
 		return utils.ErrorResponse(c, 400, "Failed to upload payment proof", err.Error())
 	}
@@ -188,6 +194,7 @@ func (ctrl *PurchaseController) Pay(c *fiber.Ctx) error {
 
 // Cancel is controller for cancel purchase
 func (ctrl *PurchaseController) Cancel(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	user := c.Locals("user").(*utils.Claims)
 	purchaseIDStr := c.Params("id")
 
@@ -196,7 +203,7 @@ func (ctrl *PurchaseController) Cancel(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, 400, "Invalid purchase ID", err.Error())
 	}
 
-	purchase, err := ctrl.purchaseService.CancelPurchase(user.UserID, purchaseID)
+	purchase, err := ctrl.purchaseService.CancelPurchase(ctx, user.UserID, purchaseID)
 	if err != nil {
 		return utils.ErrorResponse(c, 400, "Gagal membatalkan pembelian", err.Error())
 	}

@@ -3,11 +3,23 @@ package repository
 import (
 	"brevet-api/models"
 	"brevet-api/utils"
+	"context"
 	"fmt"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+// IAttendanceRepository interface
+type IAttendanceRepository interface {
+	WithTx(tx *gorm.DB) IAttendanceRepository
+	GetAllFilteredAttendances(ctx context.Context, opts utils.QueryOptions) ([]models.Attendance, int64, error)
+	GetAllFilteredAttendancesByBatchSlug(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.Attendance, int64, error)
+	Create(ctx context.Context, attendance *models.Attendance) error
+	FindByID(ctx context.Context, id uuid.UUID) (*models.Attendance, error)
+	GetByMeetingAndUser(ctx context.Context, meetingID, userID uuid.UUID) (*models.Attendance, error)
+	UpdateByMeetingAndUser(ctx context.Context, meetingID, userID uuid.UUID, update *models.Attendance) error
+}
 
 // AttendanceRepository provides methods for managing assignments
 type AttendanceRepository struct {
@@ -15,17 +27,17 @@ type AttendanceRepository struct {
 }
 
 // NewAttendanceRepository creates a new assignment repository
-func NewAttendanceRepository(db *gorm.DB) *AttendanceRepository {
+func NewAttendanceRepository(db *gorm.DB) IAttendanceRepository {
 	return &AttendanceRepository{db: db}
 }
 
 // WithTx running with transaction
-func (r *AttendanceRepository) WithTx(tx *gorm.DB) *AttendanceRepository {
+func (r *AttendanceRepository) WithTx(tx *gorm.DB) IAttendanceRepository {
 	return &AttendanceRepository{db: tx}
 }
 
 // GetAllFilteredAttendances retrieves all attendances with pagination and filtering options
-func (r *AttendanceRepository) GetAllFilteredAttendances(opts utils.QueryOptions) ([]models.Attendance, int64, error) {
+func (r *AttendanceRepository) GetAllFilteredAttendances(ctx context.Context, opts utils.QueryOptions) ([]models.Attendance, int64, error) {
 	validSortFields := utils.GetValidColumnsFromStruct(&models.Attendance{})
 
 	sort := opts.Sort
@@ -38,7 +50,7 @@ func (r *AttendanceRepository) GetAllFilteredAttendances(opts utils.QueryOptions
 		order = "asc"
 	}
 
-	db := r.db.Preload("User").Model(&models.Attendance{})
+	db := r.db.WithContext(ctx).Preload("User").Model(&models.Attendance{})
 
 	joinConditions := map[string]string{}
 	joinedRelations := map[string]bool{}
@@ -58,7 +70,7 @@ func (r *AttendanceRepository) GetAllFilteredAttendances(opts utils.QueryOptions
 }
 
 // GetAllFilteredAttendancesByBatchSlug retrieves all attendances with pagination and filtering options
-func (r *AttendanceRepository) GetAllFilteredAttendancesByBatchSlug(batchSlug string, opts utils.QueryOptions) ([]models.Attendance, int64, error) {
+func (r *AttendanceRepository) GetAllFilteredAttendancesByBatchSlug(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.Attendance, int64, error) {
 	validSortFields := utils.GetValidColumnsFromStruct(&models.Attendance{})
 
 	sort := opts.Sort
@@ -71,7 +83,7 @@ func (r *AttendanceRepository) GetAllFilteredAttendancesByBatchSlug(batchSlug st
 		order = "asc"
 	}
 
-	db := r.db.Preload("User").Model(&models.Attendance{}).
+	db := r.db.WithContext(ctx).Preload("User").Model(&models.Attendance{}).
 		Joins("JOIN meetings ON meetings.id = attendances.meeting_id").
 		Joins("JOIN batches ON batches.id = meetings.batch_id").
 		Where("batches.slug = ?", batchSlug)
@@ -94,14 +106,14 @@ func (r *AttendanceRepository) GetAllFilteredAttendancesByBatchSlug(batchSlug st
 }
 
 // Create for create new attendance
-func (r *AttendanceRepository) Create(attendance *models.Attendance) error {
-	return r.db.Create(attendance).Error
+func (r *AttendanceRepository) Create(ctx context.Context, attendance *models.Attendance) error {
+	return r.db.WithContext(ctx).Create(attendance).Error
 }
 
 // FindByID for find attendance by id
-func (r *AttendanceRepository) FindByID(id uuid.UUID) (*models.Attendance, error) {
+func (r *AttendanceRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Attendance, error) {
 	var attendance models.Attendance
-	err := r.db.Preload("User").First(&attendance, "id = ?", id).Error
+	err := r.db.WithContext(ctx).Preload("User").First(&attendance, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -109,9 +121,9 @@ func (r *AttendanceRepository) FindByID(id uuid.UUID) (*models.Attendance, error
 }
 
 // GetByMeetingAndUser method for get attendance by meeting and user id
-func (r *AttendanceRepository) GetByMeetingAndUser(meetingID, userID uuid.UUID) (*models.Attendance, error) {
+func (r *AttendanceRepository) GetByMeetingAndUser(ctx context.Context, meetingID, userID uuid.UUID) (*models.Attendance, error) {
 	var attendance models.Attendance
-	err := r.db.Where("meeting_id = ? AND user_id = ?", meetingID, userID).First(&attendance).Error
+	err := r.db.WithContext(ctx).Where("meeting_id = ? AND user_id = ?", meetingID, userID).First(&attendance).Error
 	if err != nil {
 		return nil, err
 	}
@@ -119,8 +131,8 @@ func (r *AttendanceRepository) GetByMeetingAndUser(meetingID, userID uuid.UUID) 
 }
 
 // UpdateByMeetingAndUser for update attending
-func (r *AttendanceRepository) UpdateByMeetingAndUser(meetingID, userID uuid.UUID, update *models.Attendance) error {
-	return r.db.
+func (r *AttendanceRepository) UpdateByMeetingAndUser(ctx context.Context, meetingID, userID uuid.UUID, update *models.Attendance) error {
+	return r.db.WithContext(ctx).
 		Model(&models.Attendance{}).
 		Where("meeting_id = ? AND user_id = ?", meetingID, userID).
 		Updates(map[string]any{

@@ -3,6 +3,7 @@ package repository
 import (
 	"brevet-api/models"
 	"brevet-api/utils"
+	"context"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -10,34 +11,48 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// IBatchRepository interface
+type IBatchRepository interface {
+	WithTx(tx *gorm.DB) IBatchRepository
+	WithLock() IBatchRepository
+	GetAllFilteredBatches(ctx context.Context, opts utils.QueryOptions) ([]models.Batch, int64, error)
+	GetAllFilteredBatchesByCourseSlug(ctx context.Context, courseID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error)
+	GetBatchBySlug(ctx context.Context, slug string) (*models.Batch, error)
+	IsSlugExists(ctx context.Context, slug string) bool
+	Create(ctx context.Context, batch *models.Batch) error
+	Update(ctx context.Context, batch *models.Batch) error
+	FindByID(ctx context.Context, id uuid.UUID) (*models.Batch, error)
+	DeleteByID(ctx context.Context, id uuid.UUID) error
+	GetAllTeacherInBatch(ctx context.Context, batchID uuid.UUID, opts utils.QueryOptions) ([]models.User, int64, error)
+	GetBatchesByUserPurchaseFiltered(ctx context.Context, userID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error)
+	GetBatchesByGuruMeetingRelationFiltered(ctx context.Context, guruID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error)
+}
+
 // BatchRepository is a struct that represents a batch repository
 type BatchRepository struct {
 	db *gorm.DB
 }
 
 // NewBatchRepository creates a new batch repository
-func NewBatchRepository(db *gorm.DB) *BatchRepository {
+func NewBatchRepository(db *gorm.DB) IBatchRepository {
 	return &BatchRepository{db: db}
 }
 
 // WithTx running with transaction
-func (r *BatchRepository) WithTx(tx *gorm.DB) *BatchRepository {
+func (r *BatchRepository) WithTx(tx *gorm.DB) IBatchRepository {
 	return &BatchRepository{db: tx}
 }
 
 // WithLock running with transaction and lock
-func (r *BatchRepository) WithLock() *BatchRepository {
+func (r *BatchRepository) WithLock() IBatchRepository {
 	return &BatchRepository{
 		db: r.db.Clauses(clause.Locking{Strength: "UPDATE"}),
 	}
 }
 
 // GetAllFilteredBatches retrieves all batches with pagination and filtering options
-func (r *BatchRepository) GetAllFilteredBatches(opts utils.QueryOptions) ([]models.Batch, int64, error) {
-	validSortFields, err := utils.GetValidColumns(r.db, &models.Batch{}, &models.BatchDay{})
-	if err != nil {
-		return nil, 0, err
-	}
+func (r *BatchRepository) GetAllFilteredBatches(ctx context.Context, opts utils.QueryOptions) ([]models.Batch, int64, error) {
+	validSortFields := utils.GetValidColumnsFromStruct(&models.Batch{}, &models.BatchDay{})
 
 	sort := opts.Sort
 	if !validSortFields[sort] {
@@ -49,7 +64,7 @@ func (r *BatchRepository) GetAllFilteredBatches(opts utils.QueryOptions) ([]mode
 		order = "asc"
 	}
 
-	db := r.db.Preload("BatchDays").Preload("BatchGroups").Model(&models.Batch{})
+	db := r.db.WithContext(ctx).Preload("BatchDays").Preload("BatchGroups").Model(&models.Batch{})
 
 	joinConditions := map[string]string{}
 	joinedRelations := map[string]bool{}
@@ -64,7 +79,7 @@ func (r *BatchRepository) GetAllFilteredBatches(opts utils.QueryOptions) ([]mode
 	db.Count(&total)
 
 	var batch []models.Batch
-	err = db.Order(fmt.Sprintf("%s %s", sort, order)).
+	err := db.Order(fmt.Sprintf("%s %s", sort, order)).
 		Limit(opts.Limit).
 		Offset(opts.Offset).
 		Find(&batch).Error
@@ -73,11 +88,8 @@ func (r *BatchRepository) GetAllFilteredBatches(opts utils.QueryOptions) ([]mode
 }
 
 // GetAllFilteredBatchesByCourseSlug retrieves all filtered batches by course slug
-func (r *BatchRepository) GetAllFilteredBatchesByCourseSlug(courseID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error) {
-	validSortFields, err := utils.GetValidColumns(r.db, &models.Batch{}, &models.BatchDay{})
-	if err != nil {
-		return nil, 0, err
-	}
+func (r *BatchRepository) GetAllFilteredBatchesByCourseSlug(ctx context.Context, courseID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error) {
+	validSortFields := utils.GetValidColumnsFromStruct(&models.Batch{}, &models.BatchDay{})
 
 	sort := opts.Sort
 	if !validSortFields[sort] {
@@ -89,7 +101,7 @@ func (r *BatchRepository) GetAllFilteredBatchesByCourseSlug(courseID uuid.UUID, 
 		order = "asc"
 	}
 
-	db := r.db.Preload("BatchDays").Preload("BatchGroups").Model(&models.Batch{}).Where("course_id = ?", courseID)
+	db := r.db.WithContext(ctx).Preload("BatchDays").Preload("BatchGroups").Model(&models.Batch{}).Where("course_id = ?", courseID)
 
 	joinConditions := map[string]string{}
 	joinedRelations := map[string]bool{}
@@ -104,7 +116,7 @@ func (r *BatchRepository) GetAllFilteredBatchesByCourseSlug(courseID uuid.UUID, 
 	db.Count(&total)
 
 	var batch []models.Batch
-	err = db.Order(fmt.Sprintf("%s %s", sort, order)).
+	err := db.Order(fmt.Sprintf("%s %s", sort, order)).
 		Limit(opts.Limit).
 		Offset(opts.Offset).
 		Find(&batch).Error
@@ -113,9 +125,9 @@ func (r *BatchRepository) GetAllFilteredBatchesByCourseSlug(courseID uuid.UUID, 
 }
 
 // GetBatchBySlug retrieves a batch by its slug
-func (r *BatchRepository) GetBatchBySlug(slug string) (*models.Batch, error) {
+func (r *BatchRepository) GetBatchBySlug(ctx context.Context, slug string) (*models.Batch, error) {
 	var batch models.Batch
-	err := r.db.Preload("BatchDays").Preload("BatchGroups").First(&batch, "slug = ?", slug).Error
+	err := r.db.WithContext(ctx).Preload("BatchDays").Preload("BatchGroups").First(&batch, "slug = ?", slug).Error
 	if err != nil {
 		return nil, err
 	}
@@ -123,26 +135,26 @@ func (r *BatchRepository) GetBatchBySlug(slug string) (*models.Batch, error) {
 }
 
 // IsSlugExists checks if a batch slug already exists in the database
-func (r *BatchRepository) IsSlugExists(slug string) bool {
+func (r *BatchRepository) IsSlugExists(ctx context.Context, slug string) bool {
 	var count int64
-	r.db.Model(&models.Batch{}).Where("slug = ?", slug).Count(&count)
+	r.db.WithContext(ctx).Model(&models.Batch{}).Where("slug = ?", slug).Count(&count)
 	return count > 0
 }
 
 // Create inserts a new batch
-func (r *BatchRepository) Create(batch *models.Batch) error {
-	return r.db.Create(batch).Error
+func (r *BatchRepository) Create(ctx context.Context, batch *models.Batch) error {
+	return r.db.WithContext(ctx).Create(batch).Error
 }
 
 // Update updates an existing batch
-func (r *BatchRepository) Update(batch *models.Batch) error {
-	return r.db.Save(batch).Error
+func (r *BatchRepository) Update(ctx context.Context, batch *models.Batch) error {
+	return r.db.WithContext(ctx).Save(batch).Error
 }
 
 // FindByID retrieves a batch by its ID
-func (r *BatchRepository) FindByID(id uuid.UUID) (*models.Batch, error) {
+func (r *BatchRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Batch, error) {
 	var batch models.Batch
-	err := r.db.Preload("BatchDays").Preload("BatchGroups").First(&batch, "id = ?", id).Error
+	err := r.db.WithContext(ctx).Preload("BatchDays").Preload("BatchGroups").First(&batch, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -150,16 +162,13 @@ func (r *BatchRepository) FindByID(id uuid.UUID) (*models.Batch, error) {
 }
 
 // DeleteByID deletes a batch by its ID
-func (r *BatchRepository) DeleteByID(id uuid.UUID) error {
-	return r.db.Where("id = ?", id).Delete(&models.Batch{}).Error
+func (r *BatchRepository) DeleteByID(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&models.Batch{}).Error
 }
 
 // GetAllTeacherInBatch get all teacher in batch
-func (r *BatchRepository) GetAllTeacherInBatch(batchID uuid.UUID, opts utils.QueryOptions) ([]models.User, int64, error) {
-	validSortFields, err := utils.GetValidColumns(r.db, &models.User{})
-	if err != nil {
-		return nil, 0, err
-	}
+func (r *BatchRepository) GetAllTeacherInBatch(ctx context.Context, batchID uuid.UUID, opts utils.QueryOptions) ([]models.User, int64, error) {
+	validSortFields := utils.GetValidColumnsFromStruct(&models.User{})
 
 	sort := opts.Sort
 	if !validSortFields[sort] {
@@ -171,7 +180,7 @@ func (r *BatchRepository) GetAllTeacherInBatch(batchID uuid.UUID, opts utils.Que
 		order = "asc"
 	}
 
-	db := r.db.
+	db := r.db.WithContext(ctx).
 		Model(&models.User{}).
 		Joins("JOIN batch_teachers bt ON bt.user_id = users.id").
 		Where("bt.batch_id = ?", batchID)
@@ -192,7 +201,7 @@ func (r *BatchRepository) GetAllTeacherInBatch(batchID uuid.UUID, opts utils.Que
 	}
 
 	var users []models.User
-	err = db.
+	err := db.
 		Order(fmt.Sprintf("users.%s %s", sort, order)).
 		Limit(opts.Limit).
 		Offset(opts.Offset).
@@ -202,11 +211,8 @@ func (r *BatchRepository) GetAllTeacherInBatch(batchID uuid.UUID, opts utils.Que
 }
 
 // GetBatchesByUserPurchaseFiltered is repository for get all batches where user purchase
-func (r *BatchRepository) GetBatchesByUserPurchaseFiltered(userID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error) {
-	validSortFields, err := utils.GetValidColumns(r.db, &models.Batch{}, &models.BatchDay{})
-	if err != nil {
-		return nil, 0, err
-	}
+func (r *BatchRepository) GetBatchesByUserPurchaseFiltered(ctx context.Context, userID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error) {
+	validSortFields := utils.GetValidColumnsFromStruct(&models.Batch{}, &models.BatchDay{})
 
 	sort := opts.Sort
 	if !validSortFields[sort] {
@@ -219,7 +225,7 @@ func (r *BatchRepository) GetBatchesByUserPurchaseFiltered(userID uuid.UUID, opt
 	}
 
 	// JOIN ke purchases, dan preload relasi
-	db := r.db.
+	db := r.db.WithContext(ctx).
 		Joins("JOIN purchases ON purchases.batch_id = batches.id").
 		Preload("BatchDays").
 		Preload("BatchGroups").
@@ -241,7 +247,7 @@ func (r *BatchRepository) GetBatchesByUserPurchaseFiltered(userID uuid.UUID, opt
 	db.Count(&total)
 
 	var batch []models.Batch
-	err = db.
+	err := db.
 		Order(fmt.Sprintf("batches.%s %s", sort, order)).
 		Limit(opts.Limit).
 		Offset(opts.Offset).
@@ -251,11 +257,8 @@ func (r *BatchRepository) GetBatchesByUserPurchaseFiltered(userID uuid.UUID, opt
 }
 
 // GetBatchesByGuruMeetingRelationFiltered is repo for get all batches where has taught
-func (r *BatchRepository) GetBatchesByGuruMeetingRelationFiltered(guruID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error) {
-	validSortFields, err := utils.GetValidColumns(r.db, &models.Batch{}, &models.BatchDay{}, &models.User{})
-	if err != nil {
-		return nil, 0, err
-	}
+func (r *BatchRepository) GetBatchesByGuruMeetingRelationFiltered(ctx context.Context, guruID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error) {
+	validSortFields := utils.GetValidColumnsFromStruct(&models.Batch{}, &models.BatchDay{}, &models.User{})
 
 	sort := opts.Sort
 	if !validSortFields[sort] {
@@ -267,7 +270,7 @@ func (r *BatchRepository) GetBatchesByGuruMeetingRelationFiltered(guruID uuid.UU
 		order = "asc"
 	}
 
-	db := r.db.
+	db := r.db.WithContext(ctx).
 		Joins("JOIN meetings ON meetings.batch_id = batches.id").
 		Joins("JOIN meeting_teachers ON meeting_teachers.meeting_id = meetings.id").
 		Preload("BatchDays").
@@ -289,7 +292,7 @@ func (r *BatchRepository) GetBatchesByGuruMeetingRelationFiltered(guruID uuid.UU
 	db.Count(&total)
 
 	var batches []models.Batch
-	err = db.
+	err := db.
 		Order(fmt.Sprintf("batches.%s %s", sort, order)).
 		Limit(opts.Limit).
 		Offset(opts.Offset).

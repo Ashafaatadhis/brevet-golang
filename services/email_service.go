@@ -8,6 +8,11 @@ import (
 	"gopkg.in/gomail.v2"
 )
 
+// IEmailService interface
+type IEmailService interface {
+	SendWithAttachment(to, subject, body, attachmentPath string) error
+}
+
 // EmailService for struct
 type EmailService struct {
 	SMTPHost string
@@ -18,7 +23,7 @@ type EmailService struct {
 }
 
 // NewEmailServiceFromEnv is init
-func NewEmailServiceFromEnv() (*EmailService, error) {
+func NewEmailServiceFromEnv() (IEmailService, error) {
 	host := os.Getenv("SMTP_HOST")
 	portStr := os.Getenv("SMTP_PORT")
 	user := os.Getenv("SMTP_USER")

@@ -13,12 +13,12 @@ import (
 
 // MaterialController handles material controller
 type MaterialController struct {
-	materialService *services.MaterialService
+	materialService services.IMaterialService
 	db              *gorm.DB
 }
 
 // NewMaterialController creates a new instance of MaterialController
-func NewMaterialController(materialService *services.MaterialService, db *gorm.DB) *MaterialController {
+func NewMaterialController(materialService services.IMaterialService, db *gorm.DB) *MaterialController {
 	return &MaterialController{
 		materialService: materialService,
 		db:              db,
@@ -27,9 +27,10 @@ func NewMaterialController(materialService *services.MaterialService, db *gorm.D
 
 // GetAllMaterials retrieves a list of materials with pagination and filtering options
 func (ctrl *MaterialController) GetAllMaterials(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	opts := utils.ParseQueryOptions(c)
 
-	materials, total, err := ctrl.materialService.GetAllFilteredMaterial(opts)
+	materials, total, err := ctrl.materialService.GetAllFilteredMaterial(ctx, opts)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch materials", err.Error())
 	}
@@ -45,6 +46,7 @@ func (ctrl *MaterialController) GetAllMaterials(c *fiber.Ctx) error {
 
 // GetAllMaterialByMeetingID retrieves a list of materials with pagination and filtering options
 func (ctrl *MaterialController) GetAllMaterialByMeetingID(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	opts := utils.ParseQueryOptions(c)
 	meetingIDParam := c.Params("meetingID")
 	meetingID, err := uuid.Parse(meetingIDParam)
@@ -54,7 +56,7 @@ func (ctrl *MaterialController) GetAllMaterialByMeetingID(c *fiber.Ctx) error {
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
-	materials, total, err := ctrl.materialService.GetAllFilteredMaterialsByMeetingID(meetingID, user, opts)
+	materials, total, err := ctrl.materialService.GetAllFilteredMaterialsByMeetingID(ctx, meetingID, user, opts)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch material", err.Error())
 	}
@@ -70,6 +72,7 @@ func (ctrl *MaterialController) GetAllMaterialByMeetingID(c *fiber.Ctx) error {
 
 // GetMaterialByID retrieves a single material by its ID
 func (ctrl *MaterialController) GetMaterialByID(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	materialIDParam := c.Params("materialID")
 	materialID, err := uuid.Parse(materialIDParam)
 	if err != nil {
@@ -78,7 +81,7 @@ func (ctrl *MaterialController) GetMaterialByID(c *fiber.Ctx) error {
 
 	user := c.Locals("user").(*utils.Claims)
 
-	material, err := ctrl.materialService.GetMaterialByID(user, materialID)
+	material, err := ctrl.materialService.GetMaterialByID(ctx, user, materialID)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Material not found", err.Error())
 	}
@@ -93,6 +96,7 @@ func (ctrl *MaterialController) GetMaterialByID(c *fiber.Ctx) error {
 
 // CreateMaterial creates a new material with the provided details
 func (ctrl *MaterialController) CreateMaterial(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	body := c.Locals("body").(*dto.CreateMaterialRequest)
 	user := c.Locals("user").(*utils.Claims)
 
@@ -102,7 +106,7 @@ func (ctrl *MaterialController) CreateMaterial(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 
-	material, err := ctrl.materialService.CreateMaterial(user, meetingID, body)
+	material, err := ctrl.materialService.CreateMaterial(ctx, user, meetingID, body)
 	if err != nil {
 		return utils.ErrorResponse(c, 400, "Failed to create material", err.Error())
 	}
@@ -117,6 +121,7 @@ func (ctrl *MaterialController) CreateMaterial(c *fiber.Ctx) error {
 
 // UpdateMaterial updates an existing material
 func (ctrl *MaterialController) UpdateMaterial(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	body := c.Locals("body").(*dto.UpdateMaterialRequest)
 	user := c.Locals("user").(*utils.Claims)
 
@@ -126,7 +131,7 @@ func (ctrl *MaterialController) UpdateMaterial(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 
-	material, err := ctrl.materialService.UpdateMaterial(user, materialID, body)
+	material, err := ctrl.materialService.UpdateMaterial(ctx, user, materialID, body)
 	if err != nil {
 		return utils.ErrorResponse(c, 400, "Failed to update material", err.Error())
 	}
@@ -141,6 +146,7 @@ func (ctrl *MaterialController) UpdateMaterial(c *fiber.Ctx) error {
 
 // DeleteMaterial deletes an existing material and its related files
 func (ctrl *MaterialController) DeleteMaterial(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	user := c.Locals("user").(*utils.Claims)
 
 	materialIDParam := c.Params("materialID")
@@ -149,7 +155,7 @@ func (ctrl *MaterialController) DeleteMaterial(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 
-	if err := ctrl.materialService.DeleteMaterial(user, materialID); err != nil {
+	if err := ctrl.materialService.DeleteMaterial(ctx, user, materialID); err != nil {
 		return utils.ErrorResponse(c, 400, "Failed to delete material", err.Error())
 	}
 

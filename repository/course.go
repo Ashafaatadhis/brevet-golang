@@ -3,11 +3,27 @@ package repository
 import (
 	"brevet-api/models"
 	"brevet-api/utils"
+	"context"
 	"fmt"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+// ICourseRepository interface
+type ICourseRepository interface {
+	WithTx(tx *gorm.DB) ICourseRepository
+	GetAllFilteredCourses(ctx context.Context, opts utils.QueryOptions) ([]models.Course, int64, error)
+	GetCourseBySlug(ctx context.Context, slug string) (*models.Course, error)
+	Create(ctx context.Context, course *models.Course) error
+	CreateCourseImagesBulk(ctx context.Context, images []models.CourseImage) error
+	FindByIDWithImages(ctx context.Context, id uuid.UUID) (*models.Course, error)
+	IsSlugExists(ctx context.Context, slug string) bool
+	Update(ctx context.Context, course *models.Course) error
+	DeleteCourseImagesByCourseID(ctx context.Context, courseID uuid.UUID) error
+	FindByID(ctx context.Context, id uuid.UUID) (*models.Course, error)
+	DeleteByID(ctx context.Context, id uuid.UUID) error
+}
 
 // CourseRepository is a struct that represents a course repository
 type CourseRepository struct {
@@ -15,21 +31,18 @@ type CourseRepository struct {
 }
 
 // NewCourseRepository creates a new course repository
-func NewCourseRepository(db *gorm.DB) *CourseRepository {
+func NewCourseRepository(db *gorm.DB) ICourseRepository {
 	return &CourseRepository{db: db}
 }
 
 // WithTx running with transaction
-func (r *CourseRepository) WithTx(tx *gorm.DB) *CourseRepository {
+func (r *CourseRepository) WithTx(tx *gorm.DB) ICourseRepository {
 	return &CourseRepository{db: tx}
 }
 
 // GetAllFilteredCourses retrieves all courses with pagination and filtering options
-func (r *CourseRepository) GetAllFilteredCourses(opts utils.QueryOptions) ([]models.Course, int64, error) {
-	validSortFields, err := utils.GetValidColumns(r.db, &models.Course{})
-	if err != nil {
-		return nil, 0, err
-	}
+func (r *CourseRepository) GetAllFilteredCourses(ctx context.Context, opts utils.QueryOptions) ([]models.Course, int64, error) {
+	validSortFields := utils.GetValidColumnsFromStruct(&models.Course{})
 
 	sort := opts.Sort
 	if !validSortFields[sort] {
@@ -41,7 +54,7 @@ func (r *CourseRepository) GetAllFilteredCourses(opts utils.QueryOptions) ([]mod
 		order = "asc"
 	}
 
-	db := r.db.Model(&models.Course{})
+	db := r.db.WithContext(ctx).Model(&models.Course{})
 
 	joinConditions := map[string]string{}
 	joinedRelations := map[string]bool{}
@@ -56,7 +69,7 @@ func (r *CourseRepository) GetAllFilteredCourses(opts utils.QueryOptions) ([]mod
 	db.Count(&total)
 
 	var courses []models.Course
-	err = db.Order(fmt.Sprintf("%s %s", sort, order)).
+	err := db.Order(fmt.Sprintf("%s %s", sort, order)).
 		Limit(opts.Limit).
 		Offset(opts.Offset).
 		Preload("CourseImages").
@@ -66,9 +79,9 @@ func (r *CourseRepository) GetAllFilteredCourses(opts utils.QueryOptions) ([]mod
 }
 
 // GetCourseBySlug retrieves a course by its slug
-func (r *CourseRepository) GetCourseBySlug(slug string) (*models.Course, error) {
+func (r *CourseRepository) GetCourseBySlug(ctx context.Context, slug string) (*models.Course, error) {
 	var course models.Course
-	err := r.db.Preload("CourseImages").First(&course, "slug = ?", slug).Error
+	err := r.db.WithContext(ctx).Preload("CourseImages").First(&course, "slug = ?", slug).Error
 	if err != nil {
 		return nil, err
 	}
@@ -76,22 +89,22 @@ func (r *CourseRepository) GetCourseBySlug(slug string) (*models.Course, error) 
 }
 
 // Create inserts a new course into the database
-func (r *CourseRepository) Create(course *models.Course) error {
-	return r.db.Create(course).Error
+func (r *CourseRepository) Create(ctx context.Context, course *models.Course) error {
+	return r.db.WithContext(ctx).Create(course).Error
 }
 
 // CreateCourseImagesBulk inserts multiple course images into the database
-func (r *CourseRepository) CreateCourseImagesBulk(images []models.CourseImage) error {
+func (r *CourseRepository) CreateCourseImagesBulk(ctx context.Context, images []models.CourseImage) error {
 	if len(images) == 0 {
 		return nil
 	}
-	return r.db.Create(&images).Error
+	return r.db.WithContext(ctx).Create(&images).Error
 }
 
 // FindByIDWithImages retrieves a course by its ID along with its associated images
-func (r *CourseRepository) FindByIDWithImages(id uuid.UUID) (*models.Course, error) {
+func (r *CourseRepository) FindByIDWithImages(ctx context.Context, id uuid.UUID) (*models.Course, error) {
 	var course models.Course
-	err := r.db.Preload("CourseImages").First(&course, "id = ?", id).Error
+	err := r.db.WithContext(ctx).Preload("CourseImages").First(&course, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -99,26 +112,26 @@ func (r *CourseRepository) FindByIDWithImages(id uuid.UUID) (*models.Course, err
 }
 
 // IsSlugExists checks if a course slug already exists in the database
-func (r *CourseRepository) IsSlugExists(slug string) bool {
+func (r *CourseRepository) IsSlugExists(ctx context.Context, slug string) bool {
 	var count int64
-	r.db.Model(&models.Course{}).Where("slug = ?", slug).Count(&count)
+	r.db.WithContext(ctx).Model(&models.Course{}).Where("slug = ?", slug).Count(&count)
 	return count > 0
 }
 
 // Update updates an existing course
-func (r *CourseRepository) Update(course *models.Course) error {
-	return r.db.Save(course).Error
+func (r *CourseRepository) Update(ctx context.Context, course *models.Course) error {
+	return r.db.WithContext(ctx).Save(course).Error
 }
 
 // DeleteCourseImagesByCourseID deletes all images associated with a course by its ID
-func (r *CourseRepository) DeleteCourseImagesByCourseID(courseID uuid.UUID) error {
-	return r.db.Where("course_id = ?", courseID).Delete(&models.CourseImage{}).Error
+func (r *CourseRepository) DeleteCourseImagesByCourseID(ctx context.Context, courseID uuid.UUID) error {
+	return r.db.WithContext(ctx).Where("course_id = ?", courseID).Delete(&models.CourseImage{}).Error
 }
 
 // FindByID retrieves a course by its ID
-func (r *CourseRepository) FindByID(id uuid.UUID) (*models.Course, error) {
+func (r *CourseRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Course, error) {
 	var course models.Course
-	err := r.db.First(&course, "id = ?", id).Error
+	err := r.db.WithContext(ctx).First(&course, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -126,6 +139,6 @@ func (r *CourseRepository) FindByID(id uuid.UUID) (*models.Course, error) {
 }
 
 // DeleteByID deletes a course by its ID
-func (r *CourseRepository) DeleteByID(id uuid.UUID) error {
-	return r.db.Where("id = ?", id).Delete(&models.Course{}).Error
+func (r *CourseRepository) DeleteByID(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&models.Course{}).Error
 }
