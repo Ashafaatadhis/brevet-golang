@@ -5,6 +5,7 @@ import (
 	"brevet-api/dto"
 	"brevet-api/models"
 	"brevet-api/repository"
+	"context"
 	"fmt"
 	"strconv"
 	"time"
@@ -17,15 +18,27 @@ import (
 	"gorm.io/gorm"
 )
 
+// IAuthService interface
+type IAuthService interface {
+	Register(ctx context.Context, tx *gorm.DB, req *dto.RegisterRequest) (*dto.RegisterResponse, error)
+	Login(ctx context.Context, req *dto.LoginRequest, c *fiber.Ctx) (*dto.LoginResult, error)
+	VerifyUserEmail(ctx context.Context, token, code string) error
+	ResendVerificationCode(ctx context.Context, token string) error
+	RefreshTokens(ctx context.Context, refreshToken string) (*dto.LoginResult, error)
+	LogoutUser(ctx context.Context, accessToken, refreshToken string) error
+	RevokeUserSessionByRefreshToken(ctx context.Context, refreshToken string) error
+}
+
 // AuthService is a struct that represents the authentication service
 type AuthService struct {
-	repo            *repository.AuthRepository
-	verificationSvc *VerificationService
-	sessionRepo     *repository.UserSessionRepository // Assuming you have a session repository
+	repo            repository.IAuthRepository
+	verificationSvc IVerificationService
+	sessionRepo     repository.IUserSessionRepository
 }
 
 // NewAuthService creates a new instance of AuthService
-func NewAuthService(repo *repository.AuthRepository, verificationSvc *VerificationService, sessionRepo *repository.UserSessionRepository) *AuthService {
+func NewAuthService(repo repository.IAuthRepository, verificationSvc IVerificationService,
+	sessionRepo repository.IUserSessionRepository) IAuthService {
 	return &AuthService{
 		repo:            repo,
 		verificationSvc: verificationSvc,
@@ -34,9 +47,9 @@ func NewAuthService(repo *repository.AuthRepository, verificationSvc *Verificati
 }
 
 // Register creates a new user and profile
-func (s *AuthService) Register(tx *gorm.DB, req *dto.RegisterRequest) (*dto.RegisterResponse, error) {
+func (s *AuthService) Register(ctx context.Context, tx *gorm.DB, req *dto.RegisterRequest) (*dto.RegisterResponse, error) {
 	// Validasi
-	if !s.repo.WithTx(tx).IsEmailUnique(req.Email) || !s.repo.WithTx(tx).IsPhoneUnique(req.Phone) {
+	if !s.repo.WithTx(tx).IsEmailUnique(ctx, req.Email) || !s.repo.WithTx(tx).IsPhoneUnique(ctx, req.Phone) {
 		return nil, errors.New("Email atau nomor telephone sudah digunakan")
 	}
 
@@ -48,12 +61,12 @@ func (s *AuthService) Register(tx *gorm.DB, req *dto.RegisterRequest) (*dto.Regi
 
 	groupVerified := req.GroupType == models.Umum
 
-	if err := s.repo.WithTx(tx).CreateUser(&user); err != nil {
+	if err := s.repo.WithTx(tx).CreateUser(ctx, &user); err != nil {
 		return nil, err
 	}
 
 	// Generate kode verifikasi
-	code, err := s.verificationSvc.GenerateVerificationCode(tx, user.ID)
+	code, err := s.verificationSvc.GenerateVerificationCode(ctx, tx, user.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -68,12 +81,12 @@ func (s *AuthService) Register(tx *gorm.DB, req *dto.RegisterRequest) (*dto.Regi
 	profile.UserID = user.ID
 	profile.GroupVerified = groupVerified
 
-	if err := s.repo.CreateProfile(tx, &profile); err != nil {
+	if err := s.repo.WithTx(tx).CreateProfile(ctx, &profile); err != nil {
 		return nil, err
 	}
 
 	// Buat response
-	fullUser, err := s.repo.GetUserByIDTx(tx, user.ID)
+	fullUser, err := s.repo.WithTx(tx).GetUserByID(ctx, user.ID)
 	if err != nil {
 		fmt.Println("Error fetching full user:", err)
 		return nil, err
@@ -89,9 +102,9 @@ func (s *AuthService) Register(tx *gorm.DB, req *dto.RegisterRequest) (*dto.Regi
 }
 
 // Login authenticates a user and returns access and refresh tokens
-func (s *AuthService) Login(req *dto.LoginRequest, c *fiber.Ctx) (*dto.LoginResult, error) {
+func (s *AuthService) Login(ctx context.Context, req *dto.LoginRequest, c *fiber.Ctx) (*dto.LoginResult, error) {
 
-	user, err := s.repo.GetUserByEmailWithProfile(req.Email)
+	user, err := s.repo.GetUserByEmailWithProfile(ctx, req.Email)
 	if err != nil {
 		return nil, errors.New("Email tidak ditemukan")
 	}
@@ -126,7 +139,7 @@ func (s *AuthService) Login(req *dto.LoginRequest, c *fiber.Ctx) (*dto.LoginResu
 		return nil, fmt.Errorf("gagal generate refresh token: %w", err)
 	}
 
-	if err := s.repo.CreateUserSession(user.ID, refreshToken, c); err != nil {
+	if err := s.repo.CreateUserSession(ctx, user.ID, refreshToken, c); err != nil {
 		return nil, fmt.Errorf("gagal menyimpan sesi user: %w", err)
 	}
 
@@ -143,7 +156,7 @@ func (s *AuthService) Login(req *dto.LoginRequest, c *fiber.Ctx) (*dto.LoginResu
 }
 
 // VerifyUserEmail verifies the user's email using a verification token and code
-func (s *AuthService) VerifyUserEmail(token, code string) error {
+func (s *AuthService) VerifyUserEmail(ctx context.Context, token, code string) error {
 	jwtSecret := config.GetEnv("VERIFICATION_TOKEN_SECRET", "default-key")
 
 	payload, err := utils.ExtractUserIDFromToken(token, jwtSecret)
@@ -151,7 +164,7 @@ func (s *AuthService) VerifyUserEmail(token, code string) error {
 		return fmt.Errorf("token tidak valid: %w", err)
 	}
 
-	user, err := s.repo.GetUserByID(payload.UserID)
+	user, err := s.repo.GetUserByID(ctx, payload.UserID)
 	if err != nil {
 		return fmt.Errorf("user tidak ditemukan: %w", err)
 	}
@@ -160,7 +173,7 @@ func (s *AuthService) VerifyUserEmail(token, code string) error {
 		return fmt.Errorf("email sudah diverifikasi")
 	}
 
-	isValid := s.verificationSvc.VerifyCode(user.ID, code)
+	isValid := s.verificationSvc.VerifyCode(ctx, user.ID, code)
 	if !isValid {
 		return fmt.Errorf("kode verifikasi salah atau kadaluarsa")
 	}
@@ -169,7 +182,7 @@ func (s *AuthService) VerifyUserEmail(token, code string) error {
 }
 
 // ResendVerificationCode resends the verification code to the user's email
-func (s *AuthService) ResendVerificationCode(token string) error {
+func (s *AuthService) ResendVerificationCode(ctx context.Context, token string) error {
 	jwtSecret := config.GetEnv("VERIFICATION_TOKEN_SECRET", "default-key")
 
 	payload, err := utils.ExtractUserIDFromToken(token, jwtSecret)
@@ -177,7 +190,7 @@ func (s *AuthService) ResendVerificationCode(token string) error {
 		return fmt.Errorf("token tidak valid")
 	}
 
-	user, err := s.repo.GetUserByID(payload.UserID)
+	user, err := s.repo.GetUserByID(ctx, payload.UserID)
 	if err != nil {
 		return fmt.Errorf("user tidak ditemukan: %w", err)
 	}
@@ -187,7 +200,7 @@ func (s *AuthService) ResendVerificationCode(token string) error {
 	}
 
 	// Cek cooldown
-	remaining, err := s.verificationSvc.GetCooldownRemaining(user.ID)
+	remaining, err := s.verificationSvc.GetCooldownRemaining(ctx, user.ID)
 	if err != nil {
 		return fmt.Errorf("gagal cek cooldown: %w", err)
 	}
@@ -196,7 +209,7 @@ func (s *AuthService) ResendVerificationCode(token string) error {
 	}
 
 	// Generate ulang kode
-	code, err := s.verificationSvc.GenerateVerificationCode(nil, user.ID)
+	code, err := s.verificationSvc.GenerateVerificationCode(ctx, nil, user.ID)
 	if err != nil {
 		return fmt.Errorf("gagal generate kode: %w", err)
 	}
@@ -214,7 +227,7 @@ func (s *AuthService) ResendVerificationCode(token string) error {
 }
 
 // RefreshTokens refreshes the access token using the provided refresh token
-func (s *AuthService) RefreshTokens(refreshToken string) (*dto.LoginResult, error) {
+func (s *AuthService) RefreshTokens(ctx context.Context, refreshToken string) (*dto.LoginResult, error) {
 	// Verifikasi refresh token
 	refreshSecret := config.GetEnv("REFRESH_TOKEN_SECRET", "default-key")
 	claims, err := utils.ExtractUserIDFromToken(refreshToken, refreshSecret)
@@ -223,7 +236,7 @@ func (s *AuthService) RefreshTokens(refreshToken string) (*dto.LoginResult, erro
 	}
 
 	// Ambil user dari DB
-	user, err := s.repo.GetUserByID(claims.UserID)
+	user, err := s.repo.GetUserByID(ctx, claims.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("user tidak ditemukan: %w", err)
 	}
@@ -250,9 +263,9 @@ func (s *AuthService) RefreshTokens(refreshToken string) (*dto.LoginResult, erro
 }
 
 // LogoutUser logs out the user by revoking their session and blacklisting the access token
-func (s *AuthService) LogoutUser(accessToken, refreshToken string) error {
+func (s *AuthService) LogoutUser(ctx context.Context, accessToken, refreshToken string) error {
 	// Revoke session
-	if err := s.RevokeUserSessionByRefreshToken(refreshToken); err != nil {
+	if err := s.RevokeUserSessionByRefreshToken(ctx, refreshToken); err != nil {
 		return fmt.Errorf("gagal revoke session: %w", err)
 	}
 
@@ -272,14 +285,14 @@ func (s *AuthService) LogoutUser(accessToken, refreshToken string) error {
 }
 
 // RevokeUserSessionByRefreshToken revokes a user session by its refresh token
-func (s *AuthService) RevokeUserSessionByRefreshToken(refreshToken string) error {
-	session, err := s.sessionRepo.GetByRefreshToken(refreshToken)
+func (s *AuthService) RevokeUserSessionByRefreshToken(ctx context.Context, refreshToken string) error {
+	session, err := s.sessionRepo.GetByRefreshToken(ctx, refreshToken)
 	if err != nil {
 		return fmt.Errorf("refresh token session not found: %w", err)
 	}
 
 	session.IsRevoked = true
-	if err := s.sessionRepo.Update(session); err != nil {
+	if err := s.sessionRepo.Update(ctx, session); err != nil {
 		return fmt.Errorf("gagal revoke session: %w", err)
 	}
 

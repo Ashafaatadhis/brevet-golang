@@ -15,21 +15,20 @@ import (
 
 // AuthController represents the authentication controller
 type AuthController struct {
-	authService *services.AuthService
-
-	verificationService *services.VerificationService
-	db                  *gorm.DB // ← tambahkan ini
+	authService         services.IAuthService
+	verificationService services.IVerificationService
+	db                  *gorm.DB
 }
 
 // NewAuthController creates a new AuthController
-func NewAuthController(authService *services.AuthService, verificationService *services.VerificationService, db *gorm.DB) *AuthController {
+func NewAuthController(authService services.IAuthService, verificationService services.IVerificationService, db *gorm.DB) *AuthController {
 	return &AuthController{authService: authService, verificationService: verificationService, db: db}
 }
 
 // Register handles user registration
 func (ctrl *AuthController) Register(c *fiber.Ctx) error {
-
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 
 	body := c.Locals("body").(*dto.RegisterRequest)
 	tx := ctrl.db.Begin()
@@ -41,7 +40,7 @@ func (ctrl *AuthController) Register(c *fiber.Ctx) error {
 		}
 	}()
 
-	response, err := ctrl.authService.Register(tx, body)
+	response, err := ctrl.authService.Register(ctx, tx, body)
 	if err != nil {
 		tx.Rollback()
 		log.WithError(err).Warn("Gagal registrasi user")
@@ -59,12 +58,13 @@ func (ctrl *AuthController) Register(c *fiber.Ctx) error {
 
 // Login handles user authentication
 func (ctrl *AuthController) Login(c *fiber.Ctx) error {
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 	log.Info("Login handler called")
 
 	body := c.Locals("body").(*dto.LoginRequest)
 
-	result, err := ctrl.authService.Login(body, c)
+	result, err := ctrl.authService.Login(ctx, body, c)
 	if err != nil {
 		log.WithError(err).Warn("Login gagal")
 		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Login gagal", err.Error())
@@ -100,12 +100,12 @@ func (ctrl *AuthController) Login(c *fiber.Ctx) error {
 
 // VerifyCode handles email verification
 func (ctrl *AuthController) VerifyCode(c *fiber.Ctx) error {
-
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 	log.Info("VerifyCode handler called")
 	body := c.Locals("body").(*dto.VerifyRequest)
 
-	err := ctrl.authService.VerifyUserEmail(body.Token, body.Code)
+	err := ctrl.authService.VerifyUserEmail(ctx, body.Token, body.Code)
 	if err != nil {
 		log.WithError(err).Warn("Verifikasi email gagal")
 		return utils.ErrorResponse(c, 400, "Verifikasi gagal", err.Error())
@@ -116,10 +116,11 @@ func (ctrl *AuthController) VerifyCode(c *fiber.Ctx) error {
 
 // ResendVerification handles resending the verification code
 func (ctrl *AuthController) ResendVerification(c *fiber.Ctx) error {
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 	body := c.Locals("body").(*dto.ResendVerificationRequest)
 	log.Info("ResendVerification handler called")
-	err := ctrl.authService.ResendVerificationCode(body.Token)
+	err := ctrl.authService.ResendVerificationCode(ctx, body.Token)
 	if err != nil {
 		log.WithError(err).Warn("Gagal kirim ulang kode verifikasi")
 		return utils.ErrorResponse(c, 400, "Gagal kirim ulang kode verifikasi", err.Error())
@@ -130,7 +131,8 @@ func (ctrl *AuthController) ResendVerification(c *fiber.Ctx) error {
 
 // RefreshToken handles token refresh
 func (ctrl *AuthController) RefreshToken(c *fiber.Ctx) error {
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 	log.Info("RefreshToken handler called")
 	refreshToken := c.Cookies("refresh_token")
 	if refreshToken == "" {
@@ -138,7 +140,7 @@ func (ctrl *AuthController) RefreshToken(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Refresh token missing", nil)
 	}
 
-	tokens, err := ctrl.authService.RefreshTokens(refreshToken)
+	tokens, err := ctrl.authService.RefreshTokens(ctx, refreshToken)
 	if err != nil {
 		log.WithError(err).Warn("Refresh token tidak valid atau expired")
 		return utils.ErrorResponse(c, fiber.StatusUnauthorized, "Invalid or expired refresh token", err.Error())
@@ -151,7 +153,8 @@ func (ctrl *AuthController) RefreshToken(c *fiber.Ctx) error {
 
 // Logout handles user logout
 func (ctrl *AuthController) Logout(c *fiber.Ctx) error {
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 
 	user := c.Locals("user").(*utils.Claims)
 
@@ -165,7 +168,7 @@ func (ctrl *AuthController) Logout(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Refresh token missing", nil)
 	}
 
-	if err := ctrl.authService.LogoutUser(accessToken, refreshToken); err != nil {
+	if err := ctrl.authService.LogoutUser(ctx, accessToken, refreshToken); err != nil {
 		log.WithError(err).Error("Gagal logout user")
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to logout", err.Error())
 	}

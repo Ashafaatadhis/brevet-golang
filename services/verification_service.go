@@ -3,6 +3,7 @@ package services
 import (
 	"brevet-api/config"
 	"brevet-api/repository"
+	"context"
 
 	"fmt"
 	"math/rand"
@@ -13,18 +14,25 @@ import (
 	"gorm.io/gorm"
 )
 
+// IVerificationService interface
+type IVerificationService interface {
+	GenerateVerificationCode(ctx context.Context, tx *gorm.DB, userID uuid.UUID) (string, error)
+	VerifyCode(ctx context.Context, userID uuid.UUID, code string) bool
+	GetCooldownRemaining(ctx context.Context, userID uuid.UUID) (time.Duration, error)
+}
+
 // VerificationService is a service for handling user verification codes
 type VerificationService struct {
-	repo *repository.VerificationRepository
+	repo repository.IVerificationRepository
 }
 
 // NewVerificationService creates a new instance of VerificationService
-func NewVerificationService(repo *repository.VerificationRepository) *VerificationService {
+func NewVerificationService(repo repository.IVerificationRepository) IVerificationService {
 	return &VerificationService{repo: repo}
 }
 
 // GenerateVerificationCode generates a new verification code for a user
-func (s *VerificationService) GenerateVerificationCode(tx *gorm.DB, userID uuid.UUID) (string, error) {
+func (s *VerificationService) GenerateVerificationCode(ctx context.Context, tx *gorm.DB, userID uuid.UUID) (string, error) {
 	// Generate 6-digit random code
 	code := rand.Intn(900000) + 100000
 	codeStr := fmt.Sprintf("%06d", code)
@@ -38,7 +46,7 @@ func (s *VerificationService) GenerateVerificationCode(tx *gorm.DB, userID uuid.
 	expiry := time.Now().Add(time.Duration(expiryMinutes) * time.Minute)
 
 	// Update kode verifikasi ke DB
-	if err := s.repo.UpdateVerificationCode(tx, userID, codeStr, expiry); err != nil {
+	if err := s.repo.WithTx(tx).UpdateVerificationCode(ctx, userID, codeStr, expiry); err != nil {
 		return "", err
 	}
 
@@ -46,13 +54,13 @@ func (s *VerificationService) GenerateVerificationCode(tx *gorm.DB, userID uuid.
 }
 
 // VerifyCode checks if the provided verification code is valid for the user
-func (s *VerificationService) VerifyCode(userID uuid.UUID, code string) bool {
-	user, err := s.repo.FindUserByCode(userID, code)
+func (s *VerificationService) VerifyCode(ctx context.Context, userID uuid.UUID, code string) bool {
+	user, err := s.repo.FindUserByCode(ctx, userID, code)
 	if err != nil {
 		return false
 	}
 
-	if err := s.repo.MarkUserVerified(user.ID); err != nil {
+	if err := s.repo.MarkUserVerified(ctx, user.ID); err != nil {
 		return false
 	}
 
@@ -60,8 +68,8 @@ func (s *VerificationService) VerifyCode(userID uuid.UUID, code string) bool {
 }
 
 // GetCooldownRemaining returns the remaining cooldown time for sending a new verification code
-func (s *VerificationService) GetCooldownRemaining(userID uuid.UUID) (time.Duration, error) {
-	user, err := s.repo.GetUserByID(userID)
+func (s *VerificationService) GetCooldownRemaining(ctx context.Context, userID uuid.UUID) (time.Duration, error) {
+	user, err := s.repo.GetUserByID(ctx, userID)
 	if err != nil {
 		return 0, err
 	}

@@ -15,13 +15,19 @@ import (
 	"github.com/google/uuid"
 )
 
+// IFileService interface
+type IFileService interface {
+	SaveFile(ctx *fiber.Ctx, file *multipart.FileHeader, location string, allowedExts []string) (string, error)
+	DeleteFile(cleanPath string) error
+}
+
 // FileService is a struct that represents a file service
 type FileService struct {
 	BaseDir string
 }
 
 // NewFileService creates a new file service
-func NewFileService() *FileService {
+func NewFileService() IFileService {
 	return &FileService{
 		BaseDir: config.GetEnv("UPLOAD_DIR", "./public/uploads"),
 	}

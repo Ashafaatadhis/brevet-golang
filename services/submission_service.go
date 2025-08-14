@@ -5,6 +5,7 @@ import (
 	"brevet-api/models"
 	"brevet-api/repository"
 	"brevet-api/utils"
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -15,36 +16,49 @@ import (
 	"gorm.io/gorm"
 )
 
+// ISubmissionService interface
+type ISubmissionService interface {
+	checkUserAccess(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID) (bool, error)
+	GetAllSubmissionsByAssignmentUser(ctx context.Context, assignmentID uuid.UUID, user *utils.Claims, opts utils.QueryOptions) ([]models.AssignmentSubmission, int64, error)
+	GetSubmissionDetail(ctx context.Context, submissionID uuid.UUID, user *utils.Claims) (models.AssignmentSubmission, error)
+	CreateSubmission(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID, note string, fileURLs []string) (*models.AssignmentSubmission, error)
+	UpdateSubmission(ctx context.Context, user *utils.Claims, submissionID uuid.UUID, body *dto.UpdateSubmissionRequest) (*models.AssignmentSubmission, error)
+	DeleteSubmission(ctx context.Context, user *utils.Claims, submissionID uuid.UUID) error
+	GetSubmissionGrade(ctx context.Context, user *utils.Claims, submissionID uuid.UUID) (*models.AssignmentGrade, error)
+	GradeSubmission(ctx context.Context, user *utils.Claims, submissionID uuid.UUID, req *dto.GradeSubmissionRequest) (models.AssignmentGrade, error)
+}
+
 // SubmissionService provides methods for managing submissions
 type SubmissionService struct {
-	submissionRepo  *repository.SubmissionRepository
-	assignmentRepo  *repository.AssignmentRepository
-	meetingRepo     *repository.MeetingRepository
-	purchaseService *PurchaseService
-	fileService     *FileService
+	submissionRepo  repository.ISubmisssionRepository
+	assignmentRepo  repository.IAssignmentRepository
+	meetingRepo     repository.IMeetingRepository
+	purchaseService IPurchaseService
+	fileService     IFileService
 	db              *gorm.DB
 }
 
 // NewSubmissionService creates a new instance of SubmissionService
-func NewSubmissionService(submissionRepo *repository.SubmissionRepository, assignmentRepo *repository.AssignmentRepository, meetingRepo *repository.MeetingRepository, purchaseService *PurchaseService, fileService *FileService, db *gorm.DB) *SubmissionService {
+func NewSubmissionService(submissionRepo repository.ISubmisssionRepository, assignmentRepo repository.IAssignmentRepository,
+	meetingRepo repository.IMeetingRepository, purchaseService IPurchaseService, fileService IFileService, db *gorm.DB) ISubmissionService {
 	return &SubmissionService{submissionRepo: submissionRepo, assignmentRepo: assignmentRepo, meetingRepo: meetingRepo, purchaseService: purchaseService, fileService: fileService, db: db}
 }
 
-func (s *SubmissionService) checkUserAccess(user *utils.Claims, assignmentID uuid.UUID) (bool, error) {
+func (s *SubmissionService) checkUserAccess(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID) (bool, error) {
 	// Cari batch info dari assignmentID
-	batch, err := s.assignmentRepo.GetBatchByAssignmentID(assignmentID) // balikin batchSlug & batchID
+	batch, err := s.assignmentRepo.GetBatchByAssignmentID(ctx, assignmentID) // balikin batchSlug & batchID
 	if err != nil {
 		return false, err
 	}
 
 	// Kalau role teacher, cek apakah dia mengajar batch ini
 	if user.Role == string(models.RoleTypeGuru) {
-		return s.meetingRepo.IsBatchOwnedByUser(user.UserID, batch.Slug)
+		return s.meetingRepo.IsBatchOwnedByUser(ctx, user.UserID, batch.Slug)
 	}
 
 	// Kalau student, cek pembayaran
 	if user.Role == string(models.RoleTypeSiswa) {
-		return s.purchaseService.HasPaid(user.UserID, batch.ID)
+		return s.purchaseService.HasPaid(ctx, user.UserID, batch.ID)
 	}
 
 	// Role lain tidak diizinkan
@@ -52,8 +66,8 @@ func (s *SubmissionService) checkUserAccess(user *utils.Claims, assignmentID uui
 }
 
 // GetAllSubmissionsByAssignmentUser for get all
-func (s *SubmissionService) GetAllSubmissionsByAssignmentUser(assignmentID uuid.UUID, user *utils.Claims, opts utils.QueryOptions) ([]models.AssignmentSubmission, int64, error) {
-	allowed, err := s.checkUserAccess(user, assignmentID)
+func (s *SubmissionService) GetAllSubmissionsByAssignmentUser(ctx context.Context, assignmentID uuid.UUID, user *utils.Claims, opts utils.QueryOptions) ([]models.AssignmentSubmission, int64, error) {
+	allowed, err := s.checkUserAccess(ctx, user, assignmentID)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -61,21 +75,21 @@ func (s *SubmissionService) GetAllSubmissionsByAssignmentUser(assignmentID uuid.
 		return nil, 0, errors.New("user not authorized to access this assignment")
 	}
 	if user.Role == string(models.RoleTypeGuru) {
-		return s.submissionRepo.GetAllByAssignment(assignmentID, nil, opts)
+		return s.submissionRepo.GetAllByAssignment(ctx, assignmentID, nil, opts)
 	}
-	return s.submissionRepo.GetAllByAssignment(assignmentID, &user.UserID, opts)
+	return s.submissionRepo.GetAllByAssignment(ctx, assignmentID, &user.UserID, opts)
 
 }
 
 // GetSubmissionDetail fot get detail
-func (s *SubmissionService) GetSubmissionDetail(submissionID uuid.UUID, user *utils.Claims) (models.AssignmentSubmission, error) {
+func (s *SubmissionService) GetSubmissionDetail(ctx context.Context, submissionID uuid.UUID, user *utils.Claims) (models.AssignmentSubmission, error) {
 	var submission models.AssignmentSubmission
 	var err error
 
 	if user.Role == string(models.RoleTypeGuru) {
-		submission, err = s.submissionRepo.FindByID(submissionID)
+		submission, err = s.submissionRepo.FindByID(ctx, submissionID)
 	} else {
-		subPtr, err2 := s.submissionRepo.GetByIDUser(submissionID, user.UserID)
+		subPtr, err2 := s.submissionRepo.GetByIDUser(ctx, submissionID, user.UserID)
 		if err2 != nil {
 			return models.AssignmentSubmission{}, err2
 		}
@@ -89,7 +103,7 @@ func (s *SubmissionService) GetSubmissionDetail(submissionID uuid.UUID, user *ut
 	}
 
 	// Cek akses
-	allowed, err := s.checkUserAccess(user, submission.AssignmentID)
+	allowed, err := s.checkUserAccess(ctx, user, submission.AssignmentID)
 	if err != nil {
 		return models.AssignmentSubmission{}, err
 	}
@@ -101,12 +115,12 @@ func (s *SubmissionService) GetSubmissionDetail(submissionID uuid.UUID, user *ut
 }
 
 // CreateSubmission is for create submission
-func (s *SubmissionService) CreateSubmission(user *utils.Claims, assignmentID uuid.UUID, note string, fileURLs []string) (*models.AssignmentSubmission, error) {
+func (s *SubmissionService) CreateSubmission(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID, note string, fileURLs []string) (*models.AssignmentSubmission, error) {
 	var submission models.AssignmentSubmission
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
 		// Cek apakah user sudah bayar batch terkait assignment
-		allowed, err := s.checkUserAccess(user, assignmentID)
+		allowed, err := s.checkUserAccess(ctx, user, assignmentID)
 		if err != nil {
 			return err
 		}
@@ -115,7 +129,7 @@ func (s *SubmissionService) CreateSubmission(user *utils.Claims, assignmentID uu
 		}
 
 		// Cek apakah user sudah submit sebelumnya
-		existing, err := s.submissionRepo.GetByAssignmentUser(assignmentID, user.UserID)
+		existing, err := s.submissionRepo.GetByAssignmentUser(ctx, assignmentID, user.UserID)
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
@@ -132,7 +146,7 @@ func (s *SubmissionService) CreateSubmission(user *utils.Claims, assignmentID uu
 			IsLate:       false, // opsional: bisa cek assignment.EndAt dibanding now
 		}
 
-		if err := s.submissionRepo.WithTx(tx).Create(&submission); err != nil {
+		if err := s.submissionRepo.WithTx(tx).Create(ctx, &submission); err != nil {
 			return err
 		}
 
@@ -147,7 +161,7 @@ func (s *SubmissionService) CreateSubmission(user *utils.Claims, assignmentID uu
 		}
 
 		if len(submissionFiles) > 0 {
-			if err := s.submissionRepo.WithTx(tx).CreateSubmissionFiles(submissionFiles); err != nil {
+			if err := s.submissionRepo.WithTx(tx).CreateSubmissionFiles(ctx, submissionFiles); err != nil {
 				return err
 			}
 		}
@@ -160,7 +174,7 @@ func (s *SubmissionService) CreateSubmission(user *utils.Claims, assignmentID uu
 	}
 
 	// Ambil submission lengkap dengan files
-	submission, err = s.submissionRepo.FindByID(submission.ID)
+	submission, err = s.submissionRepo.FindByID(ctx, submission.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -169,22 +183,22 @@ func (s *SubmissionService) CreateSubmission(user *utils.Claims, assignmentID uu
 }
 
 // UpdateSubmission for update
-func (s *SubmissionService) UpdateSubmission(user *utils.Claims, submissionID uuid.UUID, body *dto.UpdateSubmissionRequest) (*models.AssignmentSubmission, error) {
+func (s *SubmissionService) UpdateSubmission(ctx context.Context, user *utils.Claims, submissionID uuid.UUID, body *dto.UpdateSubmissionRequest) (*models.AssignmentSubmission, error) {
 	var updatedSubmission models.AssignmentSubmission
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
 		// Ambil submission milik user
-		submission, err := s.submissionRepo.WithTx(tx).GetByIDUser(submissionID, user.UserID)
+		submission, err := s.submissionRepo.WithTx(tx).GetByIDUser(ctx, submissionID, user.UserID)
 		if err != nil {
 			return err
 		}
 
 		// Cek pembayaran
-		batchID, err := s.assignmentRepo.GetBatchIDByAssignmentID(submission.AssignmentID)
+		batchID, err := s.assignmentRepo.GetBatchIDByAssignmentID(ctx, submission.AssignmentID)
 		if err != nil {
 			return err
 		}
-		hasPaid, err := s.purchaseService.HasPaid(user.UserID, batchID)
+		hasPaid, err := s.purchaseService.HasPaid(ctx, user.UserID, batchID)
 		if err != nil {
 			return err
 		}
@@ -200,13 +214,13 @@ func (s *SubmissionService) UpdateSubmission(user *utils.Claims, submissionID uu
 			return err
 		}
 
-		if err := s.submissionRepo.WithTx(tx).Update(submission); err != nil {
+		if err := s.submissionRepo.WithTx(tx).Update(ctx, submission); err != nil {
 			return err
 		}
 
 		// Replace files jika dikirim
 		if body.SubmissionFiles != nil {
-			if err := s.submissionRepo.WithTx(tx).DeleteFilesBySubmissionID(submission.ID); err != nil {
+			if err := s.submissionRepo.WithTx(tx).DeleteFilesBySubmissionID(ctx, submission.ID); err != nil {
 				return err
 			}
 
@@ -218,14 +232,14 @@ func (s *SubmissionService) UpdateSubmission(user *utils.Claims, submissionID uu
 				})
 			}
 			if len(files) > 0 {
-				if err := s.submissionRepo.WithTx(tx).CreateFiles(files); err != nil {
+				if err := s.submissionRepo.WithTx(tx).CreateFiles(ctx, files); err != nil {
 					return err
 				}
 			}
 		}
 
 		// Ambil ulang data untuk response
-		fresh, err := s.submissionRepo.WithTx(tx).FindByID(submission.ID)
+		fresh, err := s.submissionRepo.WithTx(tx).FindByID(ctx, submission.ID)
 		if err != nil {
 			return err
 		}
@@ -240,23 +254,23 @@ func (s *SubmissionService) UpdateSubmission(user *utils.Claims, submissionID uu
 }
 
 // DeleteSubmission for delete
-func (s *SubmissionService) DeleteSubmission(user *utils.Claims, submissionID uuid.UUID) error {
+func (s *SubmissionService) DeleteSubmission(ctx context.Context, user *utils.Claims, submissionID uuid.UUID) error {
 	var submission models.AssignmentSubmission
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
 		// Ambil submission milik user
-		submissionRsp, err := s.submissionRepo.WithTx(tx).GetByIDUser(submissionID, user.UserID)
+		submissionRsp, err := s.submissionRepo.WithTx(tx).GetByIDUser(ctx, submissionID, user.UserID)
 		if err != nil {
 			return err
 		}
 		submission = utils.Safe(submissionRsp, models.AssignmentSubmission{})
 
 		// Cek pembayaran
-		batchID, err := s.assignmentRepo.GetBatchIDByAssignmentID(submission.AssignmentID)
+		batchID, err := s.assignmentRepo.GetBatchIDByAssignmentID(ctx, submission.AssignmentID)
 		if err != nil {
 			return err
 		}
-		hasPaid, err := s.purchaseService.HasPaid(user.UserID, batchID)
+		hasPaid, err := s.purchaseService.HasPaid(ctx, user.UserID, batchID)
 		if err != nil {
 			return err
 		}
@@ -265,7 +279,7 @@ func (s *SubmissionService) DeleteSubmission(user *utils.Claims, submissionID uu
 		}
 
 		// Hapus dari DB
-		if err := s.submissionRepo.WithTx(tx).DeleteByID(submissionID); err != nil {
+		if err := s.submissionRepo.WithTx(tx).DeleteByID(ctx, submissionID); err != nil {
 			return err
 		}
 
@@ -285,13 +299,13 @@ func (s *SubmissionService) DeleteSubmission(user *utils.Claims, submissionID uu
 }
 
 // GetSubmissionGrade for get submission grade
-func (s *SubmissionService) GetSubmissionGrade(user *utils.Claims, submissionID uuid.UUID) (*models.AssignmentGrade, error) {
-	submission, err := s.submissionRepo.FindByID(submissionID)
+func (s *SubmissionService) GetSubmissionGrade(ctx context.Context, user *utils.Claims, submissionID uuid.UUID) (*models.AssignmentGrade, error) {
+	submission, err := s.submissionRepo.FindByID(ctx, submissionID)
 	if err != nil {
 		return nil, err
 	}
 
-	allowed, err := s.checkUserAccess(user, submission.AssignmentID)
+	allowed, err := s.checkUserAccess(ctx, user, submission.AssignmentID)
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +317,7 @@ func (s *SubmissionService) GetSubmissionGrade(user *utils.Claims, submissionID 
 		return nil, fmt.Errorf("forbidden: not your submission")
 	}
 
-	grade, err := s.submissionRepo.GetGradeBySubmissionID(submissionID)
+	grade, err := s.submissionRepo.GetGradeBySubmissionID(ctx, submissionID)
 	if err != nil {
 		return nil, err
 	}
@@ -312,14 +326,14 @@ func (s *SubmissionService) GetSubmissionGrade(user *utils.Claims, submissionID 
 }
 
 // GradeSubmission for post
-func (s *SubmissionService) GradeSubmission(user *utils.Claims, submissionID uuid.UUID, req *dto.GradeSubmissionRequest) (models.AssignmentGrade, error) {
-	submission, err := s.submissionRepo.FindByID(submissionID)
+func (s *SubmissionService) GradeSubmission(ctx context.Context, user *utils.Claims, submissionID uuid.UUID, req *dto.GradeSubmissionRequest) (models.AssignmentGrade, error) {
+	submission, err := s.submissionRepo.FindByID(ctx, submissionID)
 	if err != nil {
 		return models.AssignmentGrade{}, err
 	}
 
 	// Pastikan guru punya akses
-	allowed, err := s.checkUserAccess(user, submission.AssignmentID)
+	allowed, err := s.checkUserAccess(ctx, user, submission.AssignmentID)
 	if err != nil {
 		return models.AssignmentGrade{}, err
 	}
@@ -335,12 +349,12 @@ func (s *SubmissionService) GradeSubmission(user *utils.Claims, submissionID uui
 	}
 
 	// Upsert nilai
-	if _, err := s.submissionRepo.UpsertGrade(gradeModel); err != nil {
+	if _, err := s.submissionRepo.UpsertGrade(ctx, gradeModel); err != nil {
 		return models.AssignmentGrade{}, err
 	}
 
 	// Ambil lagi grade yang sudah tersimpan
-	grade, err := s.submissionRepo.GetGradeBySubmissionID(submissionID)
+	grade, err := s.submissionRepo.GetGradeBySubmissionID(ctx, submissionID)
 	if err != nil {
 		return models.AssignmentGrade{}, err
 	}

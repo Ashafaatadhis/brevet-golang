@@ -3,11 +3,33 @@ package repository
 import (
 	"brevet-api/models"
 	"brevet-api/utils"
+	"context"
 	"fmt"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+// IMeetingRepository interface
+type IMeetingRepository interface {
+	WithTx(tx *gorm.DB) IMeetingRepository
+	GetAllFilteredMeetings(ctx context.Context, opts utils.QueryOptions) ([]models.Meeting, int64, error)
+	GetMeetingsByBatchSlugFiltered(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.Meeting, int64, error)
+	GetMeetingsByBatchID(ctx context.Context, batchID uuid.UUID) ([]models.Meeting, error)
+	FindByID(ctx context.Context, id uuid.UUID) (*models.Meeting, error)
+	Create(ctx context.Context, meeting *models.Meeting) error
+	Update(ctx context.Context, meeting *models.Meeting) error
+	DeleteByID(ctx context.Context, id uuid.UUID) error
+	AddTeachers(ctx context.Context, meetingID uuid.UUID, teacherIDs []uuid.UUID) (*models.Meeting, error)
+	GetTeacherIDsByMeetingID(ctx context.Context, meetingID uuid.UUID) ([]uuid.UUID, error)
+	UpdateTeachers(ctx context.Context, meetingID uuid.UUID, newTeacherIDs []uuid.UUID) (*models.Meeting, error)
+	RemoveTeacher(ctx context.Context, meetingID uuid.UUID, teacherID uuid.UUID) (*models.Meeting, error)
+	GetTeachersByMeetingIDFiltered(ctx context.Context, meetingID uuid.UUID, opts utils.QueryOptions) ([]models.User, int64, error)
+	GetStudentsByBatchSlugFiltered(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.User, int64, error)
+	IsBatchOwnedByUser(ctx context.Context, userID uuid.UUID, batchSlug string) (bool, error)
+	IsMeetingTaughtByUser(ctx context.Context, meetingID, userID uuid.UUID) (bool, error)
+	IsUserTeachingInMeeting(ctx context.Context, userID, meetingID uuid.UUID) (bool, error)
+}
 
 // MeetingRepository is a struct that represents a meeting repository
 type MeetingRepository struct {
@@ -15,21 +37,18 @@ type MeetingRepository struct {
 }
 
 // NewMeetingRepository creates a new meeting repository
-func NewMeetingRepository(db *gorm.DB) *MeetingRepository {
+func NewMeetingRepository(db *gorm.DB) IMeetingRepository {
 	return &MeetingRepository{db: db}
 }
 
 // WithTx running with transaction
-func (r *MeetingRepository) WithTx(tx *gorm.DB) *MeetingRepository {
+func (r *MeetingRepository) WithTx(tx *gorm.DB) IMeetingRepository {
 	return &MeetingRepository{db: tx}
 }
 
 // GetAllFilteredMeetings retrieves all meetings with pagination and filtering options
-func (r *MeetingRepository) GetAllFilteredMeetings(opts utils.QueryOptions) ([]models.Meeting, int64, error) {
-	validSortFields, err := utils.GetValidColumns(r.db, &models.Meeting{})
-	if err != nil {
-		return nil, 0, err
-	}
+func (r *MeetingRepository) GetAllFilteredMeetings(ctx context.Context, opts utils.QueryOptions) ([]models.Meeting, int64, error) {
+	validSortFields := utils.GetValidColumnsFromStruct(&models.Meeting{})
 
 	sort := opts.Sort
 	if !validSortFields[sort] {
@@ -41,7 +60,7 @@ func (r *MeetingRepository) GetAllFilteredMeetings(opts utils.QueryOptions) ([]m
 		order = "asc"
 	}
 
-	db := r.db.Preload("Teachers").Preload("Materials").Preload("Assignments").Preload("Assignments.AssignmentFiles", func(db *gorm.DB) *gorm.DB {
+	db := r.db.WithContext(ctx).Preload("Teachers").Preload("Materials").Preload("Assignments").Preload("Assignments.AssignmentFiles", func(db *gorm.DB) *gorm.DB {
 		return db.Order("assignment_files.created_at ASC") // urut berdasarkan waktu upload paling awal
 	}).
 		Model(&models.Meeting{})
@@ -59,7 +78,7 @@ func (r *MeetingRepository) GetAllFilteredMeetings(opts utils.QueryOptions) ([]m
 	db.Count(&total)
 
 	var meetings []models.Meeting
-	err = db.Order(fmt.Sprintf("%s %s", sort, order)).
+	err := db.Order(fmt.Sprintf("%s %s", sort, order)).
 		Limit(opts.Limit).
 		Offset(opts.Offset).
 		Find(&meetings).Error
@@ -68,7 +87,7 @@ func (r *MeetingRepository) GetAllFilteredMeetings(opts utils.QueryOptions) ([]m
 }
 
 // GetMeetingsByBatchSlugFiltered retrieves all meetings with pagination and filtering options
-func (r *MeetingRepository) GetMeetingsByBatchSlugFiltered(batchSlug string, opts utils.QueryOptions) ([]models.Meeting, int64, error) {
+func (r *MeetingRepository) GetMeetingsByBatchSlugFiltered(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.Meeting, int64, error) {
 	validSortFields := utils.GetValidColumnsFromStruct(&models.Meeting{})
 
 	sort := opts.Sort
@@ -81,7 +100,7 @@ func (r *MeetingRepository) GetMeetingsByBatchSlugFiltered(batchSlug string, opt
 		order = "asc"
 	}
 
-	db := r.db.Preload("Teachers").Preload("Materials").Preload("Assignments").Preload("Assignments.AssignmentFiles", func(db *gorm.DB) *gorm.DB {
+	db := r.db.WithContext(ctx).Preload("Teachers").Preload("Materials").Preload("Assignments").Preload("Assignments.AssignmentFiles", func(db *gorm.DB) *gorm.DB {
 		return db.Order("assignment_files.created_at ASC")
 	}).
 		Model(&models.Meeting{}).
@@ -110,9 +129,9 @@ func (r *MeetingRepository) GetMeetingsByBatchSlugFiltered(batchSlug string, opt
 }
 
 // GetMeetingsByBatchID retrieves all meetings belonging to a specific batch ID
-func (r *MeetingRepository) GetMeetingsByBatchID(batchID uuid.UUID) ([]models.Meeting, error) {
+func (r *MeetingRepository) GetMeetingsByBatchID(ctx context.Context, batchID uuid.UUID) ([]models.Meeting, error) {
 	var meetings []models.Meeting
-	err := r.db.
+	err := r.db.WithContext(ctx).
 		Where("batch_id = ?", batchID).
 		Find(&meetings).Error
 	if err != nil {
@@ -122,9 +141,9 @@ func (r *MeetingRepository) GetMeetingsByBatchID(batchID uuid.UUID) ([]models.Me
 }
 
 // FindByID retrieves a meeting by its ID
-func (r *MeetingRepository) FindByID(id uuid.UUID) (*models.Meeting, error) {
+func (r *MeetingRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Meeting, error) {
 	var meeting models.Meeting
-	err := r.db.Preload("Teachers").Preload("Materials").Preload("Assignments").Preload("Assignments.AssignmentFiles", func(db *gorm.DB) *gorm.DB {
+	err := r.db.WithContext(ctx).Preload("Teachers").Preload("Materials").Preload("Assignments").Preload("Assignments.AssignmentFiles", func(db *gorm.DB) *gorm.DB {
 		return db.Order("assignment_files.created_at ASC") // urut berdasarkan waktu upload paling awal
 	}).
 		First(&meeting, "id = ?", id).Error
@@ -135,38 +154,38 @@ func (r *MeetingRepository) FindByID(id uuid.UUID) (*models.Meeting, error) {
 }
 
 // Create creates a new meeetings
-func (r *MeetingRepository) Create(meeting *models.Meeting) error {
-	return r.db.Create(meeting).Error
+func (r *MeetingRepository) Create(ctx context.Context, meeting *models.Meeting) error {
+	return r.db.WithContext(ctx).Create(meeting).Error
 }
 
 // Update updates an existing meeting
-func (r *MeetingRepository) Update(meeting *models.Meeting) error {
-	return r.db.Save(meeting).Error
+func (r *MeetingRepository) Update(ctx context.Context, meeting *models.Meeting) error {
+	return r.db.WithContext(ctx).Save(meeting).Error
 }
 
 // DeleteByID deletes a meeting by its ID
-func (r *MeetingRepository) DeleteByID(id uuid.UUID) error {
-	return r.db.Where("id = ?", id).Delete(&models.Meeting{}).Error
+func (r *MeetingRepository) DeleteByID(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&models.Meeting{}).Error
 }
 
 // AddTeachers is repo for add teacher to meeting
-func (r *MeetingRepository) AddTeachers(meetingID uuid.UUID, teacherIDs []uuid.UUID) (*models.Meeting, error) {
+func (r *MeetingRepository) AddTeachers(ctx context.Context, meetingID uuid.UUID, teacherIDs []uuid.UUID) (*models.Meeting, error) {
 	var teachers []models.User
-	if err := r.db.Where("id IN ?", teacherIDs).Find(&teachers).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("id IN ?", teacherIDs).Find(&teachers).Error; err != nil {
 		return nil, err
 	}
 
 	var meeting models.Meeting
-	if err := r.db.Preload("Teachers").Where("id = ?", meetingID).First(&meeting).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("Teachers").Where("id = ?", meetingID).First(&meeting).Error; err != nil {
 		return nil, err
 	}
 
-	if err := r.db.Model(&meeting).Association("Teachers").Append(teachers); err != nil {
+	if err := r.db.WithContext(ctx).Model(&meeting).Association("Teachers").Append(teachers); err != nil {
 		return nil, err
 	}
 
 	// Refresh preload setelah Append
-	if err := r.db.Preload("Teachers").First(&meeting, "id = ?", meetingID).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("Teachers").First(&meeting, "id = ?", meetingID).Error; err != nil {
 		return nil, err
 	}
 
@@ -174,9 +193,9 @@ func (r *MeetingRepository) AddTeachers(meetingID uuid.UUID, teacherIDs []uuid.U
 }
 
 // GetTeacherIDsByMeetingID that repo function where's get teacher and pluck
-func (r *MeetingRepository) GetTeacherIDsByMeetingID(meetingID uuid.UUID) ([]uuid.UUID, error) {
+func (r *MeetingRepository) GetTeacherIDsByMeetingID(ctx context.Context, meetingID uuid.UUID) ([]uuid.UUID, error) {
 	var ids []uuid.UUID
-	err := r.db.
+	err := r.db.WithContext(ctx).
 		Table("meeting_teachers").
 		Where("meeting_id = ?", meetingID).
 		Pluck("user_id", &ids).Error
@@ -184,48 +203,60 @@ func (r *MeetingRepository) GetTeacherIDsByMeetingID(meetingID uuid.UUID) ([]uui
 }
 
 // UpdateTeachers this function repo to update teachers by meeting id and replae by array of teacher ids
-func (r *MeetingRepository) UpdateTeachers(meetingID uuid.UUID, newTeacherIDs []uuid.UUID) (*models.Meeting, error) {
+func (r *MeetingRepository) UpdateTeachers(ctx context.Context, meetingID uuid.UUID, newTeacherIDs []uuid.UUID) (*models.Meeting, error) {
 	var meeting models.Meeting
-	if err := r.db.Preload("Teachers").First(&meeting, "id = ?", meetingID).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("Teachers").First(&meeting, "id = ?", meetingID).Error; err != nil {
 		return nil, err
 	}
 
 	var newTeachers []models.User
-	if err := r.db.Where("id IN ?", newTeacherIDs).Find(&newTeachers).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("id IN ?", newTeacherIDs).Find(&newTeachers).Error; err != nil {
 		return nil, err
 	}
 
 	// Ganti semua guru dengan yang baru
-	if err := r.db.Model(&meeting).Association("Teachers").Replace(newTeachers); err != nil {
+	if err := r.db.WithContext(ctx).Model(&meeting).Association("Teachers").Replace(newTeachers); err != nil {
 		return nil, err
 	}
 
 	// Reload
-	if err := r.db.Preload("Teachers").First(&meeting, "id = ?", meetingID).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("Teachers").First(&meeting, "id = ?", meetingID).Error; err != nil {
 		return nil, err
 	}
 
 	return &meeting, nil
 }
 
+// IsUserTeachingInMeeting for know user is teacher in this meet
+func (r *MeetingRepository) IsUserTeachingInMeeting(ctx context.Context, userID, meetingID uuid.UUID) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Table("meeting_teachers").
+		Where("meeting_id = ? AND user_id = ?", meetingID, userID).
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 // RemoveTeacher this repo function to remove teacher from meeting by meetingID
-func (r *MeetingRepository) RemoveTeacher(meetingID uuid.UUID, teacherID uuid.UUID) (*models.Meeting, error) {
+func (r *MeetingRepository) RemoveTeacher(ctx context.Context, meetingID uuid.UUID, teacherID uuid.UUID) (*models.Meeting, error) {
 	var meeting models.Meeting
-	if err := r.db.Preload("Teachers").First(&meeting, "id = ?", meetingID).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("Teachers").First(&meeting, "id = ?", meetingID).Error; err != nil {
 		return nil, err
 	}
 
 	var teachersToRemove models.User
-	if err := r.db.Where("id = ?", teacherID).Find(&teachersToRemove).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("id = ?", teacherID).Find(&teachersToRemove).Error; err != nil {
 		return nil, err
 	}
 
-	if err := r.db.Model(&meeting).Association("Teachers").Delete(teachersToRemove); err != nil {
+	if err := r.db.WithContext(ctx).Model(&meeting).Association("Teachers").Delete(teachersToRemove); err != nil {
 		return nil, err
 	}
 
 	// Reload
-	if err := r.db.Preload("Teachers").First(&meeting, "id = ?", meetingID).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("Teachers").First(&meeting, "id = ?", meetingID).Error; err != nil {
 		return nil, err
 	}
 
@@ -233,7 +264,7 @@ func (r *MeetingRepository) RemoveTeacher(meetingID uuid.UUID, teacherID uuid.UU
 }
 
 // GetTeachersByMeetingIDFiltered returns paginated + filtered list of teachers for a meeting
-func (r *MeetingRepository) GetTeachersByMeetingIDFiltered(meetingID uuid.UUID, opts utils.QueryOptions) ([]models.User, int64, error) {
+func (r *MeetingRepository) GetTeachersByMeetingIDFiltered(ctx context.Context, meetingID uuid.UUID, opts utils.QueryOptions) ([]models.User, int64, error) {
 	validSortFields, err := utils.GetValidColumns(r.db, &models.User{}, &models.MeetingTeacher{}, &models.Meeting{})
 	if err != nil {
 		return nil, 0, err
@@ -249,7 +280,7 @@ func (r *MeetingRepository) GetTeachersByMeetingIDFiltered(meetingID uuid.UUID, 
 		order = "asc"
 	}
 
-	db := r.db.
+	db := r.db.WithContext(ctx).
 		Model(&models.User{}).
 		Joins("JOIN meeting_teachers ON meeting_teachers.user_id = users.id").
 		Where("meeting_teachers.meeting_id = ?", meetingID)
@@ -278,7 +309,7 @@ func (r *MeetingRepository) GetTeachersByMeetingIDFiltered(meetingID uuid.UUID, 
 }
 
 // GetStudentsByBatchSlugFiltered get all students by batch
-func (r *MeetingRepository) GetStudentsByBatchSlugFiltered(batchSlug string, opts utils.QueryOptions) ([]models.User, int64, error) {
+func (r *MeetingRepository) GetStudentsByBatchSlugFiltered(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.User, int64, error) {
 	validSortFields := utils.GetValidColumnsFromStruct(&models.User{})
 
 	sort := opts.Sort
@@ -291,7 +322,7 @@ func (r *MeetingRepository) GetStudentsByBatchSlugFiltered(batchSlug string, opt
 		order = "asc"
 	}
 
-	db := r.db.Preload("Profile").
+	db := r.db.WithContext(ctx).Preload("Profile").
 		Model(&models.User{}).
 		Joins("JOIN purchases ON purchases.user_id = users.id").
 		Joins("JOIN batches ON batches.id = purchases.batch_id").
@@ -324,9 +355,9 @@ func (r *MeetingRepository) GetStudentsByBatchSlugFiltered(batchSlug string, opt
 }
 
 // IsBatchOwnedByUser for get all batch by owned teacher
-func (r *MeetingRepository) IsBatchOwnedByUser(userID uuid.UUID, batchSlug string) (bool, error) {
+func (r *MeetingRepository) IsBatchOwnedByUser(ctx context.Context, userID uuid.UUID, batchSlug string) (bool, error) {
 	var count int64
-	err := r.db.
+	err := r.db.WithContext(ctx).
 		Model(&models.Meeting{}).
 		Joins("JOIN meeting_teachers ON meeting_teachers.meeting_id = meetings.id").
 		Joins("JOIN batches ON batches.id = meetings.batch_id").
@@ -337,9 +368,9 @@ func (r *MeetingRepository) IsBatchOwnedByUser(userID uuid.UUID, batchSlug strin
 }
 
 // IsMeetingTaughtByUser for get taught
-func (r *MeetingRepository) IsMeetingTaughtByUser(meetingID, userID uuid.UUID) (bool, error) {
+func (r *MeetingRepository) IsMeetingTaughtByUser(ctx context.Context, meetingID, userID uuid.UUID) (bool, error) {
 	var count int64
-	err := r.db.
+	err := r.db.WithContext(ctx).
 		Table("meeting_teachers").
 		Where("meeting_id = ? AND user_id = ?", meetingID, userID).
 		Count(&count).Error

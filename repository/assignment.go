@@ -3,11 +3,28 @@ package repository
 import (
 	"brevet-api/models"
 	"brevet-api/utils"
+	"context"
 	"fmt"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+// IAssignmentRepository interface
+type IAssignmentRepository interface {
+	WithTx(tx *gorm.DB) IAssignmentRepository
+	GetAllFilteredAssignments(ctx context.Context, opts utils.QueryOptions) ([]models.Assignment, int64, error)
+	GetAllFilteredAssignmentsByMeetingID(ctx context.Context, meetingID uuid.UUID, opts utils.QueryOptions) ([]models.Assignment, int64, error)
+	Create(ctx context.Context, assignment *models.Assignment) error
+	Update(ctx context.Context, assignment *models.Assignment) error
+	DeleteByID(ctx context.Context, id uuid.UUID) error
+	CreateFiles(ctx context.Context, assignmentFiles []models.AssignmentFiles) error
+	DeleteFilesByAssignmentID(ctx context.Context, assignmentID uuid.UUID) error
+	FindByID(ctx context.Context, id uuid.UUID) (*models.Assignment, error)
+	GetBatchIDByAssignmentID(ctx context.Context, assignmentID uuid.UUID) (uuid.UUID, error)
+	GetBatchByAssignmentID(ctx context.Context, assignmentID uuid.UUID) (models.Batch, error)
+	CountByBatchID(ctx context.Context, batchID uuid.UUID) (int64, error)
+}
 
 // AssignmentRepository provides methods for managing assignments
 type AssignmentRepository struct {
@@ -15,17 +32,17 @@ type AssignmentRepository struct {
 }
 
 // NewAssignmentRepository creates a new assignment repository
-func NewAssignmentRepository(db *gorm.DB) *AssignmentRepository {
+func NewAssignmentRepository(db *gorm.DB) IAssignmentRepository {
 	return &AssignmentRepository{db: db}
 }
 
 // WithTx running with transaction
-func (r *AssignmentRepository) WithTx(tx *gorm.DB) *AssignmentRepository {
+func (r *AssignmentRepository) WithTx(tx *gorm.DB) IAssignmentRepository {
 	return &AssignmentRepository{db: tx}
 }
 
 // GetAllFilteredAssignments retrieves all assignments with pagination and filtering options
-func (r *AssignmentRepository) GetAllFilteredAssignments(opts utils.QueryOptions) ([]models.Assignment, int64, error) {
+func (r *AssignmentRepository) GetAllFilteredAssignments(ctx context.Context, opts utils.QueryOptions) ([]models.Assignment, int64, error) {
 	validSortFields := utils.GetValidColumnsFromStruct(&models.Assignment{})
 
 	sort := opts.Sort
@@ -38,7 +55,7 @@ func (r *AssignmentRepository) GetAllFilteredAssignments(opts utils.QueryOptions
 		order = "asc"
 	}
 
-	db := r.db.Preload("AssignmentFiles").Model(&models.Assignment{})
+	db := r.db.WithContext(ctx).Preload("AssignmentFiles").Model(&models.Assignment{})
 
 	joinConditions := map[string]string{}
 	joinedRelations := map[string]bool{}
@@ -64,7 +81,7 @@ func (r *AssignmentRepository) GetAllFilteredAssignments(opts utils.QueryOptions
 }
 
 // GetAllFilteredAssignmentsByMeetingID retrieves all assignments with pagination and filtering options
-func (r *AssignmentRepository) GetAllFilteredAssignmentsByMeetingID(meetingID uuid.UUID, opts utils.QueryOptions) ([]models.Assignment, int64, error) {
+func (r *AssignmentRepository) GetAllFilteredAssignmentsByMeetingID(ctx context.Context, meetingID uuid.UUID, opts utils.QueryOptions) ([]models.Assignment, int64, error) {
 	validSortFields := utils.GetValidColumnsFromStruct(&models.Assignment{})
 
 	sort := opts.Sort
@@ -77,7 +94,7 @@ func (r *AssignmentRepository) GetAllFilteredAssignmentsByMeetingID(meetingID uu
 		order = "asc"
 	}
 
-	db := r.db.Preload("AssignmentFiles").Model(&models.Assignment{}).
+	db := r.db.WithContext(ctx).Preload("AssignmentFiles").Model(&models.Assignment{}).
 		Where("meeting_id = ?", meetingID)
 
 	joinConditions := map[string]string{}
@@ -103,47 +120,35 @@ func (r *AssignmentRepository) GetAllFilteredAssignmentsByMeetingID(meetingID uu
 	return assignments, total, err
 }
 
-// IsUserTeachingInMeeting for know user is teacher in this meet
-func (r *MeetingRepository) IsUserTeachingInMeeting(userID, meetingID uuid.UUID) (bool, error) {
-	var count int64
-	err := r.db.Table("meeting_teachers").
-		Where("meeting_id = ? AND user_id = ?", meetingID, userID).
-		Count(&count).Error
-	if err != nil {
-		return false, err
-	}
-	return count > 0, nil
-}
-
 // Create creates a new assignment
-func (r *AssignmentRepository) Create(assignment *models.Assignment) error {
-	return r.db.Create(assignment).Error
+func (r *AssignmentRepository) Create(ctx context.Context, assignment *models.Assignment) error {
+	return r.db.WithContext(ctx).Create(assignment).Error
 }
 
 // Update updates an existing assignment
-func (r *AssignmentRepository) Update(assignment *models.Assignment) error {
-	return r.db.Save(assignment).Error
+func (r *AssignmentRepository) Update(ctx context.Context, assignment *models.Assignment) error {
+	return r.db.WithContext(ctx).Save(assignment).Error
 }
 
 // DeleteByID deletes an assignment by its ID
-func (r *AssignmentRepository) DeleteByID(id uuid.UUID) error {
-	return r.db.Preload("AssignmentFiles").Where("id = ?", id).Delete(&models.Assignment{}).Error
+func (r *AssignmentRepository) DeleteByID(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Preload("AssignmentFiles").Where("id = ?", id).Delete(&models.Assignment{}).Error
 }
 
 // CreateFiles creates new assignment files
-func (r *AssignmentRepository) CreateFiles(assignmentFiles []models.AssignmentFiles) error {
-	return r.db.Create(assignmentFiles).Error
+func (r *AssignmentRepository) CreateFiles(ctx context.Context, assignmentFiles []models.AssignmentFiles) error {
+	return r.db.WithContext(ctx).Create(assignmentFiles).Error
 }
 
 // DeleteFilesByAssignmentID deletes all files associated with a specific assignment
-func (r *AssignmentRepository) DeleteFilesByAssignmentID(assignmentID uuid.UUID) error {
-	return r.db.Where("assignment_id = ?", assignmentID).Delete(&models.AssignmentFiles{}).Error
+func (r *AssignmentRepository) DeleteFilesByAssignmentID(ctx context.Context, assignmentID uuid.UUID) error {
+	return r.db.WithContext(ctx).Where("assignment_id = ?", assignmentID).Delete(&models.AssignmentFiles{}).Error
 }
 
 // FindByID retrieves a meeting by its ID
-func (r *AssignmentRepository) FindByID(id uuid.UUID) (*models.Assignment, error) {
+func (r *AssignmentRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Assignment, error) {
 	var assignment models.Assignment
-	err := r.db.Preload("AssignmentFiles").First(&assignment, "id = ?", id).Error
+	err := r.db.WithContext(ctx).Preload("AssignmentFiles").First(&assignment, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -151,9 +156,9 @@ func (r *AssignmentRepository) FindByID(id uuid.UUID) (*models.Assignment, error
 }
 
 // GetBatchIDByAssignmentID get batch
-func (r *AssignmentRepository) GetBatchIDByAssignmentID(assignmentID uuid.UUID) (uuid.UUID, error) {
+func (r *AssignmentRepository) GetBatchIDByAssignmentID(ctx context.Context, assignmentID uuid.UUID) (uuid.UUID, error) {
 	var assignment models.Assignment
-	err := r.db.Preload("Meeting").
+	err := r.db.WithContext(ctx).Preload("Meeting").
 		First(&assignment, "id = ?", assignmentID).Error
 	if err != nil {
 		return uuid.Nil, err
@@ -163,9 +168,9 @@ func (r *AssignmentRepository) GetBatchIDByAssignmentID(assignmentID uuid.UUID) 
 }
 
 // GetBatchByAssignmentID ambil batch dari assignment
-func (r *AssignmentRepository) GetBatchByAssignmentID(assignmentID uuid.UUID) (models.Batch, error) {
+func (r *AssignmentRepository) GetBatchByAssignmentID(ctx context.Context, assignmentID uuid.UUID) (models.Batch, error) {
 	var assignment models.Assignment
-	err := r.db.
+	err := r.db.WithContext(ctx).
 		Preload("Meeting.Batch").
 		First(&assignment, "id = ?", assignmentID).Error
 	if err != nil {
@@ -176,9 +181,9 @@ func (r *AssignmentRepository) GetBatchByAssignmentID(assignmentID uuid.UUID) (m
 }
 
 // CountByBatchID for count assignment by batch id
-func (r *AssignmentRepository) CountByBatchID(batchID uuid.UUID) (int64, error) {
+func (r *AssignmentRepository) CountByBatchID(ctx context.Context, batchID uuid.UUID) (int64, error) {
 	var count int64
-	err := r.db.Model(&models.Assignment{}).
+	err := r.db.WithContext(ctx).Model(&models.Assignment{}).
 		Joins("JOIN meetings ON meetings.id = assignments.meeting_id").
 		Where("meetings.batch_id = ?", batchID).
 		Count(&count).Error

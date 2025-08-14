@@ -12,11 +12,11 @@ import (
 
 // FileController handles file upload and deletion operations
 type FileController struct {
-	fileService *services.FileService
+	fileService services.IFileService
 }
 
 // NewFileController creates a new FileController instance
-func NewFileController(fileService *services.FileService) *FileController {
+func NewFileController(fileService services.IFileService) *FileController {
 	return &FileController{fileService: fileService}
 }
 

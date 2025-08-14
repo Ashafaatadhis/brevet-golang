@@ -4,6 +4,7 @@ import (
 	"brevet-api/dto"
 	"brevet-api/models"
 	"brevet-api/repository"
+	"context"
 
 	"brevet-api/utils"
 	"fmt"
@@ -15,23 +16,34 @@ import (
 	"gorm.io/gorm"
 )
 
+// IAssignmentService interface
+type IAssignmentService interface {
+	GetAllFilteredAssignments(ctx context.Context, opts utils.QueryOptions) ([]models.Assignment, int64, error)
+	GetAllFilteredAssignmentsByMeetingID(ctx context.Context, meetingID uuid.UUID, user *utils.Claims, opts utils.QueryOptions) ([]models.Assignment, int64, error)
+	GetAssignmentByID(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID) (*models.Assignment, error)
+	CreateAssignment(ctx context.Context, user *utils.Claims, meetingID uuid.UUID, body *dto.CreateAssignmentRequest) (*models.Assignment, error)
+	UpdateAssignment(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID, body *dto.UpdateAssignmentRequest) (*models.Assignment, error)
+	DeleteAssignment(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID) error
+}
+
 // AssignmentService provides methods for managing assignments
 type AssignmentService struct {
-	assignmentRepo *repository.AssignmentRepository
-	meetingRepo    *repository.MeetingRepository
-	purchaseRepo   *repository.PurchaseRepository
-	fileService    *FileService
+	assignmentRepo repository.IAssignmentRepository
+	meetingRepo    repository.IMeetingRepository
+	purchaseRepo   repository.IPurchaseRepository
+	fileService    IFileService
 	db             *gorm.DB
 }
 
 // NewAssignmentService creates a new instance of AssignmentService
-func NewAssignmentService(assignmentRepository *repository.AssignmentRepository, meetingRepository *repository.MeetingRepository, purchaseRepo *repository.PurchaseRepository, fileService *FileService, db *gorm.DB) *AssignmentService {
+func NewAssignmentService(assignmentRepository repository.IAssignmentRepository, meetingRepository repository.IMeetingRepository,
+	purchaseRepo repository.IPurchaseRepository, fileService IFileService, db *gorm.DB) IAssignmentService {
 	return &AssignmentService{assignmentRepo: assignmentRepository, meetingRepo: meetingRepository, purchaseRepo: purchaseRepo, fileService: fileService, db: db}
 }
 
 // GetAllFilteredAssignments retrieves all assignments with pagination and filtering options
-func (s *AssignmentService) GetAllFilteredAssignments(opts utils.QueryOptions) ([]models.Assignment, int64, error) {
-	assignments, total, err := s.assignmentRepo.GetAllFilteredAssignments(opts)
+func (s *AssignmentService) GetAllFilteredAssignments(ctx context.Context, opts utils.QueryOptions) ([]models.Assignment, int64, error) {
+	assignments, total, err := s.assignmentRepo.GetAllFilteredAssignments(ctx, opts)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -39,9 +51,9 @@ func (s *AssignmentService) GetAllFilteredAssignments(opts utils.QueryOptions) (
 }
 
 // GetAllFilteredAssignmentsByMeetingID retrieves all assignments with pagination and filtering options
-func (s *AssignmentService) GetAllFilteredAssignmentsByMeetingID(meetingID uuid.UUID, user *utils.Claims, opts utils.QueryOptions) ([]models.Assignment, int64, error) {
+func (s *AssignmentService) GetAllFilteredAssignmentsByMeetingID(ctx context.Context, meetingID uuid.UUID, user *utils.Claims, opts utils.QueryOptions) ([]models.Assignment, int64, error) {
 	if user.Role == string(models.RoleTypeGuru) {
-		ok, err := s.meetingRepo.IsMeetingTaughtByUser(meetingID, user.UserID)
+		ok, err := s.meetingRepo.IsMeetingTaughtByUser(ctx, meetingID, user.UserID)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -50,7 +62,7 @@ func (s *AssignmentService) GetAllFilteredAssignmentsByMeetingID(meetingID uuid.
 		}
 	}
 
-	assignments, total, err := s.assignmentRepo.GetAllFilteredAssignmentsByMeetingID(meetingID, opts)
+	assignments, total, err := s.assignmentRepo.GetAllFilteredAssignmentsByMeetingID(ctx, meetingID, opts)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -58,8 +70,8 @@ func (s *AssignmentService) GetAllFilteredAssignmentsByMeetingID(meetingID uuid.
 }
 
 // GetAssignmentByID retrieves a single assignment by its ID
-func (s *AssignmentService) GetAssignmentByID(user *utils.Claims, assignmentID uuid.UUID) (*models.Assignment, error) {
-	assignment, err := s.assignmentRepo.FindByID(assignmentID)
+func (s *AssignmentService) GetAssignmentByID(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID) (*models.Assignment, error) {
+	assignment, err := s.assignmentRepo.FindByID(ctx, assignmentID)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +83,7 @@ func (s *AssignmentService) GetAssignmentByID(user *utils.Claims, assignmentID u
 
 	case string(models.RoleTypeGuru):
 		// 🔒 Guru hanya boleh jika ngajar di meeting terkait
-		isGuru, err := s.meetingRepo.IsUserTeachingInMeeting(user.UserID, assignment.MeetingID)
+		isGuru, err := s.meetingRepo.IsUserTeachingInMeeting(ctx, user.UserID, assignment.MeetingID)
 		if err != nil {
 			return nil, err
 		}
@@ -81,12 +93,12 @@ func (s *AssignmentService) GetAssignmentByID(user *utils.Claims, assignmentID u
 		return assignment, nil
 
 	case string(models.RoleTypeSiswa):
-		meeting, err := s.meetingRepo.FindByID(assignment.MeetingID)
+		meeting, err := s.meetingRepo.FindByID(ctx, assignment.MeetingID)
 		if err != nil {
 			return nil, err
 		}
 		// 🔒 Siswa hanya bisa jika sudah beli batch meeting tersebut
-		isPurchased, err := s.purchaseRepo.HasPaid(user.UserID, meeting.BatchID)
+		isPurchased, err := s.purchaseRepo.HasPaid(ctx, user.UserID, meeting.BatchID)
 		if err != nil {
 			return nil, err
 		}
@@ -101,12 +113,12 @@ func (s *AssignmentService) GetAssignmentByID(user *utils.Claims, assignmentID u
 }
 
 // CreateAssignment creates a new assignment with the provided details
-func (s *AssignmentService) CreateAssignment(user *utils.Claims, meetingID uuid.UUID, body *dto.CreateAssignmentRequest) (*models.Assignment, error) {
+func (s *AssignmentService) CreateAssignment(ctx context.Context, user *utils.Claims, meetingID uuid.UUID, body *dto.CreateAssignmentRequest) (*models.Assignment, error) {
 	var assignment models.Assignment
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
 
-		meeting, err := s.meetingRepo.WithTx(tx).FindByID(meetingID)
+		meeting, err := s.meetingRepo.WithTx(tx).FindByID(ctx, meetingID)
 		if err != nil {
 			return err
 		}
@@ -117,7 +129,7 @@ func (s *AssignmentService) CreateAssignment(user *utils.Claims, meetingID uuid.
 		// }
 
 		if user.Role == string(models.RoleTypeGuru) {
-			ok, err := s.meetingRepo.IsMeetingTaughtByUser(meeting.ID, user.UserID)
+			ok, err := s.meetingRepo.IsMeetingTaughtByUser(ctx, meeting.ID, user.UserID)
 			if err != nil {
 				return fmt.Errorf("failed to check meeting-teacher relation: %w", err)
 			}
@@ -137,7 +149,7 @@ func (s *AssignmentService) CreateAssignment(user *utils.Claims, meetingID uuid.
 			Type:        models.AssignmentType(body.Type),
 		}
 
-		if err := s.assignmentRepo.WithTx(tx).Create(assignmentPtr); err != nil {
+		if err := s.assignmentRepo.WithTx(tx).Create(ctx, assignmentPtr); err != nil {
 			return err
 		}
 
@@ -150,13 +162,13 @@ func (s *AssignmentService) CreateAssignment(user *utils.Claims, meetingID uuid.
 		}
 
 		if len(files) > 0 {
-			if err := s.assignmentRepo.WithTx(tx).CreateFiles(files); err != nil {
+			if err := s.assignmentRepo.WithTx(tx).CreateFiles(ctx, files); err != nil {
 				return err
 			}
 		}
 
 		// ✅ Ambil ulang dari DB untuk dapet semua kolom yang terisi otomatis (CreatedAt, dll)
-		updated, err := s.assignmentRepo.WithTx(tx).FindByID(assignmentPtr.ID)
+		updated, err := s.assignmentRepo.WithTx(tx).FindByID(ctx, assignmentPtr.ID)
 		if err != nil {
 			return err
 		}
@@ -172,11 +184,11 @@ func (s *AssignmentService) CreateAssignment(user *utils.Claims, meetingID uuid.
 }
 
 // UpdateAssignment updates an existing assignment and its files
-func (s *AssignmentService) UpdateAssignment(user *utils.Claims, assignmentID uuid.UUID, body *dto.UpdateAssignmentRequest) (*models.Assignment, error) {
+func (s *AssignmentService) UpdateAssignment(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID, body *dto.UpdateAssignmentRequest) (*models.Assignment, error) {
 	var updatedAssignment models.Assignment
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
-		assignment, err := s.assignmentRepo.WithTx(tx).FindByID(assignmentID)
+		assignment, err := s.assignmentRepo.WithTx(tx).FindByID(ctx, assignmentID)
 		if err != nil {
 			return err
 		}
@@ -186,7 +198,7 @@ func (s *AssignmentService) UpdateAssignment(user *utils.Claims, assignmentID uu
 		// 	return fmt.Errorf("forbidden: user %s not authorized to update assignment %s", user.UserID, assignment.ID)
 		// }
 		if user.Role == string(models.RoleTypeGuru) {
-			ok, err := s.meetingRepo.IsMeetingTaughtByUser(assignment.MeetingID, user.UserID)
+			ok, err := s.meetingRepo.IsMeetingTaughtByUser(ctx, assignment.MeetingID, user.UserID)
 			if err != nil {
 				return fmt.Errorf("failed to check meeting-teacher relation: %w", err)
 			}
@@ -203,14 +215,14 @@ func (s *AssignmentService) UpdateAssignment(user *utils.Claims, assignmentID uu
 			return err
 		}
 
-		if err := s.assignmentRepo.WithTx(tx).Update(assignment); err != nil {
+		if err := s.assignmentRepo.WithTx(tx).Update(ctx, assignment); err != nil {
 			return err
 		}
 
 		// Optional: replace files (delete old, insert new)
 		if body.AssignmentFiles != nil {
 			// Hapus semua file lama
-			if err := s.assignmentRepo.WithTx(tx).DeleteFilesByAssignmentID(assignment.ID); err != nil {
+			if err := s.assignmentRepo.WithTx(tx).DeleteFilesByAssignmentID(ctx, assignment.ID); err != nil {
 				return err
 			}
 
@@ -224,14 +236,14 @@ func (s *AssignmentService) UpdateAssignment(user *utils.Claims, assignmentID uu
 			}
 
 			if len(files) > 0 {
-				if err := s.assignmentRepo.WithTx(tx).CreateFiles(files); err != nil {
+				if err := s.assignmentRepo.WithTx(tx).CreateFiles(ctx, files); err != nil {
 					return err
 				}
 			}
 		}
 
 		// Ambil ulang assignment lengkap
-		fresh, err := s.assignmentRepo.WithTx(tx).FindByID(assignment.ID)
+		fresh, err := s.assignmentRepo.WithTx(tx).FindByID(ctx, assignment.ID)
 		if err != nil {
 			return err
 		}
@@ -246,11 +258,11 @@ func (s *AssignmentService) UpdateAssignment(user *utils.Claims, assignmentID uu
 }
 
 // DeleteAssignment deletes an assignment and its related files
-func (s *AssignmentService) DeleteAssignment(user *utils.Claims, assignmentID uuid.UUID) error {
+func (s *AssignmentService) DeleteAssignment(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID) error {
 	var assignment models.Assignment
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
-		assignmentRsp, err := s.assignmentRepo.WithTx(tx).FindByID(assignmentID)
+		assignmentRsp, err := s.assignmentRepo.WithTx(tx).FindByID(ctx, assignmentID)
 		if err != nil {
 			return err
 		}
@@ -260,7 +272,7 @@ func (s *AssignmentService) DeleteAssignment(user *utils.Claims, assignmentID uu
 		// 	return fmt.Errorf("forbidden: user %s not authorized to delete assignment %s", user.UserID, assignmentRsp.ID)
 		// }
 		if user.Role == string(models.RoleTypeGuru) {
-			ok, err := s.meetingRepo.IsMeetingTaughtByUser(assignmentRsp.MeetingID, user.UserID)
+			ok, err := s.meetingRepo.IsMeetingTaughtByUser(ctx, assignmentRsp.MeetingID, user.UserID)
 			if err != nil {
 				return fmt.Errorf("failed to check meeting-teacher relation: %w", err)
 			}
@@ -272,7 +284,7 @@ func (s *AssignmentService) DeleteAssignment(user *utils.Claims, assignmentID uu
 		assignment = utils.Safe(assignmentRsp, models.Assignment{})
 
 		// Hapus dari DB (files ikut kehapus karena CASCADE)
-		if err := s.assignmentRepo.WithTx(tx).DeleteByID(assignmentID); err != nil {
+		if err := s.assignmentRepo.WithTx(tx).DeleteByID(ctx, assignmentID); err != nil {
 			return err
 		}
 

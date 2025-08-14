@@ -18,6 +18,7 @@ func RegisterAssignmentRoutes(r fiber.Router, db *gorm.DB) {
 	fileService := services.NewFileService()
 
 	purchaseRepo := repository.NewPurchaseRepository(db)
+	userRepo := repository.NewUserRepository(db)
 
 	meetingRepo := repository.NewMeetingRepository(db)
 	assignmentRepository := repository.NewAssignmentRepository(db)
@@ -45,7 +46,7 @@ func RegisterAssignmentRoutes(r fiber.Router, db *gorm.DB) {
 		panic(err)
 	}
 	batchRepository := repository.NewBatchRepository(db)
-	purchaseService := services.NewPurchaseService(purchaseRepo, batchRepository, emailService, db)
+	purchaseService := services.NewPurchaseService(purchaseRepo, userRepo, batchRepository, emailService, db)
 	submissionService := services.NewSubmissionService(submissionRepository, assignmentRepository, meetingRepository, purchaseService, fileService, db)
 	submissionController := controllers.NewSubmissionController(submissionService, db)
 	r.Get("/:assignmentID/submissions", middlewares.RequireAuth(),

@@ -3,11 +3,28 @@ package repository
 import (
 	"brevet-api/models"
 	"brevet-api/utils"
+	"context"
 	"fmt"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+// IPurchaseRepository interface
+type IPurchaseRepository interface {
+	WithTx(tx *gorm.DB) IPurchaseRepository
+	GetAllFilteredPurchases(ctx context.Context, opts utils.QueryOptions) ([]models.Purchase, int64, error)
+	GetPurchaseByID(ctx context.Context, id uuid.UUID) (*models.Purchase, error)
+	HasPaid(ctx context.Context, userID uuid.UUID, batchID uuid.UUID) (bool, error)
+	CountPaidByBatchID(ctx context.Context, batchID uuid.UUID) (int64, error)
+	HasPurchaseWithStatus(ctx context.Context, userID uuid.UUID, batchID uuid.UUID, statuses ...models.PaymentStatus) (bool, error)
+	GetPaidBatchIDs(ctx context.Context, userID string) ([]string, error)
+	Create(ctx context.Context, purchase *models.Purchase) error
+	GetPriceByGroupType(ctx context.Context, groupType *models.GroupType) (*models.Price, error)
+	Update(ctx context.Context, course *models.Purchase) error
+	FindByID(ctx context.Context, id uuid.UUID) (*models.Purchase, error)
+	IsGroupTypeAllowedForBatch(ctx context.Context, batchID uuid.UUID, groupType models.GroupType) (bool, error)
+}
 
 // PurchaseRepository is a struct that represents a purchase repository
 type PurchaseRepository struct {
@@ -15,19 +32,19 @@ type PurchaseRepository struct {
 }
 
 // NewPurchaseRepository creates a new purchase repository
-func NewPurchaseRepository(db *gorm.DB) *PurchaseRepository {
+func NewPurchaseRepository(db *gorm.DB) IPurchaseRepository {
 	return &PurchaseRepository{db: db}
 }
 
 // WithTx running with transaction
-func (r *PurchaseRepository) WithTx(tx *gorm.DB) *PurchaseRepository {
+func (r *PurchaseRepository) WithTx(tx *gorm.DB) IPurchaseRepository {
 	return &PurchaseRepository{db: tx}
 }
 
 // GetAllFilteredPurchases retrieves all purchases with pagination and filtering options
-func (r *PurchaseRepository) GetAllFilteredPurchases(opts utils.QueryOptions) ([]models.Purchase, int64, error) {
+func (r *PurchaseRepository) GetAllFilteredPurchases(ctx context.Context, opts utils.QueryOptions) ([]models.Purchase, int64, error) {
 	validSortFields := utils.GetValidColumnsFromStruct(&models.Purchase{}, &models.User{}, &models.Batch{}, &models.Price{})
-	fmt.Print(validSortFields, "TAI")
+
 	sort := opts.Sort
 	if !validSortFields[sort] {
 		sort = "id"
@@ -38,7 +55,7 @@ func (r *PurchaseRepository) GetAllFilteredPurchases(opts utils.QueryOptions) ([
 		order = "asc"
 	}
 
-	db := r.db.Model(&models.Purchase{})
+	db := r.db.WithContext(ctx).Model(&models.Purchase{})
 
 	joinConditions := map[string]string{}
 	joinedRelations := map[string]bool{}
@@ -61,9 +78,9 @@ func (r *PurchaseRepository) GetAllFilteredPurchases(opts utils.QueryOptions) ([
 }
 
 // GetPurchaseByID is for get purchase by id
-func (r *PurchaseRepository) GetPurchaseByID(id uuid.UUID) (*models.Purchase, error) {
+func (r *PurchaseRepository) GetPurchaseByID(ctx context.Context, id uuid.UUID) (*models.Purchase, error) {
 	var purchase models.Purchase
-	err := r.db.Preload("User").Preload("User.Profile").
+	err := r.db.WithContext(ctx).Preload("User").Preload("User.Profile").
 		Preload("Batch").
 		Preload("Price").First(&purchase, "id = ?", id).Error
 	if err != nil {
@@ -73,64 +90,64 @@ func (r *PurchaseRepository) GetPurchaseByID(id uuid.UUID) (*models.Purchase, er
 }
 
 // HasPaid check if user has paid in this batch by batchid
-func (r *PurchaseRepository) HasPaid(userID uuid.UUID, batchID uuid.UUID) (bool, error) {
+func (r *PurchaseRepository) HasPaid(ctx context.Context, userID uuid.UUID, batchID uuid.UUID) (bool, error) {
 	var count int64
-	err := r.db.Model(&models.Purchase{}).
+	err := r.db.WithContext(ctx).Model(&models.Purchase{}).
 		Where("user_id = ? AND batch_id = ? AND payment_status = ?", userID, batchID, models.Paid).
 		Count(&count).Error
 	return count > 0, err
 }
 
 // CountPaidByBatchID retrieves the count of paid purchases for a specific batch
-func (r *PurchaseRepository) CountPaidByBatchID(batchID uuid.UUID) (int64, error) {
+func (r *PurchaseRepository) CountPaidByBatchID(ctx context.Context, batchID uuid.UUID) (int64, error) {
 	var count int64
-	err := r.db.Model(&models.Purchase{}).
+	err := r.db.WithContext(ctx).Model(&models.Purchase{}).
 		Where("batch_id = ? AND payment_status = ?", batchID, models.Paid).
 		Count(&count).Error
 	return count, err
 }
 
 // HasPurchaseWithStatus check if user has in status
-func (r *PurchaseRepository) HasPurchaseWithStatus(userID uuid.UUID, batchID uuid.UUID, statuses ...models.PaymentStatus) (bool, error) {
+func (r *PurchaseRepository) HasPurchaseWithStatus(ctx context.Context, userID uuid.UUID, batchID uuid.UUID, statuses ...models.PaymentStatus) (bool, error) {
 	var count int64
-	err := r.db.Model(&models.Purchase{}).
+	err := r.db.WithContext(ctx).Model(&models.Purchase{}).
 		Where("user_id = ? AND batch_id = ? AND payment_status IN ?", userID, batchID, statuses).
 		Count(&count).Error
 	return count > 0, err
 }
 
 // GetPaidBatchIDs get all batch where the user has paid
-func (r *PurchaseRepository) GetPaidBatchIDs(userID string) ([]string, error) {
+func (r *PurchaseRepository) GetPaidBatchIDs(ctx context.Context, userID string) ([]string, error) {
 	var batchIDs []string
-	err := r.db.Model(&models.Purchase{}).
+	err := r.db.WithContext(ctx).Model(&models.Purchase{}).
 		Where("user_id = ? AND status = ?", userID, "paid").
 		Pluck("batch_id", &batchIDs).Error
 	return batchIDs, err
 }
 
 // Create creates a new purchase
-func (r *PurchaseRepository) Create(purchase *models.Purchase) error {
-	return r.db.Create(purchase).Error
+func (r *PurchaseRepository) Create(ctx context.Context, purchase *models.Purchase) error {
+	return r.db.WithContext(ctx).Create(purchase).Error
 }
 
 // GetPriceByGroupType get price by group type
-func (r *PurchaseRepository) GetPriceByGroupType(groupType *models.GroupType) (*models.Price, error) {
+func (r *PurchaseRepository) GetPriceByGroupType(ctx context.Context, groupType *models.GroupType) (*models.Price, error) {
 	var price models.Price
-	if err := r.db.Where("group_type = ?", groupType).First(&price).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("group_type = ?", groupType).First(&price).Error; err != nil {
 		return nil, err
 	}
 	return &price, nil
 }
 
 // Update updates an existing purchase
-func (r *PurchaseRepository) Update(course *models.Purchase) error {
-	return r.db.Save(course).Error
+func (r *PurchaseRepository) Update(ctx context.Context, course *models.Purchase) error {
+	return r.db.WithContext(ctx).Save(course).Error
 }
 
 // FindByID is repo for find purchase by id
-func (r *PurchaseRepository) FindByID(id uuid.UUID) (*models.Purchase, error) {
+func (r *PurchaseRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Purchase, error) {
 	var purchase models.Purchase
-	err := r.db.First(&purchase, "id = ?", id).Error
+	err := r.db.WithContext(ctx).First(&purchase, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -138,9 +155,9 @@ func (r *PurchaseRepository) FindByID(id uuid.UUID) (*models.Purchase, error) {
 }
 
 // IsGroupTypeAllowedForBatch for checking group type
-func (r *PurchaseRepository) IsGroupTypeAllowedForBatch(batchID uuid.UUID, groupType models.GroupType) (bool, error) {
+func (r *PurchaseRepository) IsGroupTypeAllowedForBatch(ctx context.Context, batchID uuid.UUID, groupType models.GroupType) (bool, error) {
 	var count int64
-	err := r.db.
+	err := r.db.WithContext(ctx).
 		Model(&models.BatchGroup{}).
 		Where("batch_id = ? AND group_type = ?", batchID, groupType).
 		Count(&count).Error

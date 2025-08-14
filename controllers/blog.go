@@ -13,12 +13,12 @@ import (
 
 // BlogController handles blog-related operations
 type BlogController struct {
-	blogService *services.BlogService
+	blogService services.IBlogService
 	db          *gorm.DB
 }
 
 // NewBlogController creates a new BlogController
-func NewBlogController(blogService *services.BlogService, db *gorm.DB) *BlogController {
+func NewBlogController(blogService services.IBlogService, db *gorm.DB) *BlogController {
 	return &BlogController{
 		blogService: blogService,
 		db:          db,
@@ -27,9 +27,10 @@ func NewBlogController(blogService *services.BlogService, db *gorm.DB) *BlogCont
 
 // GetAllBlogs retrieves a list of blogs with pagination and filtering options
 func (ctrl *BlogController) GetAllBlogs(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	opts := utils.ParseQueryOptions(c)
 
-	blogs, total, err := ctrl.blogService.GetAllFilteredBlogs(opts)
+	blogs, total, err := ctrl.blogService.GetAllFilteredBlogs(ctx, opts)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch blogs", err.Error())
 	}
@@ -45,9 +46,10 @@ func (ctrl *BlogController) GetAllBlogs(c *fiber.Ctx) error {
 
 // GetBlogBySlug retrieves a blog by its slug (ID)
 func (ctrl *BlogController) GetBlogBySlug(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	slugParam := c.Params("slug")
 
-	blog, err := ctrl.blogService.GetBlogBySlug(slugParam)
+	blog, err := ctrl.blogService.GetBlogBySlug(ctx, slugParam)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Blog Doesn't Exist", err.Error())
 	}
@@ -62,9 +64,10 @@ func (ctrl *BlogController) GetBlogBySlug(c *fiber.Ctx) error {
 
 // CreateBlog handles the creation of a new blog
 func (ctrl *BlogController) CreateBlog(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	body := c.Locals("body").(*dto.CreateBlogRequest)
 
-	blog, err := ctrl.blogService.CreateBlog(body)
+	blog, err := ctrl.blogService.CreateBlog(ctx, body)
 	if err != nil {
 
 		return utils.ErrorResponse(c, 400, "Gagal membuat blog", err.Error())
@@ -79,6 +82,7 @@ func (ctrl *BlogController) CreateBlog(c *fiber.Ctx) error {
 
 // UpdateBlog updates an existing blog with the provided details
 func (ctrl *BlogController) UpdateBlog(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	idParam := c.Params("id")
 	id, err := uuid.Parse(idParam)
 	if err != nil {
@@ -86,7 +90,7 @@ func (ctrl *BlogController) UpdateBlog(c *fiber.Ctx) error {
 	}
 	body := c.Locals("body").(*dto.UpdateBlogRequest)
 
-	blog, err := ctrl.blogService.UpdateBlog(id, body)
+	blog, err := ctrl.blogService.UpdateBlog(ctx, id, body)
 	if err != nil {
 		return utils.ErrorResponse(c, 400, "Failed to update blog", err.Error())
 	}
@@ -101,13 +105,14 @@ func (ctrl *BlogController) UpdateBlog(c *fiber.Ctx) error {
 
 // DeleteBlog deletes a blog by its ID
 func (ctrl *BlogController) DeleteBlog(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	idParam := c.Params("id")
 	id, err := uuid.Parse(idParam)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 
-	if err := ctrl.blogService.DeleteBlog(id); err != nil {
+	if err := ctrl.blogService.DeleteBlog(ctx, id); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to delete blog", err.Error())
 	}
 

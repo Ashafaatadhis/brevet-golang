@@ -5,6 +5,7 @@ import (
 	"brevet-api/models"
 	"brevet-api/repository"
 	"brevet-api/utils"
+	"context"
 	"fmt"
 
 	"github.com/gofiber/fiber/v2"
@@ -14,23 +15,34 @@ import (
 	"gorm.io/gorm"
 )
 
+// IMaterialService interface
+type IMaterialService interface {
+	GetAllFilteredMaterial(ctx context.Context, opts utils.QueryOptions) ([]models.Material, int64, error)
+	GetAllFilteredMaterialsByMeetingID(ctx context.Context, meetingID uuid.UUID, user *utils.Claims, opts utils.QueryOptions) ([]models.Material, int64, error)
+	GetMaterialByID(ctx context.Context, user *utils.Claims, materialID uuid.UUID) (*models.Material, error)
+	CreateMaterial(ctx context.Context, user *utils.Claims, meetingID uuid.UUID, body *dto.CreateMaterialRequest) (*models.Material, error)
+	UpdateMaterial(ctx context.Context, user *utils.Claims, materialID uuid.UUID, body *dto.UpdateMaterialRequest) (*models.Material, error)
+	DeleteMaterial(ctx context.Context, user *utils.Claims, materialID uuid.UUID) error
+}
+
 // MaterialService provides methods for managing materials
 type MaterialService struct {
-	materialRepo *repository.MaterialRepository
-	meetingRepo  *repository.MeetingRepository
-	purchaseRepo *repository.PurchaseRepository
-	fileService  *FileService
+	materialRepo repository.IMaterialRepository
+	meetingRepo  repository.IMeetingRepository
+	purchaseRepo repository.IPurchaseRepository
+	fileService  IFileService
 	db           *gorm.DB
 }
 
 // NewMaterialService creates a new instance of MaterialService
-func NewMaterialService(materialRepo *repository.MaterialRepository, meetingRepository *repository.MeetingRepository, purchaseRepo *repository.PurchaseRepository, fileService *FileService, db *gorm.DB) *MaterialService {
+func NewMaterialService(materialRepo repository.IMaterialRepository, meetingRepository repository.IMeetingRepository,
+	purchaseRepo repository.IPurchaseRepository, fileService IFileService, db *gorm.DB) IMaterialService {
 	return &MaterialService{materialRepo: materialRepo, meetingRepo: meetingRepository, purchaseRepo: purchaseRepo, fileService: fileService, db: db}
 }
 
 // GetAllFilteredMaterial retrieves all materials with pagination and filtering options
-func (s *MaterialService) GetAllFilteredMaterial(opts utils.QueryOptions) ([]models.Material, int64, error) {
-	materials, total, err := s.materialRepo.GetAllFilteredMaterial(opts)
+func (s *MaterialService) GetAllFilteredMaterial(ctx context.Context, opts utils.QueryOptions) ([]models.Material, int64, error) {
+	materials, total, err := s.materialRepo.GetAllFilteredMaterial(ctx, opts)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -38,9 +50,9 @@ func (s *MaterialService) GetAllFilteredMaterial(opts utils.QueryOptions) ([]mod
 }
 
 // GetAllFilteredMaterialsByMeetingID retrieves all materials with pagination and filtering options
-func (s *MaterialService) GetAllFilteredMaterialsByMeetingID(meetingID uuid.UUID, user *utils.Claims, opts utils.QueryOptions) ([]models.Material, int64, error) {
+func (s *MaterialService) GetAllFilteredMaterialsByMeetingID(ctx context.Context, meetingID uuid.UUID, user *utils.Claims, opts utils.QueryOptions) ([]models.Material, int64, error) {
 	if user.Role == string(models.RoleTypeGuru) {
-		ok, err := s.meetingRepo.IsMeetingTaughtByUser(meetingID, user.UserID)
+		ok, err := s.meetingRepo.IsMeetingTaughtByUser(ctx, meetingID, user.UserID)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -49,7 +61,7 @@ func (s *MaterialService) GetAllFilteredMaterialsByMeetingID(meetingID uuid.UUID
 		}
 	}
 
-	materials, total, err := s.materialRepo.GetAllFilteredMaterialsByMeetingID(meetingID, opts)
+	materials, total, err := s.materialRepo.GetAllFilteredMaterialsByMeetingID(ctx, meetingID, opts)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -57,8 +69,8 @@ func (s *MaterialService) GetAllFilteredMaterialsByMeetingID(meetingID uuid.UUID
 }
 
 // GetMaterialByID retrieves a single materials by its ID
-func (s *MaterialService) GetMaterialByID(user *utils.Claims, materialID uuid.UUID) (*models.Material, error) {
-	material, err := s.materialRepo.FindByID(materialID)
+func (s *MaterialService) GetMaterialByID(ctx context.Context, user *utils.Claims, materialID uuid.UUID) (*models.Material, error) {
+	material, err := s.materialRepo.FindByID(ctx, materialID)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +82,7 @@ func (s *MaterialService) GetMaterialByID(user *utils.Claims, materialID uuid.UU
 
 	case string(models.RoleTypeGuru):
 		// 🔒 Guru hanya boleh jika ngajar di meeting terkait
-		isGuru, err := s.meetingRepo.IsUserTeachingInMeeting(user.UserID, material.MeetingID)
+		isGuru, err := s.meetingRepo.IsUserTeachingInMeeting(ctx, user.UserID, material.MeetingID)
 		if err != nil {
 			return nil, err
 		}
@@ -80,12 +92,12 @@ func (s *MaterialService) GetMaterialByID(user *utils.Claims, materialID uuid.UU
 		return material, nil
 
 	case string(models.RoleTypeSiswa):
-		meeting, err := s.meetingRepo.FindByID(material.MeetingID)
+		meeting, err := s.meetingRepo.FindByID(ctx, material.MeetingID)
 		if err != nil {
 			return nil, err
 		}
 		// 🔒 Siswa hanya bisa jika sudah beli batch meeting tersebut
-		isPurchased, err := s.purchaseRepo.HasPaid(user.UserID, meeting.BatchID)
+		isPurchased, err := s.purchaseRepo.HasPaid(ctx, user.UserID, meeting.BatchID)
 		if err != nil {
 			return nil, err
 		}
@@ -100,18 +112,18 @@ func (s *MaterialService) GetMaterialByID(user *utils.Claims, materialID uuid.UU
 }
 
 // CreateMaterial creates a new material with the provided details
-func (s *MaterialService) CreateMaterial(user *utils.Claims, meetingID uuid.UUID, body *dto.CreateMaterialRequest) (*models.Material, error) {
+func (s *MaterialService) CreateMaterial(ctx context.Context, user *utils.Claims, meetingID uuid.UUID, body *dto.CreateMaterialRequest) (*models.Material, error) {
 	var material models.Material
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
 
-		meeting, err := s.meetingRepo.WithTx(tx).FindByID(meetingID)
+		meeting, err := s.meetingRepo.WithTx(tx).FindByID(ctx, meetingID)
 		if err != nil {
 			return err
 		}
 
 		if user.Role == string(models.RoleTypeGuru) {
-			ok, err := s.meetingRepo.IsMeetingTaughtByUser(meeting.ID, user.UserID)
+			ok, err := s.meetingRepo.IsMeetingTaughtByUser(ctx, meeting.ID, user.UserID)
 			if err != nil {
 				return fmt.Errorf("failed to check meeting-teacher relation: %w", err)
 			}
@@ -128,12 +140,12 @@ func (s *MaterialService) CreateMaterial(user *utils.Claims, meetingID uuid.UUID
 			Description: utils.SafeNil(body.Description),
 		}
 
-		if err := s.materialRepo.WithTx(tx).Create(materialPtr); err != nil {
+		if err := s.materialRepo.WithTx(tx).Create(ctx, materialPtr); err != nil {
 			return err
 		}
 
 		// ✅ Ambil ulang dari DB untuk dapet semua kolom yang terisi otomatis (CreatedAt, dll)
-		updated, err := s.materialRepo.WithTx(tx).FindByID(materialPtr.ID)
+		updated, err := s.materialRepo.WithTx(tx).FindByID(ctx, materialPtr.ID)
 		if err != nil {
 			return err
 		}
@@ -149,17 +161,17 @@ func (s *MaterialService) CreateMaterial(user *utils.Claims, meetingID uuid.UUID
 }
 
 // UpdateMaterial updates an existing material and its files
-func (s *MaterialService) UpdateMaterial(user *utils.Claims, materialID uuid.UUID, body *dto.UpdateMaterialRequest) (*models.Material, error) {
+func (s *MaterialService) UpdateMaterial(ctx context.Context, user *utils.Claims, materialID uuid.UUID, body *dto.UpdateMaterialRequest) (*models.Material, error) {
 	var updatedMaterial models.Material
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
-		material, err := s.materialRepo.WithTx(tx).FindByID(materialID)
+		material, err := s.materialRepo.WithTx(tx).FindByID(ctx, materialID)
 		if err != nil {
 			return err
 		}
 
 		if user.Role == string(models.RoleTypeGuru) {
-			ok, err := s.meetingRepo.IsMeetingTaughtByUser(material.MeetingID, user.UserID)
+			ok, err := s.meetingRepo.IsMeetingTaughtByUser(ctx, material.MeetingID, user.UserID)
 			if err != nil {
 				return fmt.Errorf("failed to check meeting-teacher relation: %w", err)
 			}
@@ -176,12 +188,12 @@ func (s *MaterialService) UpdateMaterial(user *utils.Claims, materialID uuid.UUI
 			return err
 		}
 
-		if err := s.materialRepo.WithTx(tx).Update(material); err != nil {
+		if err := s.materialRepo.WithTx(tx).Update(ctx, material); err != nil {
 			return err
 		}
 
 		// Ambil ulang assignment lengkap
-		fresh, err := s.materialRepo.WithTx(tx).FindByID(material.ID)
+		fresh, err := s.materialRepo.WithTx(tx).FindByID(ctx, material.ID)
 		if err != nil {
 			return err
 		}
@@ -196,17 +208,17 @@ func (s *MaterialService) UpdateMaterial(user *utils.Claims, materialID uuid.UUI
 }
 
 // DeleteMaterial deletes an material and
-func (s *MaterialService) DeleteMaterial(user *utils.Claims, materialID uuid.UUID) error {
+func (s *MaterialService) DeleteMaterial(ctx context.Context, user *utils.Claims, materialID uuid.UUID) error {
 	var material models.Material
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
-		materialRsp, err := s.materialRepo.WithTx(tx).FindByID(materialID)
+		materialRsp, err := s.materialRepo.WithTx(tx).FindByID(ctx, materialID)
 		if err != nil {
 			return err
 		}
 
 		if user.Role == string(models.RoleTypeGuru) {
-			ok, err := s.meetingRepo.IsMeetingTaughtByUser(materialRsp.MeetingID, user.UserID)
+			ok, err := s.meetingRepo.IsMeetingTaughtByUser(ctx, materialRsp.MeetingID, user.UserID)
 			if err != nil {
 				return fmt.Errorf("failed to check meeting-teacher relation: %w", err)
 			}
@@ -218,7 +230,7 @@ func (s *MaterialService) DeleteMaterial(user *utils.Claims, materialID uuid.UUI
 		material = utils.Safe(materialRsp, models.Material{})
 
 		// Hapus dari DB (files ikut kehapus karena CASCADE)
-		if err := s.materialRepo.WithTx(tx).DeleteByID(materialID); err != nil {
+		if err := s.materialRepo.WithTx(tx).DeleteByID(ctx, materialID); err != nil {
 			return err
 		}
 

@@ -13,12 +13,12 @@ import (
 
 // AttendanceController struct controller
 type AttendanceController struct {
-	attendanceService *services.AttendanceServices
+	attendanceService services.IAttendanceServices
 	db                *gorm.DB
 }
 
 // NewAttendanceController creates a new instance of AttendanceController
-func NewAttendanceController(attendanceService *services.AttendanceServices, db *gorm.DB) *AttendanceController {
+func NewAttendanceController(attendanceService services.IAttendanceServices, db *gorm.DB) *AttendanceController {
 	return &AttendanceController{
 		attendanceService: attendanceService,
 		db:                db,
@@ -27,9 +27,10 @@ func NewAttendanceController(attendanceService *services.AttendanceServices, db 
 
 // GetAllAttendances retrieves a list of attendance records with pagination and filtering
 func (ctrl *AttendanceController) GetAllAttendances(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	opts := utils.ParseQueryOptions(c)
 
-	attendances, total, err := ctrl.attendanceService.GetAllFilteredAttendances(opts)
+	attendances, total, err := ctrl.attendanceService.GetAllFilteredAttendances(ctx, opts)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch attendances", err.Error())
 	}
@@ -45,10 +46,11 @@ func (ctrl *AttendanceController) GetAllAttendances(c *fiber.Ctx) error {
 
 // GetAllAttendancesByBatchSlug retrieves a list of attendance records with pagination and filtering
 func (ctrl *AttendanceController) GetAllAttendancesByBatchSlug(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	opts := utils.ParseQueryOptions(c)
 	batchSlug := c.Params("batchSlug")
 
-	attendances, total, err := ctrl.attendanceService.GetAllFilteredAttendancesByBatchSlug(batchSlug, opts)
+	attendances, total, err := ctrl.attendanceService.GetAllFilteredAttendancesByBatchSlug(ctx, batchSlug, opts)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch attendances", err.Error())
 	}
@@ -64,13 +66,14 @@ func (ctrl *AttendanceController) GetAllAttendancesByBatchSlug(c *fiber.Ctx) err
 
 // GetAttendanceByID retrieves a single attendance record by its ID
 func (ctrl *AttendanceController) GetAttendanceByID(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	attendanceIDParam := c.Params("attendanceID")
 	attendanceID, err := uuid.Parse(attendanceIDParam)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 
-	attendance, err := ctrl.attendanceService.GetAttendanceByID(attendanceID)
+	attendance, err := ctrl.attendanceService.GetAttendanceByID(ctx, attendanceID)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Attendance not found", err.Error())
 	}
@@ -85,6 +88,7 @@ func (ctrl *AttendanceController) GetAttendanceByID(c *fiber.Ctx) error {
 
 // BulkUpsertAttendance is handling for bulk attendance
 func (ctrl *AttendanceController) BulkUpsertAttendance(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	user := c.Locals("user").(*utils.Claims)
 	body := c.Locals("body").(*dto.BulkAttendanceRequest)
 
@@ -93,7 +97,7 @@ func (ctrl *AttendanceController) BulkUpsertAttendance(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid batch ID", err.Error())
 	}
 
-	results, err := ctrl.attendanceService.BulkUpsertAttendance(user, batchID, body)
+	results, err := ctrl.attendanceService.BulkUpsertAttendance(ctx, user, batchID, body)
 	if err != nil {
 		return utils.ErrorResponse(c, 400, "Failed to save attendances", err.Error())
 	}

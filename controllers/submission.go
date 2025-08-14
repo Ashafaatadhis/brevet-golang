@@ -15,12 +15,12 @@ import (
 
 // SubmissionController is struct
 type SubmissionController struct {
-	submissionService *services.SubmissionService
+	submissionService services.ISubmissionService
 	db                *gorm.DB
 }
 
 // NewSubmissionController creates a new instance of SubmissionController
-func NewSubmissionController(submissionService *services.SubmissionService, db *gorm.DB) *SubmissionController {
+func NewSubmissionController(submissionService services.ISubmissionService, db *gorm.DB) *SubmissionController {
 	return &SubmissionController{
 		submissionService: submissionService,
 		db:                db,
@@ -29,6 +29,7 @@ func NewSubmissionController(submissionService *services.SubmissionService, db *
 
 // GetAllSubmissionByAssignmentID for get all
 func (ctrl *SubmissionController) GetAllSubmissionByAssignmentID(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	user := c.Locals("user").(*utils.Claims)
 	assignmentID, err := uuid.Parse(c.Params("assignmentID"))
 	if err != nil {
@@ -37,7 +38,7 @@ func (ctrl *SubmissionController) GetAllSubmissionByAssignmentID(c *fiber.Ctx) e
 
 	opts := utils.ParseQueryOptions(c)
 
-	submissions, total, err := ctrl.submissionService.GetAllSubmissionsByAssignmentUser(assignmentID, user, opts)
+	submissions, total, err := ctrl.submissionService.GetAllSubmissionsByAssignmentUser(ctx, assignmentID, user, opts)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch submissions", err.Error())
 	}
@@ -53,6 +54,7 @@ func (ctrl *SubmissionController) GetAllSubmissionByAssignmentID(c *fiber.Ctx) e
 
 // GetDetailSubmission for get detail
 func (ctrl *SubmissionController) GetDetailSubmission(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	user := c.Locals("user").(*utils.Claims)
 
 	submissionID, err := uuid.Parse(c.Params("submissionID"))
@@ -60,7 +62,7 @@ func (ctrl *SubmissionController) GetDetailSubmission(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid submission ID", err.Error())
 	}
 
-	submission, err := ctrl.submissionService.GetSubmissionDetail(submissionID, user)
+	submission, err := ctrl.submissionService.GetSubmissionDetail(ctx, submissionID, user)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "Submission not found", err.Error())
 	}
@@ -75,6 +77,7 @@ func (ctrl *SubmissionController) GetDetailSubmission(c *fiber.Ctx) error {
 
 // CreateSubmission controller
 func (ctrl *SubmissionController) CreateSubmission(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	body := c.Locals("body").(*dto.CreateSubmissionRequest)
 	user := c.Locals("user").(*utils.Claims)
 
@@ -90,7 +93,7 @@ func (ctrl *SubmissionController) CreateSubmission(c *fiber.Ctx) error {
 		fileURLs = append(fileURLs, f.FileURL)
 	}
 
-	submission, err := ctrl.submissionService.CreateSubmission(user, assignmentID, body.Note, fileURLs)
+	submission, err := ctrl.submissionService.CreateSubmission(ctx, user, assignmentID, body.Note, fileURLs)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to create submission", err.Error())
 	}
@@ -105,6 +108,7 @@ func (ctrl *SubmissionController) CreateSubmission(c *fiber.Ctx) error {
 
 // UpdateSubmission for PATCH
 func (ctrl *SubmissionController) UpdateSubmission(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	body := c.Locals("body").(*dto.UpdateSubmissionRequest)
 	user := c.Locals("user").(*utils.Claims)
 
@@ -113,7 +117,7 @@ func (ctrl *SubmissionController) UpdateSubmission(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid submission ID format", err.Error())
 	}
 
-	submission, err := ctrl.submissionService.UpdateSubmission(user, submissionID, body)
+	submission, err := ctrl.submissionService.UpdateSubmission(ctx, user, submissionID, body)
 	if err != nil {
 		return utils.ErrorResponse(c, 400, "Failed to update submission", err.Error())
 	}
@@ -131,6 +135,7 @@ func (ctrl *SubmissionController) UpdateSubmission(c *fiber.Ctx) error {
 
 // DeleteSubmission for DELETE
 func (ctrl *SubmissionController) DeleteSubmission(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	user := c.Locals("user").(*utils.Claims)
 
 	submissionID, err := uuid.Parse(c.Params("submissionID"))
@@ -138,7 +143,7 @@ func (ctrl *SubmissionController) DeleteSubmission(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid submission ID format", err.Error())
 	}
 
-	if err := ctrl.submissionService.DeleteSubmission(user, submissionID); err != nil {
+	if err := ctrl.submissionService.DeleteSubmission(ctx, user, submissionID); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Failed to delete submission", err.Error())
 	}
 
@@ -147,6 +152,7 @@ func (ctrl *SubmissionController) DeleteSubmission(c *fiber.Ctx) error {
 
 // GetSubmissionGrade untuk lihat nilai & feedback
 func (ctrl *SubmissionController) GetSubmissionGrade(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	user := c.Locals("user").(*utils.Claims)
 
 	submissionID, err := uuid.Parse(c.Params("submissionID"))
@@ -154,7 +160,7 @@ func (ctrl *SubmissionController) GetSubmissionGrade(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid submission ID format", err.Error())
 	}
 
-	submission, err := ctrl.submissionService.GetSubmissionGrade(user, submissionID)
+	submission, err := ctrl.submissionService.GetSubmissionGrade(ctx, user, submissionID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return utils.SuccessResponse(c, fiber.StatusNotFound, "Submission grade not found", nil)
@@ -175,6 +181,7 @@ func (ctrl *SubmissionController) GetSubmissionGrade(c *fiber.Ctx) error {
 
 // GradeSubmission for post
 func (ctrl *SubmissionController) GradeSubmission(c *fiber.Ctx) error {
+	ctx := c.UserContext()
 	user := c.Locals("user").(*utils.Claims)
 	body := c.Locals("body").(*dto.GradeSubmissionRequest)
 	if user.Role != string(models.RoleTypeGuru) {
@@ -186,7 +193,7 @@ func (ctrl *SubmissionController) GradeSubmission(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid submission ID", err.Error())
 	}
 
-	grade, err := ctrl.submissionService.GradeSubmission(user, submissionID, body)
+	grade, err := ctrl.submissionService.GradeSubmission(ctx, user, submissionID, body)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to grade submission", err.Error())
 	}

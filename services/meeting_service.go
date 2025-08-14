@@ -5,6 +5,7 @@ import (
 	"brevet-api/models"
 	"brevet-api/repository"
 	"brevet-api/utils"
+	"context"
 	"fmt"
 
 	"github.com/gofiber/fiber/v2"
@@ -13,23 +14,41 @@ import (
 	"gorm.io/gorm"
 )
 
+// IMeetingService interface
+type IMeetingService interface {
+	GetAllFilteredMeetings(ctx context.Context, opts utils.QueryOptions) ([]models.Meeting, int64, error)
+	GetMeetingsByBatchSlug(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.Meeting, int64, error)
+	GetMeetingByID(ctx context.Context, id uuid.UUID) (*models.Meeting, error)
+	CreateMeeting(ctx context.Context, batchID uuid.UUID, body *dto.CreateMeetingRequest) (*models.Meeting, error)
+	UpdateMeeting(ctx context.Context, batchID uuid.UUID, body *dto.UpdateMeetingRequest) (*models.Meeting, error)
+	DeleteMeeting(ctx context.Context, id uuid.UUID) error
+	AddTeachersToMeeting(ctx context.Context, meetingID uuid.UUID, req *dto.AssignTeachersRequest) (*models.Meeting, error)
+	UpdateTeachersInMeeting(ctx context.Context, meetingID uuid.UUID, req *dto.AssignTeachersRequest) (*models.Meeting, error)
+	RemoveTeachersFromMeeting(ctx context.Context, meetingID uuid.UUID, teacherID uuid.UUID) (*models.Meeting, error)
+	GetTeachersByMeetingIDFiltered(ctx context.Context, meetingID uuid.UUID, opts utils.QueryOptions) ([]models.User, int64, error)
+	GetStudentsByBatchSlugFiltered(ctx context.Context, user *utils.Claims, batchSlug string, opts utils.QueryOptions) ([]models.User, int64, error)
+	GetMeetingsPurchasedByUser(ctx context.Context, userID uuid.UUID, batchSlug string, opts utils.QueryOptions) ([]models.Meeting, int64, error)
+	GetMeetingsTaughtByTeacher(ctx context.Context, userID uuid.UUID, batchSlug string, opts utils.QueryOptions) ([]models.Meeting, int64, error)
+}
+
 // MeetingService provides methods for managing meetings
 type MeetingService struct {
-	meetingRepo  *repository.MeetingRepository
-	batchRepo    *repository.BatchRepository
-	purchaseRepo *repository.PurchaseRepository
-	userRepo     *repository.UserRepository
+	meetingRepo  repository.IMeetingRepository
+	batchRepo    repository.IBatchRepository
+	purchaseRepo repository.IPurchaseRepository
+	userRepo     repository.IUserRepository
 	db           *gorm.DB
 }
 
 // NewMeetingService creates a new instance of MeetingService
-func NewMeetingService(meetingRepo *repository.MeetingRepository, batchRepo *repository.BatchRepository, purchaseRepo *repository.PurchaseRepository, userRepo *repository.UserRepository, db *gorm.DB) *MeetingService {
+func NewMeetingService(meetingRepo repository.IMeetingRepository, batchRepo repository.IBatchRepository,
+	purchaseRepo repository.IPurchaseRepository, userRepo repository.IUserRepository, db *gorm.DB) IMeetingService {
 	return &MeetingService{meetingRepo: meetingRepo, batchRepo: batchRepo, purchaseRepo: purchaseRepo, userRepo: userRepo, db: db}
 }
 
 // GetAllFilteredMeetings retrieves all meetings with pagination and filtering options
-func (s *MeetingService) GetAllFilteredMeetings(opts utils.QueryOptions) ([]models.Meeting, int64, error) {
-	meetings, total, err := s.meetingRepo.GetAllFilteredMeetings(opts)
+func (s *MeetingService) GetAllFilteredMeetings(ctx context.Context, opts utils.QueryOptions) ([]models.Meeting, int64, error) {
+	meetings, total, err := s.meetingRepo.GetAllFilteredMeetings(ctx, opts)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -37,8 +56,8 @@ func (s *MeetingService) GetAllFilteredMeetings(opts utils.QueryOptions) ([]mode
 }
 
 // GetMeetingsByBatchSlug retrieves all meetings with pagination and filtering options
-func (s *MeetingService) GetMeetingsByBatchSlug(batchSlug string, opts utils.QueryOptions) ([]models.Meeting, int64, error) {
-	meetings, total, err := s.meetingRepo.GetMeetingsByBatchSlugFiltered(batchSlug, opts)
+func (s *MeetingService) GetMeetingsByBatchSlug(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.Meeting, int64, error) {
+	meetings, total, err := s.meetingRepo.GetMeetingsByBatchSlugFiltered(ctx, batchSlug, opts)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -46,8 +65,8 @@ func (s *MeetingService) GetMeetingsByBatchSlug(batchSlug string, opts utils.Que
 }
 
 // GetMeetingByID retrieves a meeting by its id
-func (s *MeetingService) GetMeetingByID(id uuid.UUID) (*models.Meeting, error) {
-	meeting, err := s.meetingRepo.FindByID(id)
+func (s *MeetingService) GetMeetingByID(ctx context.Context, id uuid.UUID) (*models.Meeting, error) {
+	meeting, err := s.meetingRepo.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -55,12 +74,12 @@ func (s *MeetingService) GetMeetingByID(id uuid.UUID) (*models.Meeting, error) {
 }
 
 // CreateMeeting creates a new meeting with the provided details
-func (s *MeetingService) CreateMeeting(batchID uuid.UUID, body *dto.CreateMeetingRequest) (*models.Meeting, error) {
+func (s *MeetingService) CreateMeeting(ctx context.Context, batchID uuid.UUID, body *dto.CreateMeetingRequest) (*models.Meeting, error) {
 	var meeting *models.Meeting
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
 
-		_, err := s.batchRepo.WithTx(tx).FindByID(batchID)
+		_, err := s.batchRepo.WithTx(tx).FindByID(ctx, batchID)
 		if err != nil {
 			return err
 		}
@@ -73,12 +92,12 @@ func (s *MeetingService) CreateMeeting(batchID uuid.UUID, body *dto.CreateMeetin
 			Type:        models.MeetingType(body.Type),
 		}
 
-		if err := s.meetingRepo.WithTx(tx).Create(meeting); err != nil {
+		if err := s.meetingRepo.WithTx(tx).Create(ctx, meeting); err != nil {
 			return err
 		}
 
 		// ✅ Ambil ulang dari DB untuk dapet semua kolom yang terisi otomatis (CreatedAt, dll)
-		updated, err := s.meetingRepo.WithTx(tx).FindByID(meeting.ID)
+		updated, err := s.meetingRepo.WithTx(tx).FindByID(ctx, meeting.ID)
 		if err != nil {
 			return err
 		}
@@ -94,13 +113,12 @@ func (s *MeetingService) CreateMeeting(batchID uuid.UUID, body *dto.CreateMeetin
 }
 
 // UpdateMeeting updates an existing meeting with the provided details
-func (s *MeetingService) UpdateMeeting(batchID uuid.UUID, body *dto.UpdateMeetingRequest) (*models.Meeting, error) {
+func (s *MeetingService) UpdateMeeting(ctx context.Context, batchID uuid.UUID, body *dto.UpdateMeetingRequest) (*models.Meeting, error) {
 	var meeting models.Meeting
-	fmt.Println(&body, " TTT")
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
 
-		meetingPtr, err := s.meetingRepo.WithTx(tx).FindByID(batchID)
+		meetingPtr, err := s.meetingRepo.WithTx(tx).FindByID(ctx, batchID)
 		if err != nil {
 			return fmt.Errorf("meeting tidak ditemukan: %w", err)
 		}
@@ -111,12 +129,12 @@ func (s *MeetingService) UpdateMeeting(batchID uuid.UUID, body *dto.UpdateMeetin
 			return fmt.Errorf("failed to copy data: %w", err)
 		}
 
-		if err := s.meetingRepo.WithTx(tx).Update(&meeting); err != nil {
+		if err := s.meetingRepo.WithTx(tx).Update(ctx, &meeting); err != nil {
 			return err
 		}
 
 		// ✅ Ambil ulang dari DB untuk dapet semua kolom yang terisi otomatis (CreatedAt, dll)
-		updated, err := s.meetingRepo.WithTx(tx).FindByID(meeting.ID)
+		updated, err := s.meetingRepo.WithTx(tx).FindByID(ctx, meeting.ID)
 		if err != nil {
 			return err
 		}
@@ -132,17 +150,17 @@ func (s *MeetingService) UpdateMeeting(batchID uuid.UUID, body *dto.UpdateMeetin
 }
 
 // DeleteMeeting deletes a meeting by its ID
-func (s *MeetingService) DeleteMeeting(id uuid.UUID) error {
+func (s *MeetingService) DeleteMeeting(ctx context.Context, id uuid.UUID) error {
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
 		var err error
-		_, err = s.meetingRepo.WithTx(tx).FindByID(id)
+		_, err = s.meetingRepo.WithTx(tx).FindByID(ctx, id)
 		if err != nil {
 			return err
 		}
 
 		// Hapus meeting
-		if err := s.meetingRepo.WithTx(tx).DeleteByID(id); err != nil {
+		if err := s.meetingRepo.WithTx(tx).DeleteByID(ctx, id); err != nil {
 			return err
 		}
 
@@ -157,12 +175,12 @@ func (s *MeetingService) DeleteMeeting(id uuid.UUID) error {
 }
 
 // AddTeachersToMeeting is service for add teacher to meeting
-func (s *MeetingService) AddTeachersToMeeting(meetingID uuid.UUID, req *dto.AssignTeachersRequest) (*models.Meeting, error) {
+func (s *MeetingService) AddTeachersToMeeting(ctx context.Context, meetingID uuid.UUID, req *dto.AssignTeachersRequest) (*models.Meeting, error) {
 	var meeting models.Meeting
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
 
 		// Ambil semua guru berdasarkan ID yang diminta
-		teachers, err := s.userRepo.WithTx(tx).FindByIDs(req.TeacherIDs)
+		teachers, err := s.userRepo.WithTx(tx).FindByIDs(ctx, req.TeacherIDs)
 		if err != nil {
 			return err
 		}
@@ -179,7 +197,7 @@ func (s *MeetingService) AddTeachersToMeeting(meetingID uuid.UUID, req *dto.Assi
 		}
 
 		// Ambil semua user_id guru yang sudah tergabung di meeting ini
-		existingIDs, err := s.meetingRepo.WithTx(tx).GetTeacherIDsByMeetingID(meetingID)
+		existingIDs, err := s.meetingRepo.WithTx(tx).GetTeacherIDsByMeetingID(ctx, meetingID)
 		if err != nil {
 			return err
 		}
@@ -213,7 +231,7 @@ func (s *MeetingService) AddTeachersToMeeting(meetingID uuid.UUID, req *dto.Assi
 		}
 
 		// Tambahkan guru baru
-		meetingResp, err := s.meetingRepo.WithTx(tx).AddTeachers(meetingID, newTeacherIDs)
+		meetingResp, err := s.meetingRepo.WithTx(tx).AddTeachers(ctx, meetingID, newTeacherIDs)
 		if err != nil {
 			return err
 		}
@@ -232,11 +250,11 @@ func (s *MeetingService) AddTeachersToMeeting(meetingID uuid.UUID, req *dto.Assi
 }
 
 // UpdateTeachersInMeeting this function service for update teacher in meeting
-func (s *MeetingService) UpdateTeachersInMeeting(meetingID uuid.UUID, req *dto.AssignTeachersRequest) (*models.Meeting, error) {
+func (s *MeetingService) UpdateTeachersInMeeting(ctx context.Context, meetingID uuid.UUID, req *dto.AssignTeachersRequest) (*models.Meeting, error) {
 	var meeting models.Meeting
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
 		// Ambil user dari DB
-		teachers, err := s.userRepo.WithTx(tx).FindByIDs(req.TeacherIDs)
+		teachers, err := s.userRepo.WithTx(tx).FindByIDs(ctx, req.TeacherIDs)
 		if err != nil {
 			return err
 		}
@@ -254,7 +272,7 @@ func (s *MeetingService) UpdateTeachersInMeeting(meetingID uuid.UUID, req *dto.A
 		}
 
 		// Update guru di meeting
-		meetingPtr, err := s.meetingRepo.WithTx(tx).UpdateTeachers(meetingID, req.TeacherIDs)
+		meetingPtr, err := s.meetingRepo.WithTx(tx).UpdateTeachers(ctx, meetingID, req.TeacherIDs)
 		if err != nil {
 			return err
 		}
@@ -273,11 +291,11 @@ func (s *MeetingService) UpdateTeachersInMeeting(meetingID uuid.UUID, req *dto.A
 }
 
 // RemoveTeachersFromMeeting this function repo for remove teacher
-func (s *MeetingService) RemoveTeachersFromMeeting(meetingID uuid.UUID, teacherID uuid.UUID) (*models.Meeting, error) {
+func (s *MeetingService) RemoveTeachersFromMeeting(ctx context.Context, meetingID uuid.UUID, teacherID uuid.UUID) (*models.Meeting, error) {
 	var meeting models.Meeting
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
 		// Ambil user dari DB
-		teachers, err := s.userRepo.WithTx(tx).FindByID(teacherID)
+		teachers, err := s.userRepo.WithTx(tx).FindByID(ctx, teacherID)
 		if err != nil {
 			return err
 		}
@@ -288,7 +306,7 @@ func (s *MeetingService) RemoveTeachersFromMeeting(meetingID uuid.UUID, teacherI
 		}
 
 		// Hapus guru dari meeting
-		meetingPtr, err := s.meetingRepo.WithTx(tx).RemoveTeacher(meetingID, teacherID)
+		meetingPtr, err := s.meetingRepo.WithTx(tx).RemoveTeacher(ctx, meetingID, teacherID)
 		if err != nil {
 			return err
 		}
@@ -307,8 +325,8 @@ func (s *MeetingService) RemoveTeachersFromMeeting(meetingID uuid.UUID, teacherI
 }
 
 // GetTeachersByMeetingIDFiltered is function get all teachers by meeting id
-func (s *MeetingService) GetTeachersByMeetingIDFiltered(meetingID uuid.UUID, opts utils.QueryOptions) ([]models.User, int64, error) {
-	meetings, total, err := s.meetingRepo.GetTeachersByMeetingIDFiltered(meetingID, opts)
+func (s *MeetingService) GetTeachersByMeetingIDFiltered(ctx context.Context, meetingID uuid.UUID, opts utils.QueryOptions) ([]models.User, int64, error) {
+	meetings, total, err := s.meetingRepo.GetTeachersByMeetingIDFiltered(ctx, meetingID, opts)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -316,12 +334,12 @@ func (s *MeetingService) GetTeachersByMeetingIDFiltered(meetingID uuid.UUID, opt
 }
 
 // GetStudentsByBatchSlugFiltered for get all students by batch
-func (s *MeetingService) GetStudentsByBatchSlugFiltered(user *utils.Claims, batchSlug string, opts utils.QueryOptions) ([]models.User, int64, error) {
+func (s *MeetingService) GetStudentsByBatchSlugFiltered(ctx context.Context, user *utils.Claims, batchSlug string, opts utils.QueryOptions) ([]models.User, int64, error) {
 	if models.RoleType(user.Role) == models.RoleTypeAdmin {
-		return s.meetingRepo.GetStudentsByBatchSlugFiltered(batchSlug, opts)
+		return s.meetingRepo.GetStudentsByBatchSlugFiltered(ctx, batchSlug, opts)
 	}
 
-	owned, err := s.meetingRepo.IsBatchOwnedByUser(user.UserID, batchSlug)
+	owned, err := s.meetingRepo.IsBatchOwnedByUser(ctx, user.UserID, batchSlug)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -329,17 +347,17 @@ func (s *MeetingService) GetStudentsByBatchSlugFiltered(user *utils.Claims, batc
 		return nil, 0, fiber.NewError(fiber.StatusForbidden, "Anda tidak punya akses ke batch ini")
 	}
 
-	return s.meetingRepo.GetStudentsByBatchSlugFiltered(batchSlug, opts)
+	return s.meetingRepo.GetStudentsByBatchSlugFiltered(ctx, batchSlug, opts)
 }
 
 // GetMeetingsPurchasedByUser is service for get meetings where the user has purchased
-func (s *MeetingService) GetMeetingsPurchasedByUser(userID uuid.UUID, batchSlug string, opts utils.QueryOptions) ([]models.Meeting, int64, error) {
-	batch, err := s.batchRepo.GetBatchBySlug(batchSlug)
+func (s *MeetingService) GetMeetingsPurchasedByUser(ctx context.Context, userID uuid.UUID, batchSlug string, opts utils.QueryOptions) ([]models.Meeting, int64, error) {
+	batch, err := s.batchRepo.GetBatchBySlug(ctx, batchSlug)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	hasPaid, err := s.purchaseRepo.HasPaid(userID, batch.ID)
+	hasPaid, err := s.purchaseRepo.HasPaid(ctx, userID, batch.ID)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -347,13 +365,13 @@ func (s *MeetingService) GetMeetingsPurchasedByUser(userID uuid.UUID, batchSlug 
 		return nil, 0, fiber.NewError(fiber.StatusForbidden, "Anda belum membeli batch ini")
 	}
 
-	return s.meetingRepo.GetMeetingsByBatchSlugFiltered(batchSlug, opts)
+	return s.meetingRepo.GetMeetingsByBatchSlugFiltered(ctx, batchSlug, opts)
 }
 
 // GetMeetingsTaughtByTeacher is service for get meetings where the teacher has taught
-func (s *MeetingService) GetMeetingsTaughtByTeacher(userID uuid.UUID, batchSlug string, opts utils.QueryOptions) ([]models.Meeting, int64, error) {
+func (s *MeetingService) GetMeetingsTaughtByTeacher(ctx context.Context, userID uuid.UUID, batchSlug string, opts utils.QueryOptions) ([]models.Meeting, int64, error) {
 	// 🔒 Validasi kepemilikan batch
-	owned, err := s.meetingRepo.IsBatchOwnedByUser(userID, batchSlug)
+	owned, err := s.meetingRepo.IsBatchOwnedByUser(ctx, userID, batchSlug)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -361,5 +379,5 @@ func (s *MeetingService) GetMeetingsTaughtByTeacher(userID uuid.UUID, batchSlug 
 		return nil, 0, fiber.NewError(fiber.StatusForbidden, "Anda tidak mengajar di batch ini")
 	}
 
-	return s.meetingRepo.GetMeetingsByBatchSlugFiltered(batchSlug, opts)
+	return s.meetingRepo.GetMeetingsByBatchSlugFiltered(ctx, batchSlug, opts)
 }

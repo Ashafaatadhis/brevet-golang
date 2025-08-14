@@ -5,6 +5,7 @@ import (
 	"brevet-api/helpers"
 	"brevet-api/models"
 	"brevet-api/repository"
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -22,23 +23,38 @@ import (
 	"gorm.io/gorm"
 )
 
+// IPurchaseService interface
+type IPurchaseService interface {
+	GetAllFilteredPurchases(ctx context.Context, opts utils.QueryOptions) ([]models.Purchase, int64, error)
+	GetPurchaseByID(ctx context.Context, id uuid.UUID) (*models.Purchase, error)
+	HasPaid(ctx context.Context, userID uuid.UUID, batchID uuid.UUID) (bool, error)
+	generateAndSendReceipt(purchase *models.Purchase) error
+	GetPaidBatchIDs(ctx context.Context, userID string) ([]string, error)
+	CreatePurchase(ctx context.Context, userID uuid.UUID, batchID uuid.UUID) (*models.Purchase, error)
+	UpdateStatusPayment(ctx context.Context, purchaseID uuid.UUID, body *dto.UpdateStatusPayment) (*models.Purchase, error)
+	PayPurchase(ctx context.Context, userID uuid.UUID, purchaseID uuid.UUID, body *dto.PayPurchaseRequest) (*models.Purchase, error)
+	CancelPurchase(ctx context.Context, userID, purchaseID uuid.UUID) (*models.Purchase, error)
+}
+
 // PurchaseService provides methods for managing purchases
 type PurchaseService struct {
-	purchaseRepo *repository.PurchaseRepository
-	userRepo     *repository.UserRepository
-	batchRepo    *repository.BatchRepository
-	emailService *EmailService
+	purchaseRepo repository.IPurchaseRepository
+	userRepo     repository.IUserRepository
+	batchRepo    repository.IBatchRepository
+	emailService IEmailService
 	db           *gorm.DB
 }
 
 // NewPurchaseService creates a new instance of PurchaseService
-func NewPurchaseService(purchaseRepository *repository.PurchaseRepository, batchRepo *repository.BatchRepository, emailService *EmailService, db *gorm.DB) *PurchaseService {
-	return &PurchaseService{purchaseRepo: purchaseRepository, batchRepo: batchRepo, emailService: emailService, db: db}
+func NewPurchaseService(purchaseRepository repository.IPurchaseRepository, userRepo repository.IUserRepository,
+	batchRepo repository.IBatchRepository,
+	emailService IEmailService, db *gorm.DB) IPurchaseService {
+	return &PurchaseService{purchaseRepo: purchaseRepository, userRepo: userRepo, batchRepo: batchRepo, emailService: emailService, db: db}
 }
 
 // GetAllFilteredPurchases retrieves all purchases with pagination and filtering options
-func (s *PurchaseService) GetAllFilteredPurchases(opts utils.QueryOptions) ([]models.Purchase, int64, error) {
-	purchases, total, err := s.purchaseRepo.GetAllFilteredPurchases(opts)
+func (s *PurchaseService) GetAllFilteredPurchases(ctx context.Context, opts utils.QueryOptions) ([]models.Purchase, int64, error) {
+	purchases, total, err := s.purchaseRepo.GetAllFilteredPurchases(ctx, opts)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -46,8 +62,8 @@ func (s *PurchaseService) GetAllFilteredPurchases(opts utils.QueryOptions) ([]mo
 }
 
 // GetPurchaseByID retrieves a course by its slug
-func (s *PurchaseService) GetPurchaseByID(id uuid.UUID) (*models.Purchase, error) {
-	purchase, err := s.purchaseRepo.GetPurchaseByID(id)
+func (s *PurchaseService) GetPurchaseByID(ctx context.Context, id uuid.UUID) (*models.Purchase, error) {
+	purchase, err := s.purchaseRepo.GetPurchaseByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -55,8 +71,8 @@ func (s *PurchaseService) GetPurchaseByID(id uuid.UUID) (*models.Purchase, error
 }
 
 // HasPaid is for check user has paid or not
-func (s *PurchaseService) HasPaid(userID uuid.UUID, batchID uuid.UUID) (bool, error) {
-	return s.purchaseRepo.HasPaid(userID, batchID)
+func (s *PurchaseService) HasPaid(ctx context.Context, userID uuid.UUID, batchID uuid.UUID) (bool, error) {
+	return s.purchaseRepo.HasPaid(ctx, userID, batchID)
 }
 
 func (s *PurchaseService) generateAndSendReceipt(purchase *models.Purchase) error {
@@ -170,12 +186,12 @@ func (s *PurchaseService) generateAndSendReceipt(purchase *models.Purchase) erro
 }
 
 // GetPaidBatchIDs for get all batch where user has paid
-func (s *PurchaseService) GetPaidBatchIDs(userID string) ([]string, error) {
-	return s.purchaseRepo.GetPaidBatchIDs(userID)
+func (s *PurchaseService) GetPaidBatchIDs(ctx context.Context, userID string) ([]string, error) {
+	return s.purchaseRepo.GetPaidBatchIDs(ctx, userID)
 }
 
 // CreatePurchase is for create purchase
-func (s *PurchaseService) CreatePurchase(userID uuid.UUID, batchID uuid.UUID) (*models.Purchase, error) {
+func (s *PurchaseService) CreatePurchase(ctx context.Context, userID uuid.UUID, batchID uuid.UUID) (*models.Purchase, error) {
 	var result *models.Purchase
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
@@ -183,7 +199,7 @@ func (s *PurchaseService) CreatePurchase(userID uuid.UUID, batchID uuid.UUID) (*
 		userRepo := s.userRepo.WithTx(tx)
 
 		// 1. Cek apakah sudah pernah beli (pakai tx)
-		hasPaid, err := purchaseRepo.HasPurchaseWithStatus(userID, batchID,
+		hasPaid, err := purchaseRepo.HasPurchaseWithStatus(ctx, userID, batchID,
 			[]models.PaymentStatus{
 				models.Pending, models.WaitingConfirmation, models.Paid,
 			}...,
@@ -196,7 +212,7 @@ func (s *PurchaseService) CreatePurchase(userID uuid.UUID, batchID uuid.UUID) (*
 		}
 
 		// 2. Ambil user
-		user, err := userRepo.WithTx(tx).FindByID(userID)
+		user, err := userRepo.FindByID(ctx, userID)
 		if err != nil {
 			return fmt.Errorf("User tidak ditemukan: %w", err)
 		}
@@ -205,7 +221,7 @@ func (s *PurchaseService) CreatePurchase(userID uuid.UUID, batchID uuid.UUID) (*
 		}
 
 		// this leak exist when user group type is not verified by admin
-		allowed, err := purchaseRepo.IsGroupTypeAllowedForBatch(batchID, *user.Profile.GroupType)
+		allowed, err := purchaseRepo.IsGroupTypeAllowedForBatch(ctx, batchID, *user.Profile.GroupType)
 		if err != nil {
 			return fmt.Errorf("gagal validasi group type batch: %w", err)
 		}
@@ -214,7 +230,7 @@ func (s *PurchaseService) CreatePurchase(userID uuid.UUID, batchID uuid.UUID) (*
 		}
 
 		// 3. Ambil harga
-		price, err := purchaseRepo.GetPriceByGroupType(user.Profile.GroupType)
+		price, err := purchaseRepo.GetPriceByGroupType(ctx, user.Profile.GroupType)
 		if err != nil {
 			return fmt.Errorf("harga untuk group_type '%s' tidak ditemukan: %w", *user.Profile.GroupType, err)
 		}
@@ -232,12 +248,12 @@ func (s *PurchaseService) CreatePurchase(userID uuid.UUID, batchID uuid.UUID) (*
 			ExpiredAt:      &expiredAt,
 			PaymentStatus:  models.Pending,
 		}
-		if err := purchaseRepo.Create(purchase); err != nil {
+		if err := purchaseRepo.Create(ctx, purchase); err != nil {
 			return err
 		}
 
 		// 5. Ambil ulang setelah insert (pakai tx juga)
-		result, err = purchaseRepo.GetPurchaseByID(purchase.ID)
+		result, err = purchaseRepo.GetPurchaseByID(ctx, purchase.ID)
 		if err != nil {
 			return fmt.Errorf("Gagal mengambil ulang purchase: %w", err)
 		}
@@ -252,14 +268,14 @@ func (s *PurchaseService) CreatePurchase(userID uuid.UUID, batchID uuid.UUID) (*
 }
 
 // UpdateStatusPayment verification payment service
-func (s *PurchaseService) UpdateStatusPayment(purchaseID uuid.UUID, body *dto.UpdateStatusPayment) (*models.Purchase, error) {
+func (s *PurchaseService) UpdateStatusPayment(ctx context.Context, purchaseID uuid.UUID, body *dto.UpdateStatusPayment) (*models.Purchase, error) {
 	var result *models.Purchase
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
 		purchaseRepo := s.purchaseRepo.WithTx(tx)
 		batchRepo := s.batchRepo.WithTx(tx).WithLock()
 
-		purchase, err := purchaseRepo.GetPurchaseByID(purchaseID)
+		purchase, err := purchaseRepo.GetPurchaseByID(ctx, purchaseID)
 		if err != nil {
 			return fmt.Errorf("data tidak ditemukan: %w", err)
 		}
@@ -269,12 +285,12 @@ func (s *PurchaseService) UpdateStatusPayment(purchaseID uuid.UUID, body *dto.Up
 		// }
 
 		if body.PaymentStatus == models.Paid {
-			batch, err := batchRepo.FindByID(*purchase.BatchID)
+			batch, err := batchRepo.FindByID(ctx, *purchase.BatchID)
 			if err != nil {
 				return fmt.Errorf("batch tidak ditemukan: %w", err)
 			}
 
-			count, err := purchaseRepo.CountPaidByBatchID(*purchase.BatchID)
+			count, err := purchaseRepo.CountPaidByBatchID(ctx, *purchase.BatchID)
 			if err != nil {
 				return fmt.Errorf("gagal menghitung paid: %w", err)
 			}
@@ -291,11 +307,11 @@ func (s *PurchaseService) UpdateStatusPayment(purchaseID uuid.UUID, body *dto.Up
 		}
 
 		purchase.PaymentStatus = body.PaymentStatus
-		if err := purchaseRepo.Update(purchase); err != nil {
+		if err := purchaseRepo.Update(ctx, purchase); err != nil {
 			return fmt.Errorf("gagal update status: %w", err)
 		}
 
-		result, err = s.purchaseRepo.WithTx(tx).GetPurchaseByID(purchase.ID)
+		result, err = s.purchaseRepo.WithTx(tx).GetPurchaseByID(ctx, purchase.ID)
 		if err != nil {
 			return fmt.Errorf("gagal mengambil ulang purchase: %w", err)
 		}
@@ -311,9 +327,9 @@ func (s *PurchaseService) UpdateStatusPayment(purchaseID uuid.UUID, body *dto.Up
 }
 
 // PayPurchase is for pay purchase
-func (s *PurchaseService) PayPurchase(userID uuid.UUID, purchaseID uuid.UUID, body *dto.PayPurchaseRequest) (*models.Purchase, error) {
+func (s *PurchaseService) PayPurchase(ctx context.Context, userID uuid.UUID, purchaseID uuid.UUID, body *dto.PayPurchaseRequest) (*models.Purchase, error) {
 	// Ambil purchase
-	purchase, err := s.purchaseRepo.FindByID(purchaseID)
+	purchase, err := s.purchaseRepo.FindByID(ctx, purchaseID)
 	if err != nil {
 		return nil, fmt.Errorf("purchase tidak ditemukan")
 	}
@@ -340,11 +356,11 @@ func (s *PurchaseService) PayPurchase(userID uuid.UUID, purchaseID uuid.UUID, bo
 	purchase.BuyerBankAccountNumber = &body.BuyerBankAccountNumber
 	purchase.UpdatedAt = time.Now()
 
-	if err := s.purchaseRepo.Update(purchase); err != nil {
+	if err := s.purchaseRepo.Update(ctx, purchase); err != nil {
 		return nil, err
 	}
 
-	purchaseWithPrice, err := s.purchaseRepo.GetPurchaseByID(purchase.ID)
+	purchaseWithPrice, err := s.purchaseRepo.GetPurchaseByID(ctx, purchase.ID)
 	if err != nil {
 		return nil, fmt.Errorf("Gagal mengambil ulang purchase: %w", err)
 	}
@@ -354,8 +370,8 @@ func (s *PurchaseService) PayPurchase(userID uuid.UUID, purchaseID uuid.UUID, bo
 }
 
 // CancelPurchase is using for cancel purchase
-func (s *PurchaseService) CancelPurchase(userID, purchaseID uuid.UUID) (*models.Purchase, error) {
-	purchase, err := s.purchaseRepo.FindByID(purchaseID)
+func (s *PurchaseService) CancelPurchase(ctx context.Context, userID, purchaseID uuid.UUID) (*models.Purchase, error) {
+	purchase, err := s.purchaseRepo.FindByID(ctx, purchaseID)
 	if err != nil {
 		return nil, fmt.Errorf("purchase tidak ditemukan")
 	}
@@ -374,12 +390,12 @@ func (s *PurchaseService) CancelPurchase(userID, purchaseID uuid.UUID) (*models.
 	purchase.PaymentStatus = models.Cancelled
 	purchase.UpdatedAt = time.Now()
 
-	err = s.purchaseRepo.Update(purchase)
+	err = s.purchaseRepo.Update(ctx, purchase)
 	if err != nil {
 		return nil, err
 	}
 
-	purchaseWithPrice, err := s.purchaseRepo.GetPurchaseByID(purchase.ID)
+	purchaseWithPrice, err := s.purchaseRepo.GetPurchaseByID(ctx, purchase.ID)
 	if err != nil {
 		return nil, fmt.Errorf("Gagal mengambil ulang purchase: %w", err)
 	}

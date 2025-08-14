@@ -16,23 +16,24 @@ import (
 
 // UserController represents the authentication controller
 type UserController struct {
-	userService *services.UserService
-	authService *services.AuthService
+	userService services.IUserService
+	authService services.IAuthService
 	db          *gorm.DB
 }
 
 // NewUserController is a constructor for UserController
-func NewUserController(userService *services.UserService, authService *services.AuthService, db *gorm.DB) *UserController {
+func NewUserController(userService services.IUserService, authService services.IAuthService, db *gorm.DB) *UserController {
 	return &UserController{userService: userService, authService: authService, db: db}
 }
 
 // GetAllUsers retrieves all users
 func (ctrl *UserController) GetAllUsers(c *fiber.Ctx) error {
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 	log.Info("GetAllUsers handler called")
 	opts := utils.ParseQueryOptions(c)
 
-	users, total, err := ctrl.userService.GetAllFilteredUsers(opts)
+	users, total, err := ctrl.userService.GetAllFilteredUsers(ctx, opts)
 	if err != nil {
 		log.WithError(err).Error("Gagal mengambil daftar user")
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch users", err.Error())
@@ -50,7 +51,8 @@ func (ctrl *UserController) GetAllUsers(c *fiber.Ctx) error {
 
 // GetUserByID is represent to get user by id
 func (ctrl *UserController) GetUserByID(c *fiber.Ctx) error {
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 	idParam := c.Params("id")
 	log = log.WithField("user_id", idParam)
 	log.Info("GetUserByID handler called")
@@ -60,7 +62,7 @@ func (ctrl *UserController) GetUserByID(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 
-	user, err := ctrl.userService.GetUserByID(id) // pastikan parameternya uuid.UUID
+	user, err := ctrl.userService.GetUserByID(ctx, id) // pastikan parameternya uuid.UUID
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -82,11 +84,12 @@ func (ctrl *UserController) GetUserByID(c *fiber.Ctx) error {
 
 // GetProfile retrieves the profile of the authenticated user
 func (ctrl *UserController) GetProfile(c *fiber.Ctx) error {
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 	claims := c.Locals("user").(*utils.Claims)
 	log = log.WithField("user_id", claims.UserID)
 	log.Info("GetProfile handler called")
-	userResp, err := ctrl.userService.GetProfileResponseByID(claims.UserID)
+	userResp, err := ctrl.userService.GetProfileResponseByID(ctx, claims.UserID)
 	if err != nil {
 		log.WithError(err).Warn("User tidak ditemukan saat ambil profil")
 		return utils.ErrorResponse(c, fiber.StatusNotFound, "User not found", err.Error())
@@ -97,7 +100,8 @@ func (ctrl *UserController) GetProfile(c *fiber.Ctx) error {
 
 // CreateUserWithProfile is for create user
 func (ctrl *UserController) CreateUserWithProfile(c *fiber.Ctx) error {
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 	log.Info("CreateUserWithProfile handler called")
 	body := c.Locals("body").(*dto.CreateUserWithProfileRequest)
 
@@ -114,7 +118,7 @@ func (ctrl *UserController) CreateUserWithProfile(c *fiber.Ctx) error {
 	}
 
 	// Delegasikan ke service
-	userResp, err := ctrl.userService.CreateUserWithProfile(body)
+	userResp, err := ctrl.userService.CreateUserWithProfile(ctx, body)
 	if err != nil {
 		log.WithError(err).Error("Gagal membuat user")
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Gagal membuat user", err.Error())
@@ -125,7 +129,8 @@ func (ctrl *UserController) CreateUserWithProfile(c *fiber.Ctx) error {
 
 // UpdateUserWithProfile untuk controler update user
 func (ctrl *UserController) UpdateUserWithProfile(c *fiber.Ctx) error {
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 	userIDStr := c.Params("id")
 	log = log.WithField("user_id", userIDStr)
 	log.Info("UpdateUserWithProfile handler called")
@@ -138,7 +143,7 @@ func (ctrl *UserController) UpdateUserWithProfile(c *fiber.Ctx) error {
 	body := c.Locals("body").(*dto.UpdateUserWithProfileRequest)
 
 	// Delegasikan semua ke service
-	userResp, err := ctrl.userService.UpdateUserWithProfile(userID, body)
+	userResp, err := ctrl.userService.UpdateUserWithProfile(ctx, userID, body)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			log.Warn("User tidak ditemukan saat update")
@@ -153,7 +158,8 @@ func (ctrl *UserController) UpdateUserWithProfile(c *fiber.Ctx) error {
 
 // DeleteUserByID for delete user controller
 func (ctrl *UserController) DeleteUserByID(c *fiber.Ctx) error {
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 	userIDStr := c.Params("id")
 	log = log.WithField("user_id", userIDStr)
 	log.Info("DeleteUserByID handler called")
@@ -164,7 +170,7 @@ func (ctrl *UserController) DeleteUserByID(c *fiber.Ctx) error {
 	}
 
 	// Delegasi ke service
-	if err := ctrl.userService.DeleteUserByID(userID); err != nil {
+	if err := ctrl.userService.DeleteUserByID(ctx, userID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			log.Warn("User tidak ditemukan saat hapus")
 			return utils.ErrorResponse(c, fiber.StatusNotFound, "User tidak ditemukan", nil)
@@ -178,7 +184,8 @@ func (ctrl *UserController) DeleteUserByID(c *fiber.Ctx) error {
 
 // UpdateMyProfile updates the profile of the authenticated user
 func (ctrl *UserController) UpdateMyProfile(c *fiber.Ctx) error {
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 
 	claims := c.Locals("user").(*utils.Claims)
 	userID := claims.UserID
@@ -188,7 +195,7 @@ func (ctrl *UserController) UpdateMyProfile(c *fiber.Ctx) error {
 	body := c.Locals("body").(*dto.UpdateMyProfile)
 
 	// Delegasikan semuanya ke service
-	userResp, err := ctrl.userService.UpdateMyProfile(userID, body)
+	userResp, err := ctrl.userService.UpdateMyProfile(ctx, userID, body)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			log.Warn("User tidak ditemukan saat update profil")

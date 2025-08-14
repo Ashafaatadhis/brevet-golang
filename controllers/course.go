@@ -14,12 +14,12 @@ import (
 
 // CourseController handles course-related operations
 type CourseController struct {
-	courseService *services.CourseService
+	courseService services.ICourseService
 	db            *gorm.DB
 }
 
 // NewCourseController creates a new CourseController
-func NewCourseController(courseService *services.CourseService, db *gorm.DB) *CourseController {
+func NewCourseController(courseService services.ICourseService, db *gorm.DB) *CourseController {
 	return &CourseController{
 		courseService: courseService,
 		db:            db,
@@ -28,11 +28,12 @@ func NewCourseController(courseService *services.CourseService, db *gorm.DB) *Co
 
 // GetAllCourses retrieves a list of courses with pagination and filtering options
 func (ctrl *CourseController) GetAllCourses(c *fiber.Ctx) error {
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 	log.Info("GetAllCourses handler called")
 	opts := utils.ParseQueryOptions(c)
 
-	courses, total, err := ctrl.courseService.GetAllFilteredCourses(opts)
+	courses, total, err := ctrl.courseService.GetAllFilteredCourses(ctx, opts)
 	if err != nil {
 		log.WithError(err).Error("Gagal mengambil daftar kursus")
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch courses", err.Error())
@@ -50,12 +51,12 @@ func (ctrl *CourseController) GetAllCourses(c *fiber.Ctx) error {
 
 // GetCourseBySlug retrieves a course by its slug (ID)
 func (ctrl *CourseController) GetCourseBySlug(c *fiber.Ctx) error {
-
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 	log.Info("GetCourseBySlug handler called")
 	slugParam := c.Params("slug")
 	log = log.WithField("slug", slugParam)
-	course, err := ctrl.courseService.GetCourseBySlug(slugParam)
+	course, err := ctrl.courseService.GetCourseBySlug(ctx, slugParam)
 	if err != nil {
 		log.WithError(err).Warn("Kursus tidak ditemukan")
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Course Doesn't Exist", err.Error())
@@ -72,12 +73,13 @@ func (ctrl *CourseController) GetCourseBySlug(c *fiber.Ctx) error {
 
 // CreateCourse creates a new course with the provided details
 func (ctrl *CourseController) CreateCourse(c *fiber.Ctx) error {
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 	body := c.Locals("body").(*dto.CreateCourseRequest)
 	user := c.Locals("user").(*utils.Claims)
 	log = log.WithField("user_id", user.ID)
 	log.Info("CreateCourse handler called")
-	course, err := ctrl.courseService.CreateCourse(body)
+	course, err := ctrl.courseService.CreateCourse(ctx, body)
 	if err != nil {
 		log.WithError(err).Error("Gagal membuat kursus")
 		return utils.ErrorResponse(c, 400, "Failed to create course", err.Error())
@@ -94,7 +96,8 @@ func (ctrl *CourseController) CreateCourse(c *fiber.Ctx) error {
 
 // UpdateCourse updates an existing course with the provided details
 func (ctrl *CourseController) UpdateCourse(c *fiber.Ctx) error {
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 	user := c.Locals("user").(*utils.Claims)
 	log = log.WithField("user_id", user.ID)
 	idParam := c.Params("id")
@@ -109,7 +112,7 @@ func (ctrl *CourseController) UpdateCourse(c *fiber.Ctx) error {
 	}
 	body := c.Locals("body").(*dto.UpdateCourseRequest)
 
-	course, err := ctrl.courseService.UpdateCourse(id, body)
+	course, err := ctrl.courseService.UpdateCourse(ctx, id, body)
 	if err != nil {
 		log.WithError(err).Error("Gagal memperbarui kursus")
 		return utils.ErrorResponse(c, 400, "Failed to update course", err.Error())
@@ -126,7 +129,8 @@ func (ctrl *CourseController) UpdateCourse(c *fiber.Ctx) error {
 
 // DeleteCourse deletes a course by its ID
 func (ctrl *CourseController) DeleteCourse(c *fiber.Ctx) error {
-	log := helpers.LoggerFromCtx(c.UserContext())
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
 	user := c.Locals("user").(*utils.Claims)
 	log = log.WithField("user_id", user.ID)
 
@@ -140,7 +144,7 @@ func (ctrl *CourseController) DeleteCourse(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid UUID format", err.Error())
 	}
 
-	if err := ctrl.courseService.DeleteCourse(id); err != nil {
+	if err := ctrl.courseService.DeleteCourse(ctx, id); err != nil {
 		log.WithError(err).Error("Gagal menghapus kursus")
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to delete course", err.Error())
 	}

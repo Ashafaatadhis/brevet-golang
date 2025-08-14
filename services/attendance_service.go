@@ -5,29 +5,38 @@ import (
 	"brevet-api/models"
 	"brevet-api/repository"
 	"brevet-api/utils"
+	"context"
 	"fmt"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
+// IAttendanceServices interface
+type IAttendanceServices interface {
+	GetAllFilteredAttendances(ctx context.Context, opts utils.QueryOptions) ([]models.Attendance, int64, error)
+	GetAllFilteredAttendancesByBatchSlug(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.Attendance, int64, error)
+	GetAttendanceByID(ctx context.Context, attendanceID uuid.UUID) (*models.Attendance, error)
+	BulkUpsertAttendance(ctx context.Context, user *utils.Claims, batchID uuid.UUID, req *dto.BulkAttendanceRequest) ([]models.Attendance, error)
+}
+
 // AttendanceServices provides methods for managing assignments
 type AttendanceServices struct {
-	attendanceRepo *repository.AttendanceRepository
-	meetingRepo    *repository.MeetingRepository
-	purchaseRepo   *repository.PurchaseRepository
+	attendanceRepo repository.IAttendanceRepository
+	meetingRepo    repository.IMeetingRepository
+	purchaseRepo   repository.IPurchaseRepository
 	db             *gorm.DB
 }
 
 // NewAttendanceService creates a new instance of AssignmentService
-func NewAttendanceService(attendanceRepo *repository.AttendanceRepository, meetingRepo *repository.MeetingRepository,
-	purchaseRepo *repository.PurchaseRepository, db *gorm.DB) *AttendanceServices {
+func NewAttendanceService(attendanceRepo repository.IAttendanceRepository, meetingRepo repository.IMeetingRepository,
+	purchaseRepo repository.IPurchaseRepository, db *gorm.DB) IAttendanceServices {
 	return &AttendanceServices{attendanceRepo: attendanceRepo, meetingRepo: meetingRepo, purchaseRepo: purchaseRepo, db: db}
 }
 
 // GetAllFilteredAttendances retrieves all attendances with pagination and filtering options
-func (s *AttendanceServices) GetAllFilteredAttendances(opts utils.QueryOptions) ([]models.Attendance, int64, error) {
-	attendances, total, err := s.attendanceRepo.GetAllFilteredAttendances(opts)
+func (s *AttendanceServices) GetAllFilteredAttendances(ctx context.Context, opts utils.QueryOptions) ([]models.Attendance, int64, error) {
+	attendances, total, err := s.attendanceRepo.GetAllFilteredAttendances(ctx, opts)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -35,8 +44,8 @@ func (s *AttendanceServices) GetAllFilteredAttendances(opts utils.QueryOptions) 
 }
 
 // GetAllFilteredAttendancesByBatchSlug retrieves all attendances with pagination and filtering options
-func (s *AttendanceServices) GetAllFilteredAttendancesByBatchSlug(batchSlug string, opts utils.QueryOptions) ([]models.Attendance, int64, error) {
-	attendances, total, err := s.attendanceRepo.GetAllFilteredAttendancesByBatchSlug(batchSlug, opts)
+func (s *AttendanceServices) GetAllFilteredAttendancesByBatchSlug(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.Attendance, int64, error) {
+	attendances, total, err := s.attendanceRepo.GetAllFilteredAttendancesByBatchSlug(ctx, batchSlug, opts)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -44,16 +53,16 @@ func (s *AttendanceServices) GetAllFilteredAttendancesByBatchSlug(batchSlug stri
 }
 
 // GetAttendanceByID retrieves a single attendance by its ID
-func (s *AttendanceServices) GetAttendanceByID(attendanceID uuid.UUID) (*models.Attendance, error) {
-	return s.attendanceRepo.FindByID(attendanceID)
+func (s *AttendanceServices) GetAttendanceByID(ctx context.Context, attendanceID uuid.UUID) (*models.Attendance, error) {
+	return s.attendanceRepo.FindByID(ctx, attendanceID)
 }
 
 // BulkUpsertAttendance for bulk attendance services
-func (s *AttendanceServices) BulkUpsertAttendance(user *utils.Claims, batchID uuid.UUID, req *dto.BulkAttendanceRequest) ([]models.Attendance, error) {
+func (s *AttendanceServices) BulkUpsertAttendance(ctx context.Context, user *utils.Claims, batchID uuid.UUID, req *dto.BulkAttendanceRequest) ([]models.Attendance, error) {
 	var results []models.Attendance
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
-		meetings, err := s.meetingRepo.WithTx(tx).GetMeetingsByBatchID(batchID)
+		meetings, err := s.meetingRepo.WithTx(tx).GetMeetingsByBatchID(ctx, batchID)
 		if err != nil {
 			return fmt.Errorf("failed to fetch meetings for batch: %w", err)
 		}
@@ -68,7 +77,7 @@ func (s *AttendanceServices) BulkUpsertAttendance(user *utils.Claims, batchID uu
 				return fmt.Errorf("Invalid meeting ID %s for batch", item.MeetingID)
 			}
 
-			hasPaid, err := s.purchaseRepo.WithTx(tx).HasPaid(item.UserID, batchID)
+			hasPaid, err := s.purchaseRepo.WithTx(tx).HasPaid(ctx, item.UserID, batchID)
 			if err != nil {
 				return fmt.Errorf("Failed to check payment for user %s: %w", item.UserID, err)
 			}
@@ -76,13 +85,13 @@ func (s *AttendanceServices) BulkUpsertAttendance(user *utils.Claims, batchID uu
 				return fmt.Errorf("User %s has not purchased the batch", item.UserID)
 			}
 
-			existing, err := s.attendanceRepo.WithTx(tx).GetByMeetingAndUser(item.MeetingID, item.UserID)
+			existing, err := s.attendanceRepo.WithTx(tx).GetByMeetingAndUser(ctx, item.MeetingID, item.UserID)
 			if err == nil && existing != nil {
 				existing.IsPresent = item.IsPresent
 				existing.Note = item.Note
 				existing.UpdatedBy = user.UserID
 
-				if err := s.attendanceRepo.WithTx(tx).UpdateByMeetingAndUser(item.MeetingID, item.UserID, existing); err != nil {
+				if err := s.attendanceRepo.WithTx(tx).UpdateByMeetingAndUser(ctx, item.MeetingID, item.UserID, existing); err != nil {
 					return err
 				}
 				results = append(results, *existing)
@@ -94,7 +103,7 @@ func (s *AttendanceServices) BulkUpsertAttendance(user *utils.Claims, batchID uu
 					Note:      item.Note,
 					UpdatedBy: user.UserID,
 				}
-				if err := s.attendanceRepo.WithTx(tx).Create(newAttendance); err != nil {
+				if err := s.attendanceRepo.WithTx(tx).Create(ctx, newAttendance); err != nil {
 					return err
 				}
 				results = append(results, *newAttendance)
