@@ -24,5 +24,5 @@ type AssignmentSubmission struct {
 	Assignment      Assignment       `gorm:"foreignKey:AssignmentID;references:ID"` // Relasi ke Assignment
 	User            User             `gorm:"foreignKey:UserID;references:ID"`       // Relasi ke User
 	SubmissionFiles []SubmissionFile `gorm:"foreignKey:AssignmentSubmissionID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	AssignmentGrade *AssignmentGrade `gorm:"foreignKey:AssignmentSubmissionID"`
+	AssignmentGrade *AssignmentGrade `gorm:"foreignKey:AssignmentSubmissionID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 }
