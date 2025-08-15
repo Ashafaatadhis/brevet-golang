@@ -17,6 +17,6 @@ type AssignmentGrade struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	AssignmentSubmission AssignmentSubmission `gorm:"foreignKey:AssignmentSubmissionID"`
+	AssignmentSubmission AssignmentSubmission `gorm:"foreignKey:AssignmentSubmissionID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	GradedByUser         User                 `gorm:"foreignKey:GradedBy"`
 }
