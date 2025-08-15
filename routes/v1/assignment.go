@@ -56,4 +56,11 @@ func RegisterAssignmentRoutes(r fiber.Router, db *gorm.DB) {
 		middlewares.RequireRole([]string{"siswa"}), middlewares.ValidateBody[dto.CreateSubmissionRequest](),
 		submissionController.CreateSubmission)
 
+	r.Get("/:assignmentID/grades/excel", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"guru"}), submissionController.GenerateGradesExcel,
+	)
+	r.Put("/:assignmentID/grades/import", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"guru"}), submissionController.ImportGradesFromExcel,
+	)
+
 }
