@@ -38,8 +38,12 @@ func main() {
 	// }
 
 	// fmt.Println("All tables dropped successfully.")
-	db.Migrator().DropTable(&models.AssignmentGrade{})
+	db.Migrator().DropTable(&models.Assignment{},
+		&models.AssignmentSubmission{},
+		&models.AssignmentGrade{})
 	err := db.AutoMigrate(
+		&models.Assignment{},
+		&models.AssignmentSubmission{},
 		&models.AssignmentGrade{},
 	// &models.Meeting{},
 	// &models.User{},

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -59,7 +60,7 @@ func (r *SubmissionRepository) GetAllByAssignment(ctx context.Context, assignmen
 		order = "desc"
 	}
 
-	db := r.db.WithContext(ctx).Preload("SubmissionFiles").
+	db := r.db.WithContext(ctx).Preload("SubmissionFiles").Preload("Assignment").Preload("User").Preload("AssignmentGrade").
 		Where("assignment_id = ?", assignmentID).
 		Model(&models.AssignmentSubmission{})
 
@@ -87,7 +88,7 @@ func (r *SubmissionRepository) GetAllByAssignment(ctx context.Context, assignmen
 // GetByIDAssignmentUser for get
 func (r *SubmissionRepository) GetByIDAssignmentUser(ctx context.Context, submissionID, assignmentID, userID uuid.UUID) (models.AssignmentSubmission, error) {
 	var submission models.AssignmentSubmission
-	err := r.db.WithContext(ctx).Preload("SubmissionFiles").
+	err := r.db.WithContext(ctx).Preload("SubmissionFiles").Preload("Assignment").Preload("User").Preload("AssignmentGrade").
 		Where("id = ? AND assignment_id = ? AND user_id = ?", submissionID, assignmentID, userID).
 		First(&submission).Error
 
@@ -96,6 +97,19 @@ func (r *SubmissionRepository) GetByIDAssignmentUser(ctx context.Context, submis
 
 // Create is for create assignment_submissions
 func (r *SubmissionRepository) Create(ctx context.Context, submission *models.AssignmentSubmission) error {
+	// Ambil end_at dari assignment
+	var assignment models.Assignment
+	if err := r.db.WithContext(ctx).
+		Select("end_at").
+		Where("id = ?", submission.AssignmentID).
+		First(&assignment).Error; err != nil {
+		return err
+	}
+
+	// Hitung telat atau tidak
+	submission.IsLate = time.Now().After(assignment.EndAt)
+
+	// Simpan submission
 	return r.db.WithContext(ctx).Create(submission).Error
 }
 
@@ -114,7 +128,7 @@ func (r *SubmissionRepository) GetByAssignmentUser(ctx context.Context, assignme
 // FindByID get submission by id with preload submissionFiles
 func (r *SubmissionRepository) FindByID(ctx context.Context, id uuid.UUID) (models.AssignmentSubmission, error) {
 	var submission models.AssignmentSubmission
-	err := r.db.WithContext(ctx).Preload("SubmissionFiles").Where("id = ?", id).First(&submission).Error
+	err := r.db.WithContext(ctx).Preload("SubmissionFiles").Preload("Assignment").Preload("User").Preload("AssignmentGrade").Where("id = ?", id).First(&submission).Error
 	return submission, err
 }
 
@@ -145,7 +159,7 @@ func (r *SubmissionRepository) DeleteByID(ctx context.Context, id uuid.UUID) err
 func (r *SubmissionRepository) GetByIDUser(ctx context.Context, submissionID, userID uuid.UUID) (*models.AssignmentSubmission, error) {
 	var submission models.AssignmentSubmission
 	err := r.db.WithContext(ctx).
-		Preload("SubmissionFiles").
+		Preload("SubmissionFiles").Preload("Assignment").Preload("User").Preload("AssignmentGrade").
 		Where("id = ? AND user_id = ?", submissionID, userID).
 		First(&submission).Error
 	if err != nil {

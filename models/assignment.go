@@ -22,4 +22,6 @@ type Assignment struct {
 	Meeting         Meeting           `gorm:"foreignKey:MeetingID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 	Teacher         *User             `gorm:"foreignKey:TeacherID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
 	AssignmentFiles []AssignmentFiles `gorm:"foreignKey:AssignmentID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+
+	AssignmentSubmissions []AssignmentSubmission `gorm:"foreignKey:AssignmentID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 }

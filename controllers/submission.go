@@ -93,7 +93,7 @@ func (ctrl *SubmissionController) CreateSubmission(c *fiber.Ctx) error {
 		fileURLs = append(fileURLs, f.FileURL)
 	}
 
-	submission, err := ctrl.submissionService.CreateSubmission(ctx, user, assignmentID, body.Note, fileURLs)
+	submission, err := ctrl.submissionService.CreateSubmission(ctx, user, assignmentID, body, fileURLs)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to create submission", err.Error())
 	}
