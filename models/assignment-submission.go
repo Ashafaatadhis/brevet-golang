@@ -13,9 +13,10 @@ type AssignmentSubmission struct {
 
 	UserID uuid.UUID `gorm:"type:uuid;not null"`
 
-	Note        string    `gorm:"type:text"`
-	SubmittedAt time.Time `gorm:"type:timestamp"`
-	IsLate      bool      `gorm:"not null"`
+	Note      *string `gorm:"type:text"`
+	EssayText *string `gorm:"type:text"`
+	// SubmittedAt time.Time `gorm:"type:timestamp"`
+	IsLate bool `gorm:"not null"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -23,4 +24,5 @@ type AssignmentSubmission struct {
 	Assignment      Assignment       `gorm:"foreignKey:AssignmentID;references:ID"` // Relasi ke Assignment
 	User            User             `gorm:"foreignKey:UserID;references:ID"`       // Relasi ke User
 	SubmissionFiles []SubmissionFile `gorm:"foreignKey:AssignmentSubmissionID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	AssignmentGrade *AssignmentGrade `gorm:"foreignKey:AssignmentSubmissionID"`
 }

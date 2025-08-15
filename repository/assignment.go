@@ -21,6 +21,7 @@ type IAssignmentRepository interface {
 	CreateFiles(ctx context.Context, assignmentFiles []models.AssignmentFiles) error
 	DeleteFilesByAssignmentID(ctx context.Context, assignmentID uuid.UUID) error
 	FindByID(ctx context.Context, id uuid.UUID) (*models.Assignment, error)
+	FindByIDWithUserData(ctx context.Context, id uuid.UUID, role models.RoleType, userID uuid.UUID) (*models.Assignment, error)
 	GetBatchIDByAssignmentID(ctx context.Context, assignmentID uuid.UUID) (uuid.UUID, error)
 	GetBatchByAssignmentID(ctx context.Context, assignmentID uuid.UUID) (models.Batch, error)
 	CountByBatchID(ctx context.Context, batchID uuid.UUID) (int64, error)
@@ -148,12 +149,52 @@ func (r *AssignmentRepository) DeleteFilesByAssignmentID(ctx context.Context, as
 // FindByID retrieves a meeting by its ID
 func (r *AssignmentRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Assignment, error) {
 	var assignment models.Assignment
-	err := r.db.WithContext(ctx).Preload("AssignmentFiles").First(&assignment, "id = ?", id).Error
+	err := r.db.WithContext(ctx).
+		Preload("AssignmentFiles").
+		Preload("AssignmentSubmissions").
+		First(&assignment, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
 	return &assignment, nil
 }
+
+// FindByIDWithUserData retrieves a meeting by its ID
+func (r *AssignmentRepository) FindByIDWithUserData(ctx context.Context, id uuid.UUID, role models.RoleType, userID uuid.UUID) (*models.Assignment, error) {
+	var assignment models.Assignment
+
+	query := r.db.WithContext(ctx).
+		Preload("AssignmentFiles")
+
+	if role == models.RoleTypeSiswa {
+		query = query.
+			Preload("AssignmentSubmissions", func(db *gorm.DB) *gorm.DB {
+				return db.Where("user_id = ?", userID)
+			}).
+			Preload("AssignmentSubmissions.SubmissionFiles").
+			Preload("AssignmentSubmissions.AssignmentGrade")
+	} else {
+		query = query.
+			Preload("AssignmentSubmissions").
+			Preload("AssignmentSubmissions.SubmissionFiles").
+			Preload("AssignmentSubmissions.AssignmentGrade")
+	}
+
+	err := query.First(&assignment, "id = ?", id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &assignment, nil
+}
+
+// func (r *AssignmentRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Assignment, error) {
+// 	var assignment models.Assignment
+// 	err := r.db.WithContext(ctx).Preload("AssignmentFiles").First(&assignment, "id = ?", id).Error
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return &assignment, nil
+// }
 
 // GetBatchIDByAssignmentID get batch
 func (r *AssignmentRepository) GetBatchIDByAssignmentID(ctx context.Context, assignmentID uuid.UUID) (uuid.UUID, error) {

@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/google/uuid"
@@ -21,7 +20,7 @@ type ISubmissionService interface {
 	checkUserAccess(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID) (bool, error)
 	GetAllSubmissionsByAssignmentUser(ctx context.Context, assignmentID uuid.UUID, user *utils.Claims, opts utils.QueryOptions) ([]models.AssignmentSubmission, int64, error)
 	GetSubmissionDetail(ctx context.Context, submissionID uuid.UUID, user *utils.Claims) (models.AssignmentSubmission, error)
-	CreateSubmission(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID, note string, fileURLs []string) (*models.AssignmentSubmission, error)
+	CreateSubmission(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID, req *dto.CreateSubmissionRequest, fileURLs []string) (*models.AssignmentSubmission, error)
 	UpdateSubmission(ctx context.Context, user *utils.Claims, submissionID uuid.UUID, body *dto.UpdateSubmissionRequest) (*models.AssignmentSubmission, error)
 	DeleteSubmission(ctx context.Context, user *utils.Claims, submissionID uuid.UUID) error
 	GetSubmissionGrade(ctx context.Context, user *utils.Claims, submissionID uuid.UUID) (*models.AssignmentGrade, error)
@@ -115,7 +114,7 @@ func (s *SubmissionService) GetSubmissionDetail(ctx context.Context, submissionI
 }
 
 // CreateSubmission is for create submission
-func (s *SubmissionService) CreateSubmission(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID, note string, fileURLs []string) (*models.AssignmentSubmission, error) {
+func (s *SubmissionService) CreateSubmission(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID, req *dto.CreateSubmissionRequest, fileURLs []string) (*models.AssignmentSubmission, error) {
 	var submission models.AssignmentSubmission
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
@@ -141,9 +140,8 @@ func (s *SubmissionService) CreateSubmission(ctx context.Context, user *utils.Cl
 			ID:           uuid.New(),
 			AssignmentID: assignmentID,
 			UserID:       user.UserID,
-			Note:         note,
-			SubmittedAt:  time.Now(),
-			IsLate:       false, // opsional: bisa cek assignment.EndAt dibanding now
+			Note:         req.Note,
+			EssayText:    req.EssayText,
 		}
 
 		if err := s.submissionRepo.WithTx(tx).Create(ctx, &submission); err != nil {

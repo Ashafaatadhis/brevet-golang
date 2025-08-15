@@ -13,9 +13,10 @@ type SubmissionResponse struct {
 
 	UserID uuid.UUID `json:"user_id"`
 
-	Note        string    `json:"note"`
-	SubmittedAt time.Time `json:"submitteed_at"`
-	IsLate      bool      `json:"is_late"`
+	Note      *string `json:"note"`
+	EssayText *string `json:"essay_text"`
+
+	IsLate bool `json:"is_late"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -28,8 +29,10 @@ type SubmissionResponse struct {
 		UpdatedAt              time.Time `json:"updated_at"`
 	} `json:"submission_files"`
 
-	Assignment *AssignmentResponse `json:"assignment,omitempty"` // Relasi ke Assignment
-	User       *UserResponse       `json:"user,omitempty"`       // Relasi ke User
+	AssignmentGrade *SubmissionGradeResponse `json:"assignment_grade"`
+
+	Assignment *AssignmentResponse `json:"assignment"` // Relasi ke Assignment
+	User       *UserResponse       `json:"user"`       // Relasi ke User
 }
 
 // SubmissionGradeResponse represents the response structure for submission grade
@@ -53,13 +56,15 @@ type SubmissionFileDTO struct {
 
 // CreateSubmissionRequest for POST
 type CreateSubmissionRequest struct {
-	Note            string              `json:"note" validate:"required"`
-	SubmissionFiles []SubmissionFileDTO `json:"submission_files" validate:"required,dive"`
+	Note            *string             `json:"note" validate:"omitempty"`
+	EssayText       *string             `json:"essay_text" validate:"omitempty"`
+	SubmissionFiles []SubmissionFileDTO `json:"submission_files" validate:"omitempty,dive"`
 }
 
 // UpdateSubmissionRequest for PUT
 type UpdateSubmissionRequest struct {
 	Note            *string              `json:"note" validate:"omitempty"`
+	EssayText       *string              `json:"essay_text" validate:"omitempty"`
 	SubmissionFiles *[]SubmissionFileDTO `json:"submission_files,omitempty" validate:"omitempty,dive"`
 }
 

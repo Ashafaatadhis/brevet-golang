@@ -71,7 +71,7 @@ func (s *AssignmentService) GetAllFilteredAssignmentsByMeetingID(ctx context.Con
 
 // GetAssignmentByID retrieves a single assignment by its ID
 func (s *AssignmentService) GetAssignmentByID(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID) (*models.Assignment, error) {
-	assignment, err := s.assignmentRepo.FindByID(ctx, assignmentID)
+	assignment, err := s.assignmentRepo.FindByIDWithUserData(ctx, assignmentID, models.RoleType(user.Role), user.UserID)
 	if err != nil {
 		return nil, err
 	}

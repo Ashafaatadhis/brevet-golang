@@ -29,6 +29,8 @@ type AssignmentResponse struct {
 		CreatedAt    time.Time `json:"created_at"`
 		UpdatedAt    time.Time `json:"updated_at"`
 	} `json:"assignment_files"`
+
+	AssignmentSubmissions *[]SubmissionResponse `json:"assignment_submissions,omitempty"`
 }
 
 // AssignmentFileRequest represents the request structure for assignment files
