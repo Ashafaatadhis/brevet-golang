@@ -8,10 +8,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"mime/multipart"
+	"strconv"
 
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/google/uuid"
 	"github.com/jinzhu/copier"
+	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
 )
 
@@ -25,6 +28,8 @@ type ISubmissionService interface {
 	DeleteSubmission(ctx context.Context, user *utils.Claims, submissionID uuid.UUID) error
 	GetSubmissionGrade(ctx context.Context, user *utils.Claims, submissionID uuid.UUID) (*models.AssignmentGrade, error)
 	GradeSubmission(ctx context.Context, user *utils.Claims, submissionID uuid.UUID, req *dto.GradeSubmissionRequest) (models.AssignmentGrade, error)
+	GenerateGradesExcel(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID) (*excelize.File, string, error)
+	ImportGradesFromExcel(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID, fileHeader *multipart.FileHeader) error
 }
 
 // SubmissionService provides methods for managing submissions
@@ -358,4 +363,128 @@ func (s *SubmissionService) GradeSubmission(ctx context.Context, user *utils.Cla
 	}
 
 	return *grade, nil
+}
+
+// GenerateGradesExcel services
+func (s *SubmissionService) GenerateGradesExcel(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID) (*excelize.File, string, error) {
+	// Cek akses guru
+	allowed, err := s.checkUserAccess(ctx, user, assignmentID)
+	if err != nil {
+		return nil, "", err
+	}
+	if !allowed {
+		return nil, "", fmt.Errorf("forbidden: not teacher of this assignment")
+	}
+
+	// Ambil data submission + grade
+	submissions, err := s.submissionRepo.GetGradesByAssignmentID(ctx, assignmentID)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// Buat file Excel
+	f := excelize.NewFile()
+	sheet := "Penilaian"
+	f.SetSheetName("Sheet1", sheet)
+
+	// Header
+	headers := []string{"UserID", "No", "Nama Siswa", "Nilai", "Feedback"}
+	for i, h := range headers {
+		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
+		f.SetCellValue(sheet, cell, h)
+	}
+
+	// Isi data
+	for i, sub := range submissions {
+		no := i + 1
+		userID := sub.UserID.String()
+		name := sub.User.Name
+		grade := ""
+		feedback := ""
+		if sub.AssignmentGrade != nil {
+			grade = fmt.Sprintf("%d", sub.AssignmentGrade.Grade)
+			feedback = sub.AssignmentGrade.Feedback
+		}
+		row := i + 2
+		f.SetCellValue(sheet, fmt.Sprintf("A%d", row), userID) // hidden column
+		f.SetCellValue(sheet, fmt.Sprintf("B%d", row), no)
+		f.SetCellValue(sheet, fmt.Sprintf("C%d", row), name)
+		f.SetCellValue(sheet, fmt.Sprintf("D%d", row), grade)
+		f.SetCellValue(sheet, fmt.Sprintf("E%d", row), feedback)
+	}
+
+	// Sembunyikan kolom UserID
+	f.SetColVisible(sheet, "A", false)
+
+	// Nama file
+	filename := fmt.Sprintf("penilaian_%s.xlsx", assignmentID.String())
+
+	return f, filename, nil
+}
+
+// ImportGradesFromExcel excel
+func (s *SubmissionService) ImportGradesFromExcel(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID, fileHeader *multipart.FileHeader) error {
+	// Cek akses guru
+	allowed, err := s.checkUserAccess(ctx, user, assignmentID)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return fmt.Errorf("forbidden: not teacher of this assignment")
+	}
+
+	// Buka file Excel
+	file, err := fileHeader.Open()
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	f, err := excelize.OpenReader(file)
+	if err != nil {
+		return err
+	}
+
+	sheetName := f.GetSheetName(0)
+	rows, err := f.GetRows(sheetName)
+	if err != nil {
+		return err
+	}
+
+	// Loop data mulai dari row 2 (skip header)
+	for i := 1; i < len(rows); i++ {
+		if len(rows[i]) < 5 {
+			continue // skip kalau kolom tidak lengkap
+		}
+
+		userIDStr := rows[i][0] // hidden column
+		gradeStr := rows[i][3]
+		feedback := rows[i][4]
+
+		userID, err := uuid.Parse(userIDStr)
+		if err != nil {
+			return fmt.Errorf("row %d: invalid UserID", i+1)
+		}
+
+		grade, _ := strconv.Atoi(gradeStr)
+
+		// Cari submission ID berdasarkan assignmentID + userID
+		submission, err := s.submissionRepo.FindByAssignmentAndUserID(ctx, assignmentID, userID)
+		if err != nil {
+			return fmt.Errorf("row %d: %v", i+1, err)
+		}
+
+		// Upsert nilai
+		gradeModel := models.AssignmentGrade{
+			AssignmentSubmissionID: submission.ID,
+			Grade:                  grade,
+			Feedback:               feedback,
+			GradedBy:               user.UserID,
+		}
+		if _, err := s.submissionRepo.UpsertGrade(ctx, gradeModel); err != nil {
+			return fmt.Errorf("row %d: %v", i+1, err)
+		}
+	}
+
+	return nil
 }

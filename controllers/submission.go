@@ -6,6 +6,7 @@ import (
 	"brevet-api/services"
 	"brevet-api/utils"
 	"errors"
+	"fmt"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -207,4 +208,53 @@ func (ctrl *SubmissionController) GradeSubmission(c *fiber.Ctx) error {
 	}
 
 	return utils.SuccessResponse(c, fiber.StatusOK, "Submission graded successfully", gradeResponse)
+}
+
+// GenerateGradesExcel controller
+func (ctrl *SubmissionController) GenerateGradesExcel(c *fiber.Ctx) error {
+	ctx := c.UserContext()
+	user := c.Locals("user").(*utils.Claims)
+
+	assignmentID, err := uuid.Parse(c.Params("assignmentID"))
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid assignment ID", err.Error())
+	}
+
+	f, filename, err := ctrl.submissionService.GenerateGradesExcel(ctx, user, assignmentID)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to generate grades excel", err.Error())
+	}
+
+	// Simpan sementara di memory
+	buffer, err := f.WriteToBuffer()
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to write excel buffer", err.Error())
+	}
+
+	// Kirim sebagai file download
+	c.Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	return c.SendStream(buffer)
+}
+
+// ImportGradesFromExcel excel
+func (ctrl *SubmissionController) ImportGradesFromExcel(c *fiber.Ctx) error {
+	ctx := c.UserContext()
+	user := c.Locals("user").(*utils.Claims)
+
+	assignmentID, err := uuid.Parse(c.Params("assignmentID"))
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid assignment ID", err.Error())
+	}
+
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Missing excel file", err.Error())
+	}
+
+	if err := ctrl.submissionService.ImportGradesFromExcel(ctx, user, assignmentID, fileHeader); err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to import grades from excel", err.Error())
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Grades imported successfully", nil)
 }

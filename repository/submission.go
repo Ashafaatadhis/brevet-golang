@@ -20,8 +20,10 @@ type ISubmisssionRepository interface {
 	Create(ctx context.Context, submission *models.AssignmentSubmission) error
 	CreateSubmissionFiles(ctx context.Context, files []models.SubmissionFile) error
 	GetByAssignmentUser(ctx context.Context, assignmentID, userID uuid.UUID) (models.AssignmentSubmission, error)
+	FindByAssignmentAndUserID(ctx context.Context, assignmentID uuid.UUID, userID uuid.UUID) (*models.AssignmentSubmission, error)
 	FindByID(ctx context.Context, id uuid.UUID) (models.AssignmentSubmission, error)
 	Update(ctx context.Context, submission *models.AssignmentSubmission) error
+	GetGradesByAssignmentID(ctx context.Context, assignmentID uuid.UUID) ([]models.AssignmentSubmission, error)
 	DeleteFilesBySubmissionID(ctx context.Context, submissionID uuid.UUID) error
 	CreateFiles(ctx context.Context, files []models.SubmissionFile) error
 	DeleteByID(ctx context.Context, id uuid.UUID) error
@@ -60,7 +62,7 @@ func (r *SubmissionRepository) GetAllByAssignment(ctx context.Context, assignmen
 		order = "desc"
 	}
 
-	db := r.db.WithContext(ctx).Preload("SubmissionFiles").Preload("Assignment").Preload("User").Preload("AssignmentGrade").
+	db := r.db.WithContext(ctx).Preload("SubmissionFiles").Preload("Assignment").Preload("User").Preload("AssignmentGrade").Preload("AssignmentGrade.GradedByUser").
 		Where("assignment_id = ?", assignmentID).
 		Model(&models.AssignmentSubmission{})
 
@@ -88,11 +90,23 @@ func (r *SubmissionRepository) GetAllByAssignment(ctx context.Context, assignmen
 // GetByIDAssignmentUser for get
 func (r *SubmissionRepository) GetByIDAssignmentUser(ctx context.Context, submissionID, assignmentID, userID uuid.UUID) (models.AssignmentSubmission, error) {
 	var submission models.AssignmentSubmission
-	err := r.db.WithContext(ctx).Preload("SubmissionFiles").Preload("Assignment").Preload("User").Preload("AssignmentGrade").
+	err := r.db.WithContext(ctx).Preload("SubmissionFiles").Preload("Assignment").Preload("User").Preload("AssignmentGrade").Preload("AssignmentGrade.GradedByUser").
 		Where("id = ? AND assignment_id = ? AND user_id = ?", submissionID, assignmentID, userID).
 		First(&submission).Error
 
 	return submission, err
+}
+
+// FindByAssignmentAndUserID get submission by assignment id and user id
+func (r *SubmissionRepository) FindByAssignmentAndUserID(ctx context.Context, assignmentID uuid.UUID, userID uuid.UUID) (*models.AssignmentSubmission, error) {
+	var submission models.AssignmentSubmission
+	err := r.db.WithContext(ctx).
+		Where("assignment_id = ? AND user_id = ?", assignmentID, userID).
+		First(&submission).Error
+	if err != nil {
+		return nil, err
+	}
+	return &submission, nil
 }
 
 // Create is for create assignment_submissions
@@ -128,7 +142,7 @@ func (r *SubmissionRepository) GetByAssignmentUser(ctx context.Context, assignme
 // FindByID get submission by id with preload submissionFiles
 func (r *SubmissionRepository) FindByID(ctx context.Context, id uuid.UUID) (models.AssignmentSubmission, error) {
 	var submission models.AssignmentSubmission
-	err := r.db.WithContext(ctx).Preload("SubmissionFiles").Preload("Assignment").Preload("User").Preload("AssignmentGrade").Where("id = ?", id).First(&submission).Error
+	err := r.db.WithContext(ctx).Preload("SubmissionFiles").Preload("Assignment").Preload("User").Preload("AssignmentGrade").Preload("AssignmentGrade.GradedByUser").Where("id = ?", id).First(&submission).Error
 	return submission, err
 }
 
@@ -159,7 +173,7 @@ func (r *SubmissionRepository) DeleteByID(ctx context.Context, id uuid.UUID) err
 func (r *SubmissionRepository) GetByIDUser(ctx context.Context, submissionID, userID uuid.UUID) (*models.AssignmentSubmission, error) {
 	var submission models.AssignmentSubmission
 	err := r.db.WithContext(ctx).
-		Preload("SubmissionFiles").Preload("Assignment").Preload("User").Preload("AssignmentGrade").
+		Preload("SubmissionFiles").Preload("Assignment").Preload("User").Preload("AssignmentGrade").Preload("AssignmentGrade.GradedByUser").
 		Where("id = ? AND user_id = ?", submissionID, userID).
 		First(&submission).Error
 	if err != nil {
@@ -180,6 +194,20 @@ func (r *SubmissionRepository) GetGradeBySubmissionID(ctx context.Context, submi
 	}
 
 	return &grade, nil
+}
+
+// GetGradesByAssignmentID repo get grade by assignment id
+func (r *SubmissionRepository) GetGradesByAssignmentID(ctx context.Context, assignmentID uuid.UUID) ([]models.AssignmentSubmission, error) {
+	var submissions []models.AssignmentSubmission
+	err := r.db.WithContext(ctx).
+		Preload("User").
+		Preload("AssignmentGrade").
+		Where("assignment_id = ?", assignmentID).
+		Find(&submissions).Error
+	if err != nil {
+		return nil, err
+	}
+	return submissions, nil
 }
 
 // UpsertGrade for upsert
