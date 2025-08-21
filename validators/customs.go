@@ -69,6 +69,36 @@ func RoleTypeValidator(fl validator.FieldLevel) bool {
 	}
 }
 
+// QuizTypeValidator checks if quiz_type value is valid
+func QuizTypeValidator(fl validator.FieldLevel) bool {
+	field := fl.Field()
+
+	// Kalau nil, anggap valid (tidak wajib)
+	if field.Kind() == reflect.Ptr {
+		if field.IsNil() {
+			return true
+		}
+	}
+
+	var val string
+
+	// Ambil nilai string dari pointer atau value biasa
+	if field.Kind() == reflect.Ptr {
+		val = field.Elem().String()
+	} else if field.Kind() == reflect.String {
+		val = field.String()
+	} else {
+		return false
+	}
+
+	switch models.QuizType(val) {
+	case models.QuizTypeMC, models.QuizTypeTF:
+		return true
+	default:
+		return false
+	}
+}
+
 // CourseTypeValidator checks if course_type value is valid
 func CourseTypeValidator(fl validator.FieldLevel) bool {
 	field := fl.Field()

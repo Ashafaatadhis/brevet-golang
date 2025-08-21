@@ -54,6 +54,7 @@ func main() {
 
 	// Cleanup expired sessions every hour
 	scheduler.StartCleanupScheduler(db)
+	scheduler.StartAutoSubmitScheduler(db)
 
 	// Purpose route for testing
 	app.Get("/hello", func(c *fiber.Ctx) error {

@@ -19,6 +19,7 @@ type Meeting struct {
 	UpdatedAt time.Time
 
 	Batch       Batch        `gorm:"foreignKey:BatchID;constraint:OnDelete:CASCADE"`
+	Quizzes     []Quiz       `gorm:"foreignKey:MeetingID;constraint:OnDelete:CASCADE"`
 	Assignments []Assignment `gorm:"foreignKey:MeetingID;constraint:OnDelete:CASCADE"`
 	Materials   []Material   `gorm:"foreignKey:MeetingID;constraint:OnDelete:CASCADE"`
 	Teachers    []User       `gorm:"many2many:meeting_teachers;constraint:OnDelete:CASCADE"`
