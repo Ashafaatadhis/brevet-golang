@@ -93,6 +93,8 @@ func RegisterMeetingRoutes(r fiber.Router, db *gorm.DB) {
 	// ==================================
 	// 				Quizzes
 	// ==================================
+	r.Get("/:meetingID/quizzes", middlewares.RequireAuth(), middlewares.RequireRole([]string{"admin", "guru"}),
+		quizController.GetQuizByMeetingIDFiltered)
 
 	r.Post("/:meetingID/quizzes", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin", "guru"}),

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"brevet-api/models"
+	"brevet-api/utils"
 	"context"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 type IQuizRepository interface {
 	WithTx(tx *gorm.DB) IQuizRepository
 	GetQuizByID(ctx context.Context, quizID uuid.UUID) (*models.Quiz, error)
+	GetQuizByMeetingIDFiltered(ctx context.Context, meetingID uuid.UUID, opts utils.QueryOptions) ([]models.Quiz, int64, error)
 	GetQuestionByID(ctx context.Context, questionID, quizID uuid.UUID) (*models.QuizQuestion, error)
 	Create(ctx context.Context, quiz *models.Quiz) error
 	CreateOptions(ctx context.Context, options []models.QuizOption) error
@@ -49,6 +51,39 @@ func NewQuizRepository(db *gorm.DB) IQuizRepository {
 // WithTx running with transaction
 func (r *QuizRepository) WithTx(tx *gorm.DB) IQuizRepository {
 	return &QuizRepository{db: tx}
+}
+
+// GetQuizByMeetingIDFiltered retrieves all quiz with pagination and filtering options
+func (r *QuizRepository) GetQuizByMeetingIDFiltered(ctx context.Context, meetingID uuid.UUID, opts utils.QueryOptions) ([]models.Quiz, int64, error) {
+	validSortFields := utils.GetValidColumnsFromStruct(&models.Quiz{})
+
+	sort := opts.Sort
+	if !validSortFields[sort] {
+		sort = "id"
+	}
+
+	order := opts.Order
+	if order != "asc" && order != "desc" {
+		order = "asc"
+	}
+
+	db := r.db.WithContext(ctx).Model(&models.Quiz{}).Where("meeting_id = ?", meetingID)
+
+	joinConditions := map[string]string{}
+	joinedRelations := map[string]bool{}
+
+	db = utils.ApplyFiltersWithJoins(db, "quizzes", opts.Filters, validSortFields, joinConditions, joinedRelations)
+
+	var total int64
+	db.Count(&total)
+
+	var quizzes []models.Quiz
+	err := db.Order(fmt.Sprintf("%s %s", sort, order)).
+		Limit(opts.Limit).
+		Offset(opts.Offset).
+		Find(&quizzes).Error
+
+	return quizzes, total, err
 }
 
 // CountQuestionsByQuizID menghitung jumlah soal di quiz tertentu
