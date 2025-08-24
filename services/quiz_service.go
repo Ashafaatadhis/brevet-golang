@@ -20,6 +20,7 @@ import (
 
 // IQuizService interface
 type IQuizService interface {
+	GetQuizByMeetingIDFiltered(ctx context.Context, meetingID uuid.UUID, opts utils.QueryOptions, user *utils.Claims) ([]models.Quiz, int64, error)
 	ImportQuestionsFromExcel(ctx context.Context, user *utils.Claims, quizID uuid.UUID, fileHeader *multipart.FileHeader) error
 	CreateQuizMetadata(ctx context.Context, user *utils.Claims, meetingID uuid.UUID, req *dto.ImportQuizzesRequest) (*models.Quiz, error)
 	SaveTempSubmission(ctx context.Context, user *utils.Claims, attemptID uuid.UUID, body *dto.SaveTempSubmissionRequest) error
@@ -431,6 +432,26 @@ func (s *QuizService) GetQuizMetadata(ctx context.Context, user *utils.Claims, q
 	// opsional: hide fields tertentu
 	// quiz.Questions = nil
 	return quiz, nil
+}
+
+// GetQuizByMeetingIDFiltered filtered
+func (s *QuizService) GetQuizByMeetingIDFiltered(ctx context.Context, meetingID uuid.UUID, opts utils.QueryOptions, user *utils.Claims) ([]models.Quiz, int64, error) {
+
+	allowed, err := s.checkUserAccess(ctx, user, meetingID)
+	if err != nil {
+		return nil, 0, err
+	}
+	if !allowed {
+		return nil, 0, fmt.Errorf("forbidden")
+	}
+
+	quizzes, total, err := s.quizRepo.GetQuizByMeetingIDFiltered(ctx, meetingID, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return quizzes, total, nil
+
 }
 
 // GetQuizWithQuestions ambil quiz + questions + options + temp submission user

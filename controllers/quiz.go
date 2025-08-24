@@ -65,6 +65,31 @@ func (ctrl *QuizController) ImportQuestionsFromExcel(c *fiber.Ctx) error {
 	return utils.SuccessResponse(c, fiber.StatusOK, "Questions imported successfully", nil)
 }
 
+// GetQuizByMeetingIDFiltered retrieves a list of purchases with pagination and filtering options
+func (ctrl *QuizController) GetQuizByMeetingIDFiltered(c *fiber.Ctx) error {
+	ctx := c.UserContext()
+	opts := utils.ParseQueryOptions(c)
+	user := c.Locals("user").(*utils.Claims)
+
+	meetingID, err := uuid.Parse(c.Params("meetingID"))
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid meeting ID", err.Error())
+	}
+
+	quizzes, total, err := ctrl.quizService.GetQuizByMeetingIDFiltered(ctx, meetingID, opts, user)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch quizzes", err.Error())
+	}
+
+	var quizzesResponse []dto.QuizResponse
+	if copyErr := copier.Copy(&quizzesResponse, quizzes); copyErr != nil {
+		return utils.ErrorResponse(c, 500, "Failed to map quiz data", copyErr.Error())
+	}
+
+	meta := utils.BuildPaginationMeta(total, opts.Limit, opts.Page)
+	return utils.SuccessWithMeta(c, fiber.StatusOK, "Quizzes fetched", quizzesResponse, meta)
+}
+
 // StartQuiz start
 func (ctrl *QuizController) StartQuiz(c *fiber.Ctx) error {
 	ctx := c.UserContext()
