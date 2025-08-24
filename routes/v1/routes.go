@@ -59,4 +59,8 @@ func RegisterV1Routes(r fiber.Router, db *gorm.DB) {
 	submissionGroup := r.Group("/submissions")
 	RegisterSubmissionRoutes(submissionGroup, db)
 
+	// /v1/quizzes
+	quizGroup := r.Group("/quizzes")
+	RegisterQuizRoutes(quizGroup, db)
+
 }

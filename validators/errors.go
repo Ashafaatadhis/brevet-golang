@@ -38,6 +38,8 @@ func FormatValidationError(errs validator.ValidationErrors) map[string]string {
 			msg = fmt.Sprintf("%s harus salah satu dari: online, offline", field)
 		case "assignment_type":
 			msg = fmt.Sprintf("%s harus salah satu dari: file, essay", field)
+		case "quiz_type":
+			msg = fmt.Sprintf("%s harus salah satu dari: mc, tf", field)
 		case "payment_status_type":
 			msg = fmt.Sprintf("%s harus salah satu dari: pending, waiting_confirmation, paid, rejected, expired, cancelled", field)
 		default:

@@ -26,6 +26,7 @@ type IBatchRepository interface {
 	GetAllTeacherInBatch(ctx context.Context, batchID uuid.UUID, opts utils.QueryOptions) ([]models.User, int64, error)
 	GetBatchesByUserPurchaseFiltered(ctx context.Context, userID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error)
 	GetBatchesByGuruMeetingRelationFiltered(ctx context.Context, guruID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error)
+	GetBatchByMeetingID(ctx context.Context, meetingID uuid.UUID) (models.Batch, error)
 }
 
 // BatchRepository is a struct that represents a batch repository
@@ -299,4 +300,17 @@ func (r *BatchRepository) GetBatchesByGuruMeetingRelationFiltered(ctx context.Co
 		Find(&batches).Error
 
 	return batches, total, err
+}
+
+// GetBatchByMeetingID ambil batch dari meetingid
+func (r *BatchRepository) GetBatchByMeetingID(ctx context.Context, meetingID uuid.UUID) (models.Batch, error) {
+	var meeting models.Meeting
+	err := r.db.WithContext(ctx).
+		Preload("Batch").
+		First(&meeting, "id = ?", meetingID).Error
+	if err != nil {
+		return models.Batch{}, err
+	}
+
+	return meeting.Batch, nil
 }

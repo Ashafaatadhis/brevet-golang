@@ -15,12 +15,17 @@ import (
 func RegisterMeetingRoutes(r fiber.Router, db *gorm.DB) {
 
 	fileService := services.NewFileService()
+	emailService, err := services.NewEmailServiceFromEnv()
+	if err != nil {
+		panic(err)
+	}
 
 	userRepository := repository.NewUserRepository(db)
 	batchRepository := repository.NewBatchRepository(db)
 
 	meetingRepo := repository.NewMeetingRepository(db)
 	purchaseRepo := repository.NewPurchaseRepository(db)
+	purchaseService := services.NewPurchaseService(purchaseRepo, userRepository, batchRepository, emailService, db)
 	meetingService := services.NewMeetingService(meetingRepo, batchRepository, purchaseRepo, userRepository, db)
 	meetingController := controllers.NewMeetingController(meetingService, db)
 
@@ -31,6 +36,10 @@ func RegisterMeetingRoutes(r fiber.Router, db *gorm.DB) {
 	materialRepository := repository.NewMaterialRepository(db)
 	materialService := services.NewMaterialService(materialRepository, meetingRepo, purchaseRepo, fileService, db)
 	materialController := controllers.NewMaterialController(materialService, db)
+
+	quizRepository := repository.NewQuizRepository(db)
+	quizService := services.NewQuizService(quizRepository, batchRepository, meetingRepo, purchaseService, fileService, db)
+	quizController := controllers.NewQuizController(quizService, db)
 
 	r.Get("/", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin"}), meetingController.GetAllMeetings)
@@ -81,5 +90,12 @@ func RegisterMeetingRoutes(r fiber.Router, db *gorm.DB) {
 	r.Post("/:meetingID/materials", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin", "guru"}),
 		middlewares.ValidateBody[dto.CreateMaterialRequest](), materialController.CreateMaterial)
+	// ==================================
+	// 				Quizzes
+	// ==================================
+
+	r.Post("/:meetingID/quizzes", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"admin", "guru"}),
+		middlewares.ValidateBody[dto.ImportQuizzesRequest](), quizController.CreateQuizMetadata)
 
 }

@@ -60,7 +60,7 @@ func (r *MeetingRepository) GetAllFilteredMeetings(ctx context.Context, opts uti
 		order = "asc"
 	}
 
-	db := r.db.WithContext(ctx).Preload("Teachers").Preload("Materials").Preload("Assignments").Preload("Assignments.AssignmentFiles", func(db *gorm.DB) *gorm.DB {
+	db := r.db.WithContext(ctx).Preload("Teachers").Preload("Quizzes").Preload("Materials").Preload("Assignments").Preload("Assignments.AssignmentFiles", func(db *gorm.DB) *gorm.DB {
 		return db.Order("assignment_files.created_at ASC") // urut berdasarkan waktu upload paling awal
 	}).
 		Model(&models.Meeting{})
@@ -100,7 +100,7 @@ func (r *MeetingRepository) GetMeetingsByBatchSlugFiltered(ctx context.Context, 
 		order = "asc"
 	}
 
-	db := r.db.WithContext(ctx).Preload("Teachers").Preload("Materials").Preload("Assignments").Preload("Assignments.AssignmentFiles", func(db *gorm.DB) *gorm.DB {
+	db := r.db.WithContext(ctx).Preload("Teachers").Preload("Quizzes").Preload("Materials").Preload("Assignments").Preload("Assignments.AssignmentFiles", func(db *gorm.DB) *gorm.DB {
 		return db.Order("assignment_files.created_at ASC")
 	}).
 		Model(&models.Meeting{}).
@@ -143,7 +143,7 @@ func (r *MeetingRepository) GetMeetingsByBatchID(ctx context.Context, batchID uu
 // FindByID retrieves a meeting by its ID
 func (r *MeetingRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Meeting, error) {
 	var meeting models.Meeting
-	err := r.db.WithContext(ctx).Preload("Teachers").Preload("Materials").Preload("Assignments").Preload("Assignments.AssignmentFiles", func(db *gorm.DB) *gorm.DB {
+	err := r.db.WithContext(ctx).Preload("Teachers").Preload("Quizzes").Preload("Materials").Preload("Assignments").Preload("Assignments.AssignmentFiles", func(db *gorm.DB) *gorm.DB {
 		return db.Order("assignment_files.created_at ASC") // urut berdasarkan waktu upload paling awal
 	}).
 		First(&meeting, "id = ?", id).Error
