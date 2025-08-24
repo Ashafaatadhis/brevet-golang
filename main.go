@@ -58,7 +58,7 @@ func main() {
 
 	// Purpose route for testing
 	app.Get("/hello", func(c *fiber.Ctx) error {
-		return utils.SuccessResponse(c, fiber.StatusOK, "Hello, World v2 WITH CDN!", nil)
+		return utils.SuccessResponse(c, fiber.StatusOK, "Hello, JIDan!ss", nil)
 	})
 
 	// Register routes
