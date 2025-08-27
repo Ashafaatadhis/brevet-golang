@@ -36,6 +36,8 @@ type IQuizRepository interface {
 	UpdateQuiz(ctx context.Context, quiz *models.Quiz) error
 	DeleteQuiz(ctx context.Context, quizID uuid.UUID) error
 	GetQuizResultByAttemptID(ctx context.Context, attemptID uuid.UUID) (*models.QuizResult, error)
+	CountByBatchID(ctx context.Context, batchID uuid.UUID) (int64, error)
+	CountCompletedByBatchUser(ctx context.Context, batchID, userID uuid.UUID) (int64, error)
 }
 
 // QuizRepository is a struct that represents a quiz repository
@@ -291,4 +293,25 @@ func (r *QuizRepository) GetQuizResultByAttemptID(ctx context.Context, attemptID
 		return nil, err
 	}
 	return &result, nil
+}
+
+// CountByBatchID count quizzes by batch ID
+func (r *QuizRepository) CountByBatchID(ctx context.Context, batchID uuid.UUID) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&models.Quiz{}).
+		Joins("JOIN meetings ON meetings.id = quizzes.meeting_id").
+		Where("meetings.batch_id = ?", batchID).
+		Count(&count).Error
+	return count, err
+}
+
+// CountCompletedByBatchUser counts completed quizzes for a user in a specific batch
+func (r *QuizRepository) CountCompletedByBatchUser(ctx context.Context, batchID, userID uuid.UUID) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&models.QuizAttempt{}).
+		Joins("JOIN quizzes ON quizzes.id = quiz_attempts.quiz_id").
+		Joins("JOIN meetings ON meetings.id = quizzes.meeting_id").
+		Where("meetings.batch_id = ? AND quiz_attempts.user_id = ? AND quiz_attempts.ended_at IS NOT NULL", batchID, userID).
+		Count(&count).Error
+	return count, err
 }

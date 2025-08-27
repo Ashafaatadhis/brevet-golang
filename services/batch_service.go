@@ -32,6 +32,7 @@ type IBatchService interface {
 type BatchService struct {
 	repo           repository.IBatchRepository
 	userRepo       repository.IUserRepository
+	quizRepo       repository.IQuizRepository
 	courseRepo     repository.ICourseRepository
 	assignmentRepo repository.IAssignmentRepository
 	submissionRepo repository.ISubmisssionRepository
@@ -40,10 +41,10 @@ type BatchService struct {
 }
 
 // NewBatchService creates a new instance of BatchService
-func NewBatchService(repo repository.IBatchRepository, userRepo repository.IUserRepository, courseRepo repository.ICourseRepository,
+func NewBatchService(repo repository.IBatchRepository, userRepo repository.IUserRepository, quizRepo repository.IQuizRepository, courseRepo repository.ICourseRepository,
 	assignmentRepo repository.IAssignmentRepository,
 	submissionRepo repository.ISubmisssionRepository, db *gorm.DB, fileService IFileService) IBatchService {
-	return &BatchService{repo: repo, userRepo: userRepo, courseRepo: courseRepo, assignmentRepo: assignmentRepo, submissionRepo: submissionRepo, db: db, fileService: fileService}
+	return &BatchService{repo: repo, userRepo: userRepo, quizRepo: quizRepo, courseRepo: courseRepo, assignmentRepo: assignmentRepo, submissionRepo: submissionRepo, db: db, fileService: fileService}
 }
 
 // GetAllFilteredBatches retrieves all batches with pagination and filtering options
@@ -286,22 +287,56 @@ func (s *BatchService) GetBatchesTaughtByGuru(ctx context.Context, guruID uuid.U
 
 // CalculateProgress service calculate progress
 func (s *BatchService) CalculateProgress(ctx context.Context, batchID, userID uuid.UUID) (float64, error) {
-	// Hitung total assignment di batch
+	// Hitung total assignment & quiz di batch
 	totalAssignments, err := s.assignmentRepo.CountByBatchID(ctx, batchID)
 	if err != nil {
 		return 0, err
 	}
-	if totalAssignments == 0 {
-		return 0, nil // biar ga bagi nol
-	}
 
-	// Hitung total submission user yg sudah dikumpulkan di batch tsb
-	completedSubmissions, err := s.submissionRepo.CountCompletedByBatchUser(ctx, batchID, userID)
+	totalQuizzes, err := s.quizRepo.CountByBatchID(ctx, batchID)
 	if err != nil {
 		return 0, err
 	}
 
-	// Hitung persentase progress
-	progress := (float64(completedSubmissions) / float64(totalAssignments)) * 100
+	totalItems := totalAssignments + totalQuizzes
+	if totalItems == 0 {
+		return 0, nil // biar ga bagi nol
+	}
+
+	// Hitung total submission assignment & quiz user yang sudah selesai
+	completedAssignments, err := s.submissionRepo.CountCompletedByBatchUser(ctx, batchID, userID)
+	if err != nil {
+		return 0, err
+	}
+
+	completedQuizzes, err := s.quizRepo.CountCompletedByBatchUser(ctx, batchID, userID)
+	if err != nil {
+		return 0, err
+	}
+
+	completedItems := completedAssignments + completedQuizzes
+
+	progress := (float64(completedItems) / float64(totalItems)) * 100
 	return progress, nil
 }
+
+// func (s *BatchService) CalculateProgress(ctx context.Context, batchID, userID uuid.UUID) (float64, error) {
+// 	// Hitung total assignment di batch
+// 	totalAssignments, err := s.assignmentRepo.CountByBatchID(ctx, batchID)
+// 	if err != nil {
+// 		return 0, err
+// 	}
+// 	if totalAssignments == 0 {
+// 		return 0, nil // biar ga bagi nol
+// 	}
+
+// 	// Hitung total submission user yg sudah dikumpulkan di batch tsb
+// 	completedSubmissions, err := s.submissionRepo.CountCompletedByBatchUser(ctx, batchID, userID)
+// 	if err != nil {
+// 		return 0, err
+// 	}
+
+// 	// Hitung persentase progress
+// 	progress := (float64(completedSubmissions) / float64(totalAssignments)) * 100
+// 	return progress, nil
+// }
