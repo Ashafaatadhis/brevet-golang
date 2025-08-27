@@ -66,6 +66,11 @@ func RegisterQuizRoutes(r fiber.Router, db *gorm.DB) {
 		middlewares.RequireRole([]string{"siswa"}),
 		quizController.GetActiveAttempt,
 	)
+	r.Get("/:quizID/attempts",
+		middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"siswa"}),
+		quizController.GetListAttempt,
+	)
 
 	r.Post("/:quizID/import-questions",
 		middlewares.RequireAuth(),

@@ -225,6 +225,33 @@ func (ctrl *QuizController) GetActiveAttempt(c *fiber.Ctx) error {
 	return utils.SuccessResponse(c, fiber.StatusOK, "Success", quizAttemptResponse)
 }
 
+// GetListAttempt controller
+func (ctrl *QuizController) GetListAttempt(c *fiber.Ctx) error {
+	ctx := c.UserContext()
+	user := c.Locals("user").(*utils.Claims)
+
+	quizID, err := uuid.Parse(c.Params("quizID"))
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid quiz ID", err.Error())
+	}
+
+	attempt, err := ctrl.quizService.GetActiveAttempt(ctx, quizID, user)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch attempt", err.Error())
+	}
+
+	if attempt == nil {
+		return utils.SuccessResponse(c, fiber.StatusOK, "No attempt yet", nil)
+	}
+
+	var quizAttemptResponse dto.QuizAttemptResponse
+	if err := copier.CopyWithOption(&quizAttemptResponse, attempt, copier.Option{IgnoreEmpty: true}); err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to map quiz attempt data", err.Error())
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Success", quizAttemptResponse)
+}
+
 // GetAttemptDetail detail
 func (ctrl *QuizController) GetAttemptDetail(c *fiber.Ctx) error {
 	ctx := c.UserContext()
