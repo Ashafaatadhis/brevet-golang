@@ -33,6 +33,7 @@ type IQuizService interface {
 	UpdateQuiz(ctx context.Context, quizID uuid.UUID, user *utils.Claims, body *dto.UpdateQuizRequest) (*models.Quiz, error)
 	DeleteQuiz(ctx context.Context, quizID uuid.UUID, user *utils.Claims) error
 	GetAttemptResult(ctx context.Context, attemptID uuid.UUID, user *utils.Claims) (*models.QuizResult, error)
+	GetListAttempt(ctx context.Context, quizID uuid.UUID, user *utils.Claims) ([]models.QuizAttempt, error)
 }
 
 // QuizService provides methods for managing quizzes
@@ -498,6 +499,28 @@ func (s *QuizService) GetActiveAttempt(ctx context.Context, quizID uuid.UUID, us
 		return nil, err
 	}
 	return attempt, nil
+}
+
+// GetListAttempt get list attempt
+func (s *QuizService) GetListAttempt(ctx context.Context, quizID uuid.UUID, user *utils.Claims) ([]models.QuizAttempt, error) {
+	quiz, err := s.quizRepo.GetQuizWithQuestions(ctx, quizID)
+	if err != nil {
+		return nil, err
+	}
+	// 3️⃣ Opsional: cek apakah user boleh akses quiz ini
+	allowed, err := s.checkUserAccess(ctx, user, quiz.MeetingID)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, fmt.Errorf("forbidden")
+	}
+
+	attempts, err := s.quizRepo.GetAttemptsByQuizAndUser(ctx, quizID, user.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return attempts, nil
 }
 
 // GetAttemptDetail detail
