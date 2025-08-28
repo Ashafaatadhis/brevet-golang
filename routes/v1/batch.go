@@ -16,22 +16,32 @@ func RegisterBatchRoute(r fiber.Router, db *gorm.DB) {
 
 	batchRepository := repository.NewBatchRepository(db)
 	userRepository := repository.NewUserRepository(db)
+	quizRepository := repository.NewQuizRepository(db)
+	testimonialRepository := repository.NewTestimonialRepository(db)
 	courseRepository := repository.NewCourseRepository(db)
 	assignmentRepository := repository.NewAssignmentRepository(db)
+	purchaseRepository := repository.NewPurchaseRepository(db)
 	submissionRepository := repository.NewSubmissionRepository(db)
+
+	emailService, err := services.NewEmailServiceFromEnv()
+	if err != nil {
+		panic(err)
+	}
 	fileService := services.NewFileService()
 	courseService := services.NewCourseService(courseRepository, db, fileService)
-	batchService := services.NewBatchService(batchRepository, userRepository, courseRepository, assignmentRepository, submissionRepository, db, fileService)
+	batchService := services.NewBatchService(batchRepository, userRepository, quizRepository, courseRepository, assignmentRepository, submissionRepository, db, fileService)
+	purchaseService := services.NewPurchaseService(purchaseRepository, userRepository, batchRepository, emailService, db)
+	testimonialService := services.NewTestimonialService(testimonialRepository, purchaseService, batchRepository)
 
 	meetingRepository := repository.NewMeetingRepository(db)
 	purchaseRepo := repository.NewPurchaseRepository(db)
 	meetingService := services.NewMeetingService(meetingRepository, batchRepository, purchaseRepo, userRepository, db)
 
 	batchController := controllers.NewBatchController(batchService, meetingService, courseService, db)
+	testimonialController := controllers.NewTestimonialController(testimonialService)
 
 	meetingController := controllers.NewMeetingController(meetingService, db)
 
-	purchaseRepository := repository.NewPurchaseRepository(db)
 	attendanceRepository := repository.NewAttendanceRepository(db)
 	attendanceService := services.NewAttendanceService(attendanceRepository, meetingRepository, purchaseRepository, db)
 	attendanceController := controllers.NewAttendanceController(attendanceService, db)
@@ -78,5 +88,15 @@ func RegisterBatchRoute(r fiber.Router, db *gorm.DB) {
 		middlewares.ValidateBody[dto.BulkAttendanceRequest](), attendanceController.BulkUpsertAttendance)
 	r.Get("/:batchSlug/attendances", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin"}), attendanceController.GetAllAttendancesByBatchSlug)
+
+	// ==================================
+	// 				Testimonial
+	// ==================================
+	r.Get("/:batchSlug/testimonials",
+		testimonialController.GetByBatchIDFiltered)
+	r.Post("/:batchID/testimonials", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"siswa"}),
+		middlewares.ValidateBody[dto.CreateTestimonialRequest](),
+		testimonialController.Create)
 
 }
