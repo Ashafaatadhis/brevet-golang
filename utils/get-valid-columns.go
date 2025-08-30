@@ -75,15 +75,15 @@ func GetValidColumnsFromStruct(models ...any) map[string]bool {
 }
 
 // getColumnName extracts column name from gorm tag, or converts field name to snake_case
-func getColumnName(field reflect.StructField) string {
-	gormTag := field.Tag.Get("gorm")
-	for _, tag := range strings.Split(gormTag, ";") {
-		if strings.HasPrefix(tag, "column:") {
-			return strings.TrimPrefix(tag, "column:")
-		}
-	}
-	return toSnakeCase(field.Name)
-}
+// func getColumnName(field reflect.StructField) string {
+// 	gormTag := field.Tag.Get("gorm")
+// 	for _, tag := range strings.Split(gormTag, ";") {
+// 		if strings.HasPrefix(tag, "column:") {
+// 			return strings.TrimPrefix(tag, "column:")
+// 		}
+// 	}
+// 	return toSnakeCase(field.Name)
+// }
 
 // toSnakeCase converts CamelCase to snake_case
 func toSnakeCase(str string) string {

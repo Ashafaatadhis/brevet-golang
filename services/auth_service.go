@@ -34,15 +34,20 @@ type AuthService struct {
 	repo            repository.IAuthRepository
 	verificationSvc IVerificationService
 	sessionRepo     repository.IUserSessionRepository
+
+	tokenService ITokenService
+	emailService IEmailService
 }
 
 // NewAuthService creates a new instance of AuthService
 func NewAuthService(repo repository.IAuthRepository, verificationSvc IVerificationService,
-	sessionRepo repository.IUserSessionRepository) IAuthService {
+	sessionRepo repository.IUserSessionRepository, tokenService ITokenService, emailService IEmailService) IAuthService {
 	return &AuthService{
 		repo:            repo,
 		verificationSvc: verificationSvc,
 		sessionRepo:     sessionRepo,
+		tokenService:    tokenService,
+		emailService:    emailService,
 	}
 }
 
@@ -159,7 +164,7 @@ func (s *AuthService) Login(ctx context.Context, req *dto.LoginRequest, c *fiber
 func (s *AuthService) VerifyUserEmail(ctx context.Context, token, code string) error {
 	jwtSecret := config.GetEnv("VERIFICATION_TOKEN_SECRET", "default-key")
 
-	payload, err := utils.ExtractUserIDFromToken(token, jwtSecret)
+	payload, err := s.tokenService.ExtractUserIDFromToken(token, jwtSecret)
 	if err != nil {
 		return fmt.Errorf("token tidak valid: %w", err)
 	}
@@ -185,7 +190,7 @@ func (s *AuthService) VerifyUserEmail(ctx context.Context, token, code string) e
 func (s *AuthService) ResendVerificationCode(ctx context.Context, token string) error {
 	jwtSecret := config.GetEnv("VERIFICATION_TOKEN_SECRET", "default-key")
 
-	payload, err := utils.ExtractUserIDFromToken(token, jwtSecret)
+	payload, err := s.tokenService.ExtractUserIDFromToken(token, jwtSecret)
 	if err != nil {
 		return fmt.Errorf("token tidak valid")
 	}
@@ -215,13 +220,16 @@ func (s *AuthService) ResendVerificationCode(ctx context.Context, token string) 
 	}
 
 	// Generate token verifikasi baru
-	token, err = utils.GenerateVerificationToken(user.ID, user.Email)
+	token, err = s.tokenService.GenerateVerificationToken(user.ID, user.Email)
 	if err != nil {
 		return fmt.Errorf("gagal buat token verifikasi: %w", err)
 	}
 
 	// Kirim email (async)
-	go utils.SendVerificationEmail(user.Email, code, token)
+	err = s.emailService.SendVerificationEmail(user.Email, code, token)
+	if err != nil {
+		return fmt.Errorf("gagal kirim email: %w", err)
+	}
 
 	return nil
 }
@@ -230,7 +238,7 @@ func (s *AuthService) ResendVerificationCode(ctx context.Context, token string) 
 func (s *AuthService) RefreshTokens(ctx context.Context, refreshToken string) (*dto.LoginResult, error) {
 	// Verifikasi refresh token
 	refreshSecret := config.GetEnv("REFRESH_TOKEN_SECRET", "default-key")
-	claims, err := utils.ExtractUserIDFromToken(refreshToken, refreshSecret)
+	claims, err := s.tokenService.ExtractUserIDFromToken(refreshToken, refreshSecret)
 	if err != nil {
 		return nil, fmt.Errorf("refresh token tidak valid: %w", err)
 	}
@@ -246,7 +254,7 @@ func (s *AuthService) RefreshTokens(ctx context.Context, refreshToken string) (*
 	accessToken := ""
 	accessExpiry := config.GetIntEnv("ACCESS_TOKEN_EXPIRY_HOURS", 24)
 
-	accessToken, err = utils.GenerateJWT(*user, accessSecret, accessExpiry)
+	accessToken, err = s.tokenService.GenerateJWT(*user, accessSecret, accessExpiry)
 	if err != nil {
 		return nil, fmt.Errorf("gagal generate token baru: %w", err)
 	}

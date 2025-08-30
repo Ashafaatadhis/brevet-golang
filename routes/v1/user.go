@@ -17,8 +17,13 @@ func RegisterUserRoutes(r fiber.Router, db *gorm.DB) {
 	authRepository := repository.NewAuthRepository(db)
 	sessionRepository := repository.NewUserSessionRepository(db)
 	verificationRepository := repository.NewVerificationRepository(db)
+	emailService, err := services.NewEmailServiceFromEnv()
+	if err != nil {
+		panic(err)
+	}
 	verificationService := services.NewVerificationService(verificationRepository)
-	authService := services.NewAuthService(authRepository, verificationService, sessionRepository)
+	tokenService := services.NewTokenService()
+	authService := services.NewAuthService(authRepository, verificationService, sessionRepository, tokenService, emailService)
 
 	userRepository := repository.NewUserRepository(db)
 	userService := services.NewUserService(userRepository, db, authRepository)
