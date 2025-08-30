@@ -21,7 +21,12 @@ func RegisterMeRoutes(r fiber.Router, db *gorm.DB) {
 	sessionRepository := repository.NewUserSessionRepository(db)
 	verificationRepository := repository.NewVerificationRepository(db)
 	verificationService := services.NewVerificationService(verificationRepository)
-	authService := services.NewAuthService(authRepository, verificationService, sessionRepository)
+	emailService, err := services.NewEmailServiceFromEnv()
+	if err != nil {
+		panic(err)
+	}
+	tokenService := services.NewTokenService()
+	authService := services.NewAuthService(authRepository, verificationService, sessionRepository, tokenService, emailService)
 
 	userRepository := repository.NewUserRepository(db)
 	userService := services.NewUserService(userRepository, db, authRepository)
@@ -44,10 +49,6 @@ func RegisterMeRoutes(r fiber.Router, db *gorm.DB) {
 	meetingService := services.NewMeetingService(meetingRepository, batchRepository, purchaseRepo, userRepository, db)
 
 	batchController := controllers.NewBatchController(batchService, meetingService, courseService, db)
-	emailService, err := services.NewEmailServiceFromEnv()
-	if err != nil {
-		panic(err)
-	}
 
 	purchaseService := services.NewPurchaseService(purchaseRepo, userRepository, batchRepository, emailService, db)
 	purchaseController := controllers.NewPurchaseController(purchaseService, db)

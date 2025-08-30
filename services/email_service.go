@@ -1,6 +1,7 @@
 package services
 
 import (
+	"brevet-api/utils"
 	"fmt"
 	"os"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 // IEmailService interface
 type IEmailService interface {
 	SendWithAttachment(to, subject, body, attachmentPath string) error
+	SendVerificationEmail(email, code, token string) error
 }
 
 // EmailService for struct
@@ -61,5 +63,11 @@ func (s *EmailService) SendWithAttachment(to, subject, body, attachmentPath stri
 	if err := d.DialAndSend(m); err != nil {
 		return fmt.Errorf("failed to send email: %w", err)
 	}
+	return nil
+}
+
+// SendVerificationEmail send
+func (s *EmailService) SendVerificationEmail(email, code, token string) error {
+	go utils.SendVerificationEmail(email, code, token)
 	return nil
 }

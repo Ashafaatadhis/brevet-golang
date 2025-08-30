@@ -45,9 +45,14 @@ func (s *VerificationService) GenerateVerificationCode(ctx context.Context, tx *
 	}
 	expiry := time.Now().Add(time.Duration(expiryMinutes) * time.Minute)
 
-	// Update kode verifikasi ke DB
-	if err := s.repo.WithTx(tx).UpdateVerificationCode(ctx, userID, codeStr, expiry); err != nil {
-		return "", err
+	if tx == nil {
+		if err := s.repo.UpdateVerificationCode(ctx, userID, codeStr, expiry); err != nil {
+			return "", err
+		}
+	} else {
+		if err := s.repo.WithTx(tx).UpdateVerificationCode(ctx, userID, codeStr, expiry); err != nil {
+			return "", err
+		}
 	}
 
 	return codeStr, nil
