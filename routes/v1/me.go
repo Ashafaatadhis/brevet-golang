@@ -87,6 +87,11 @@ func RegisterMeRoutes(r fiber.Router, db *gorm.DB) {
 	r.Post("/batches/:batchID/certificate", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"siswa"}), certificateController.GenerateCertificate)
 
+	r.Get("/batches/:batchID/certificate",
+		middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"siswa"}),
+		certificateController.GetCertificate)
+
 	// r.Get("/batches", middlewares.RequireAuth(),
 	// 	middlewares.RequireRole([]string{"guru", "siswa"}), batchController.GetMyBatchesByID)
 }
