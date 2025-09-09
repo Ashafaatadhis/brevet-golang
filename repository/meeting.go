@@ -29,6 +29,7 @@ type IMeetingRepository interface {
 	IsBatchOwnedByUser(ctx context.Context, userID uuid.UUID, batchSlug string) (bool, error)
 	IsMeetingTaughtByUser(ctx context.Context, meetingID, userID uuid.UUID) (bool, error)
 	IsUserTeachingInMeeting(ctx context.Context, userID, meetingID uuid.UUID) (bool, error)
+	GetMeetingNamesByBatchID(ctx context.Context, batchID uuid.UUID) ([]string, error)
 }
 
 // MeetingRepository is a struct that represents a meeting repository
@@ -151,6 +152,24 @@ func (r *MeetingRepository) FindByID(ctx context.Context, id uuid.UUID) (*models
 		return nil, err
 	}
 	return &meeting, nil
+}
+
+// GetMeetingNamesByBatchID mengambil daftar nama meeting berdasarkan BatchID
+func (r *MeetingRepository) GetMeetingNamesByBatchID(ctx context.Context, batchID uuid.UUID) ([]string, error) {
+	var names []string
+
+	err := r.db.WithContext(ctx).
+		Model(&models.Meeting{}).
+		Select("meetings.title").
+		Where("meetings.batch_id = ?", batchID).
+		Order("meetings.created_at ASC").
+		Pluck("meetings.title", &names).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return names, nil
 }
 
 // Create creates a new meeetings

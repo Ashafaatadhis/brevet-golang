@@ -18,6 +18,7 @@ import (
 // IFileService interface
 type IFileService interface {
 	SaveFile(ctx *fiber.Ctx, file *multipart.FileHeader, location string, allowedExts []string) (string, error)
+	SaveGeneratedFile(location, filename string, data []byte) (string, error)
 	DeleteFile(cleanPath string) error
 }
 
@@ -69,6 +70,35 @@ func (s *FileService) SaveFile(ctx *fiber.Ctx, file *multipart.FileHeader, locat
 
 	return fmt.Sprintf("/uploads/%s", publicPath), nil
 
+}
+
+// SaveGeneratedFile save generated file
+func (s *FileService) SaveGeneratedFile(location, filename string, data []byte) (string, error) {
+	now := time.Now()
+	subPath := filepath.Join(location, now.Format("2006"), now.Format("01"), now.Format("02"))
+	saveDir := filepath.Join(s.BaseDir, filepath.Clean(subPath))
+
+	if !utils.IsSafePath(s.BaseDir, saveDir) {
+		return "", fmt.Errorf("Lokasi upload tidak valid")
+	}
+
+	if err := os.MkdirAll(saveDir, 0755); err != nil {
+		return "", fmt.Errorf("Gagal membuat folder upload: %w", err)
+	}
+
+	savePath := filepath.Join(saveDir, filename)
+	if err := os.WriteFile(savePath, data, 0644); err != nil {
+		return "", fmt.Errorf("Gagal menyimpan file: %w", err)
+	}
+
+	publicPath := filepath.ToSlash(filepath.Join(subPath, filename))
+
+	if config.GetEnv("USE_CDN", "false") == "true" {
+		cdnBase := config.GetEnv("CDN_URL", "https://cdn.tcugapps.com")
+		return fmt.Sprintf("%s/%s", strings.TrimRight(cdnBase, "/"), publicPath), nil
+	}
+
+	return fmt.Sprintf("/uploads/%s", publicPath), nil
 }
 
 // DeleteFile deletes a file from the server after validating the path

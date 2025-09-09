@@ -19,6 +19,7 @@ type IAttendanceRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*models.Attendance, error)
 	GetByMeetingAndUser(ctx context.Context, meetingID, userID uuid.UUID) (*models.Attendance, error)
 	UpdateByMeetingAndUser(ctx context.Context, meetingID, userID uuid.UUID, update *models.Attendance) error
+	CountByBatchUser(ctx context.Context, batchID, userID uuid.UUID) (int64, error)
 }
 
 // AttendanceRepository provides methods for managing assignments
@@ -140,4 +141,18 @@ func (r *AttendanceRepository) UpdateByMeetingAndUser(ctx context.Context, meeti
 			"note":       update.Note,
 			"updated_by": update.UpdatedBy,
 		}).Error
+}
+
+// CountByBatchUser returns total meetings attended by a user in a batch
+func (r *AttendanceRepository) CountByBatchUser(ctx context.Context, batchID, userID uuid.UUID) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&models.Attendance{}).
+		Joins("JOIN meetings ON meetings.id = attendances.meeting_id").
+		Where("attendances.user_id = ? AND attendances.is_present = TRUE AND meetings.batch_id = ?", userID, batchID).
+		Count(&count).Error
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }

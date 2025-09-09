@@ -1,3 +1,5 @@
 cara run awoawawkoawk
 
 air --build.cmd "go build -o .\bin\application.exe main.go" --build.bin ".\bin\application.exe"
+
+mockery --name=IFileService --dir=./services --output=mocks --outpkg=mocks        
