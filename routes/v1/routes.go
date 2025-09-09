@@ -67,4 +67,8 @@ func RegisterV1Routes(r fiber.Router, db *gorm.DB) {
 	testimonialGroup := r.Group("/testimonials")
 	RegisterTestimonialRoute(testimonialGroup, db)
 
+	// /v1/certificates
+	certificateGroup := r.Group("/certificates")
+	RegisterCertificateRoutes(certificateGroup, db)
+
 }

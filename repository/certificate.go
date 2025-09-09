@@ -11,10 +11,13 @@ import (
 
 // ICertificateRepository interface
 type ICertificateRepository interface {
+	GetByBatch(ctx context.Context, batchID uuid.UUID) ([]*models.Certificate, error)
 	GetByBatchUser(ctx context.Context, batchID, userID uuid.UUID) (*models.Certificate, error)
 	Create(ctx context.Context, cert *models.Certificate) error
 	Update(ctx context.Context, cert *models.Certificate) error
 	GetLastSequenceByBatch(ctx context.Context, batchID uuid.UUID) (int, error)
+	GetByIDAndBatch(ctx context.Context, certID, batchID uuid.UUID) (*models.Certificate, error)
+	GetByID(ctx context.Context, certID uuid.UUID) (*models.Certificate, error)
 }
 
 // CertificateRepository is a struct that represents a certificate repository
@@ -25,6 +28,18 @@ type CertificateRepository struct {
 // NewCertificateRepository creates a new certificate repository
 func NewCertificateRepository(db *gorm.DB) ICertificateRepository {
 	return &CertificateRepository{db: db}
+}
+
+// GetByBatch get by batch ied
+func (r *CertificateRepository) GetByBatch(ctx context.Context, batchID uuid.UUID) ([]*models.Certificate, error) {
+	var certs []*models.Certificate
+	err := r.db.WithContext(ctx).
+		Where("batch_id = ?", batchID).
+		Find(&certs).Error
+	if err != nil {
+		return nil, err
+	}
+	return certs, nil
 }
 
 // GetByBatchUser retrieves a certificate by batch ID and user ID
@@ -71,4 +86,28 @@ func (r *CertificateRepository) GetLastSequenceByBatch(ctx context.Context, batc
 		return 0, nil
 	}
 	return seq, nil
+}
+
+// GetByIDAndBatch get by id and batch id
+func (r *CertificateRepository) GetByIDAndBatch(ctx context.Context, certID, batchID uuid.UUID) (*models.Certificate, error) {
+	var cert models.Certificate
+	err := r.db.WithContext(ctx).
+		Where("id = ? AND batch_id = ?", certID, batchID).
+		First(&cert).Error
+	if err != nil {
+		return nil, err
+	}
+	return &cert, nil
+}
+
+// GetByID get certificate by id
+func (r *CertificateRepository) GetByID(ctx context.Context, certID uuid.UUID) (*models.Certificate, error) {
+	var cert models.Certificate
+	err := r.db.WithContext(ctx).
+		Where("id = ?", certID).
+		First(&cert).Error
+	if err != nil {
+		return nil, err
+	}
+	return &cert, nil
 }

@@ -5,6 +5,7 @@ import (
 	"brevet-api/helpers"
 	"brevet-api/models"
 	"brevet-api/repository"
+	"brevet-api/utils"
 	"bytes"
 	"context"
 	"fmt"
@@ -22,7 +23,15 @@ import (
 
 // ICertificateService interface
 type ICertificateService interface {
-	EnsureCertificate(ctx context.Context, batchID uuid.UUID, userID uuid.UUID) (*models.Certificate, error)
+	generatePDF(userName string, batch *models.Batch, certNumber string, listOfMeeting []string, qrPath string) (string, error)
+	generateQRCode(certID uuid.UUID) (string, error)
+	generateCertificateNumber(ctx context.Context, batchID uuid.UUID) (string, error)
+	checkUserAccess(ctx context.Context, user *utils.Claims, batchID uuid.UUID) (bool, error)
+	EnsureCertificate(ctx context.Context, batchID uuid.UUID, user *utils.Claims) (*models.Certificate, error)
+	GetCertificateByBatchUser(ctx context.Context, batchID uuid.UUID, user *utils.Claims) (*models.Certificate, error)
+	GetCertificatesByBatch(ctx context.Context, batchID uuid.UUID, user *utils.Claims) ([]*models.Certificate, error)
+	GetCertificateDetail(ctx context.Context, certID uuid.UUID, claims *utils.Claims) (*models.Certificate, error)
+	VerifyCertificate(ctx context.Context, certID uuid.UUID) (*models.Certificate, error)
 }
 
 // CertificateService provides methods for managing courses
@@ -389,22 +398,43 @@ func (s *CertificateService) generateCertificateNumber(ctx context.Context, batc
 	return fmt.Sprintf("%s-%s %04d", prefix, batch.ID.String()[:8], nextSeq), nil
 }
 
+func (s *CertificateService) checkUserAccess(ctx context.Context, user *utils.Claims, batchID uuid.UUID) (bool, error) {
+	// Cari batch info dari meetingID
+	batch, err := s.batchRepo.FindByID(ctx, batchID) // balikin batchSlug & batchID
+	if err != nil {
+		return false, err
+	}
+
+	// Kalau role teacher, cek apakah dia mengajar batch ini
+	if user.Role == string(models.RoleTypeGuru) {
+		return s.meetingRepo.IsBatchOwnedByUser(ctx, user.UserID, batch.Slug)
+	}
+
+	// Kalau student, cek pembayaran
+	if user.Role == string(models.RoleTypeSiswa) {
+		return s.purchaseService.HasPaid(ctx, user.UserID, batch.ID)
+	}
+
+	// Role lain tidak diizinkan
+	return false, nil
+}
+
 // EnsureCertificate memastikan sertifikat dibuat untuk user
-func (s *CertificateService) EnsureCertificate(ctx context.Context, batchID uuid.UUID, userID uuid.UUID) (*models.Certificate, error) {
-	fmt.Println("[DEBUG] Mulai EnsureCertificate", "batchID:", batchID, "userID:", userID)
+func (s *CertificateService) EnsureCertificate(ctx context.Context, batchID uuid.UUID, user *utils.Claims) (*models.Certificate, error) {
+	fmt.Println("[DEBUG] Mulai EnsureCertificate", "batchID:", batchID, "userID:", user.UserID)
 
 	// bayar dulu bos
-	isPaid, err := s.purchaseService.HasPaid(ctx, userID, batchID)
-	fmt.Println("[DEBUG] isPaid:", isPaid, "err:", err)
+	allowed, err := s.checkUserAccess(ctx, user, batchID)
+	fmt.Println("[DEBUG] isPaid:", allowed, "err:", err)
 	if err != nil {
 		return nil, err
 	}
-	if !isPaid {
+	if !allowed {
 		return nil, fmt.Errorf("forbidden")
 	}
 
 	// 1. cek progress assignment & quiz
-	progress, err := s.batchService.CalculateProgress(ctx, batchID, userID)
+	progress, err := s.batchService.CalculateProgress(ctx, batchID, user.UserID)
 	fmt.Println("[DEBUG] progress:", progress, "err:", err)
 	if err != nil {
 		return nil, err
@@ -419,7 +449,7 @@ func (s *CertificateService) EnsureCertificate(ctx context.Context, batchID uuid
 	if err != nil {
 		return nil, err
 	}
-	attendedMeetings, err := s.attendanceRepo.CountByBatchUser(ctx, batchID, userID)
+	attendedMeetings, err := s.attendanceRepo.CountByBatchUser(ctx, batchID, user.UserID)
 	fmt.Println("[DEBUG] attendedMeetings:", attendedMeetings, "err:", err)
 	if err != nil {
 		return nil, err
@@ -429,13 +459,13 @@ func (s *CertificateService) EnsureCertificate(ctx context.Context, batchID uuid
 	}
 
 	// cek sertifikat existing
-	_, err = s.certRepo.GetByBatchUser(ctx, batchID, userID)
+	_, err = s.certRepo.GetByBatchUser(ctx, batchID, user.UserID)
 	fmt.Println("[DEBUG] GetByBatchUser err:", err)
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
 	if err == nil {
-		return nil, fmt.Errorf("sertifikat sudah ada untuk user %s di batch %s", userID, batchID)
+		return nil, fmt.Errorf("sertifikat sudah ada untuk user %s di batch %s", user.UserID, batchID)
 	}
 
 	certNumber, err := s.generateCertificateNumber(ctx, batchID)
@@ -447,7 +477,7 @@ func (s *CertificateService) EnsureCertificate(ctx context.Context, batchID uuid
 	cert := &models.Certificate{
 		BatchID: batchID,
 		Number:  certNumber,
-		UserID:  userID,
+		UserID:  user.UserID,
 	}
 	err = s.certRepo.Create(ctx, cert)
 	fmt.Println("[DEBUG] Insert Certificate err:", err, "certID:", cert.ID)
@@ -461,12 +491,6 @@ func (s *CertificateService) EnsureCertificate(ctx context.Context, batchID uuid
 		return nil, err
 	}
 	defer os.Remove(qrPath)
-
-	user, err := s.userRepo.FindByID(ctx, userID)
-	fmt.Println("[DEBUG] user:", user, "err:", err)
-	if err != nil {
-		return nil, err
-	}
 
 	batch, err := s.batchRepo.GetBatchWithCourse(ctx, batchID)
 	fmt.Println("[DEBUG] batch:", batch, "err:", err)
@@ -497,4 +521,62 @@ func (s *CertificateService) EnsureCertificate(ctx context.Context, batchID uuid
 
 	fmt.Println("[DEBUG] Sukses generate certificate", "certID:", cert.ID, "URL:", cert.URL)
 	return cert, nil
+}
+
+// GetCertificateByBatchUser get certificate by batch id & user id
+func (s *CertificateService) GetCertificateByBatchUser(ctx context.Context, batchID uuid.UUID, user *utils.Claims) (*models.Certificate, error) {
+	allowed, err := s.checkUserAccess(ctx, user, batchID)
+	fmt.Println("[DEBUG] isPaid:", allowed, "err:", err)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, fmt.Errorf("forbidden")
+	}
+
+	cert, err := s.certRepo.GetByBatchUser(ctx, batchID, user.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return cert, nil
+}
+
+// GetCertificatesByBatch for get
+func (s *CertificateService) GetCertificatesByBatch(ctx context.Context, batchID uuid.UUID, user *utils.Claims) ([]*models.Certificate, error) {
+	allowed, err := s.checkUserAccess(ctx, user, batchID)
+	fmt.Println("[DEBUG] isPaid:", allowed, "err:", err)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, fmt.Errorf("forbidden")
+	}
+
+	return s.certRepo.GetByBatch(ctx, batchID)
+}
+
+// GetCertificateDetail detail certificate
+func (s *CertificateService) GetCertificateDetail(ctx context.Context, certID uuid.UUID, claims *utils.Claims) (*models.Certificate, error) {
+	// Ambil certificate dulu berdasarkan certID
+	cert, err := s.certRepo.GetByID(ctx, certID)
+	if err != nil {
+		return nil, err
+	}
+
+	// baru ambil batchID dari hasil query
+	allowed, err := s.checkUserAccess(ctx, claims, cert.BatchID)
+	fmt.Println("[DEBUG] allowed:", allowed, "err:", err)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, fmt.Errorf("forbidden")
+	}
+
+	return cert, nil
+}
+
+// VerifyCertificate verifies certificate authenticity by ID (no auth required)
+func (s *CertificateService) VerifyCertificate(ctx context.Context, certID uuid.UUID) (*models.Certificate, error) {
+	return s.certRepo.GetByID(ctx, certID)
 }
