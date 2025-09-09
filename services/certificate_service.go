@@ -155,8 +155,10 @@ func (s *CertificateService) generatePDF(userName string, batch *models.Batch, c
 	tpl2 := importer.ImportPage(pdf, templatePath, 2, "/MediaBox")
 	// if tpl2 != 0 {
 	// Bangun data materials dari listOfMeeting
+
 	materials := make([]LearningMaterial, 0, len(listOfMeeting))
 	for i, m := range listOfMeeting {
+		fmt.Printf("[DEBUG] Meeting %d raw: %q (len=%d)\n", i+1, m, len(m))
 		materials = append(materials, LearningMaterial{
 			No:       fmt.Sprintf("%d", i+1),
 			Material: m,
@@ -185,8 +187,11 @@ func (s *CertificateService) generatePDF(userName string, batch *models.Batch, c
 
 	// ===== Hitung total tinggi body =====
 	tableBodyH := 0.0
-	for _, m := range materials {
+	for i, m := range materials {
+		fmt.Printf("[DEBUG] SplitLines material %d: %q (len=%d)\n", i+1, m.Material, len(m.Material))
 		linesMaterial := pdf.SplitLines([]byte(m.Material), colWidthMaterial-2*padding)
+		fmt.Printf("[DEBUG] lines=%d\n", len(linesMaterial))
+
 		cellH := float64(len(linesMaterial))*rowHeight + 2*padding
 		tableBodyH += cellH
 	}
@@ -212,10 +217,11 @@ func (s *CertificateService) generatePDF(userName string, batch *models.Batch, c
 	// ===== Baris data =====
 	pdf.SetY(startY + cellHHeader)
 
-	for _, m := range materials {
+	for i, m := range materials {
 		yStart := pdf.GetY()
-
+		fmt.Printf("[DEBUG] Render row %d: %q at Y=%.2f\n", i+1, m.Material, yStart)
 		linesMaterial := pdf.SplitLines([]byte(m.Material), colWidthMaterial-2*padding)
+		fmt.Printf("[DEBUG] Row %d has %d lines\n", i+1, len(linesMaterial))
 		cellH := float64(len(linesMaterial))*rowHeight + 2*padding
 
 		pdf.SetFont("Cambria", "", 12)
