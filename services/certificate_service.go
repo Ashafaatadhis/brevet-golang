@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -66,7 +67,6 @@ type LearningMaterial struct {
 }
 
 // generatePDF membuat PDF sertifikat dari template gambar
-// generatePDF membuat PDF sertifikat dari template gambar
 func (s *CertificateService) generatePDF(userName string, batch *models.Batch, certNumber string, listOfMeeting []string, qrPath string) (string, error) {
 	// pastikan folder certificates ada
 	if _, err := os.Stat("./certificates"); os.IsNotExist(err) {
@@ -82,12 +82,23 @@ func (s *CertificateService) generatePDF(userName string, batch *models.Batch, c
 
 	pdf := gofpdf.New("L", "mm", "A4", "")
 
-	// Add fonts with proper error handling
-	pdf.AddUTF8Font("Lucida", "", "./fonts/lucida.ttf")
-	pdf.AddUTF8Font("Cambria", "I", "./fonts/cambriai.ttf")
-	pdf.AddUTF8Font("Cambria", "", "./fonts/cambria.ttf")
-	pdf.AddUTF8Font("Cambria", "IB", "./fonts/cambriaib.ttf")
-	pdf.AddUTF8Font("Cambria", "B", "./fonts/cambriab.ttf")
+	// Add fonts with try-catch mechanism
+	safeAddFont := func(name, style, path string) {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("[WARNING] Failed to add font %s: %v\n", path, r)
+			}
+		}()
+		if _, err := os.Stat(path); err == nil {
+			pdf.AddUTF8Font(name, style, path)
+		}
+	}
+
+	safeAddFont("Lucida", "", "./fonts/lucida.ttf")
+	safeAddFont("Cambria", "I", "./fonts/cambriai.ttf")
+	safeAddFont("Cambria", "", "./fonts/cambria.ttf")
+	safeAddFont("Cambria", "IB", "./fonts/cambriaib.ttf")
+	safeAddFont("Cambria", "B", "./fonts/cambriab.ttf")
 
 	// Helper function to safely set font with fallback
 	safeSetFont := func(fontFamily, style string, size float64) {
@@ -98,6 +109,38 @@ func (s *CertificateService) generatePDF(userName string, batch *models.Batch, c
 			}
 		}()
 		pdf.SetFont(fontFamily, style, size)
+	}
+
+	// Safe SplitLines function
+	safeSplitLines := func(text string, width float64) [][]byte {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("[WARNING] SplitLines failed for text: %q, width: %f, error: %v\n", text, width, r)
+			}
+		}()
+
+		if width <= 0 {
+			fmt.Printf("[WARNING] Invalid width %f for text: %q\n", width, text)
+			return [][]byte{[]byte(text)}
+		}
+
+		if len(text) == 0 {
+			return [][]byte{[]byte("")}
+		}
+
+		// Fallback for very long texts or problematic characters
+		if len(text) > 500 {
+			fmt.Printf("[WARNING] Text too long (%d chars), truncating: %q\n", len(text), text[:50]+"...")
+			text = text[:500] + "..."
+		}
+
+		lines := pdf.SplitLines([]byte(text), width)
+		if len(lines) == 0 {
+			fmt.Printf("[WARNING] SplitLines returned empty for: %q\n", text)
+			return [][]byte{[]byte(text)}
+		}
+
+		return lines
 	}
 
 	importer := gofpdi.NewImporter()
@@ -167,18 +210,26 @@ func (s *CertificateService) generatePDF(userName string, batch *models.Batch, c
 	if tpl2 == 0 {
 		fmt.Println("[WARNING] Failed to import page 2 from template, skipping second page")
 	} else {
+		fmt.Printf("[DEBUG] Successfully imported page 2, processing %d meetings\n", len(listOfMeeting))
+
 		// Bangun data materials dari listOfMeeting
 		materials := make([]LearningMaterial, 0, len(listOfMeeting))
 		for i, m := range listOfMeeting {
 			fmt.Printf("[DEBUG] Meeting %d raw: %q (len=%d)\n", i+1, m, len(m))
+			// Sanitize meeting name
+			sanitized := strings.TrimSpace(m)
+			if len(sanitized) == 0 {
+				sanitized = fmt.Sprintf("Meeting %d", i+1)
+			}
 			materials = append(materials, LearningMaterial{
 				No:       fmt.Sprintf("%d", i+1),
-				Material: m,
+				Material: sanitized,
 			})
 		}
 
 		pdf.AddPage()
 		importer.UseImportedTemplate(pdf, tpl2, 0, 0, 297, 210)
+
 		startX := 25.0
 		rowHeight := 8.0
 		colWidthNo := 15.0
@@ -186,35 +237,55 @@ func (s *CertificateService) generatePDF(userName string, batch *models.Batch, c
 		padding := 1.0
 		pageW, pageH := pdf.GetPageSize()
 
-		// ===== Hitung tinggi header =====
+		fmt.Printf("[DEBUG] Page dimensions: %.2f x %.2f\n", pageW, pageH)
+		fmt.Printf("[DEBUG] Table config: colWidthNo=%.2f, colWidthMaterial=%.2f, padding=%.2f\n", colWidthNo, colWidthMaterial, padding)
+
+		// ===== Hitung tinggi header dengan safe method =====
 		headerNo := "No."
 		headerMateri := "Learning Materials"
-		linesHeaderNo := pdf.SplitLines([]byte(headerNo), colWidthNo-2*padding)
-		linesHeaderMateri := pdf.SplitLines([]byte(headerMateri), colWidthMaterial-2*padding)
+
+		safeColWidthNo := colWidthNo - 2*padding
+		safeColWidthMaterial := colWidthMaterial - 2*padding
+
+		fmt.Printf("[DEBUG] Safe widths: No=%.2f, Material=%.2f\n", safeColWidthNo, safeColWidthMaterial)
+
+		linesHeaderNo := safeSplitLines(headerNo, safeColWidthNo)
+		linesHeaderMateri := safeSplitLines(headerMateri, safeColWidthMaterial)
+
 		maxLinesHeader := len(linesHeaderNo)
 		if len(linesHeaderMateri) > maxLinesHeader {
 			maxLinesHeader = len(linesHeaderMateri)
 		}
+
+		fmt.Printf("[DEBUG] Header lines: No=%d, Material=%d, max=%d\n", len(linesHeaderNo), len(linesHeaderMateri), maxLinesHeader)
+
 		cellHHeader := float64(maxLinesHeader)*rowHeight + 2*padding
 
-		// ===== Hitung total tinggi body =====
+		// ===== Hitung total tinggi body dengan safe method =====
 		tableBodyH := 0.0
 		for i, m := range materials {
-			fmt.Printf("[DEBUG] SplitLines material %d: %q (len=%d)\n", i+1, m.Material, len(m.Material))
-			linesMaterial := pdf.SplitLines([]byte(m.Material), colWidthMaterial-2*padding)
-			fmt.Printf("[DEBUG] lines=%d\n", len(linesMaterial))
+			fmt.Printf("[DEBUG] Processing material %d: %q (len=%d)\n", i+1, m.Material, len(m.Material))
+
+			linesMaterial := safeSplitLines(m.Material, safeColWidthMaterial)
+			fmt.Printf("[DEBUG] Material %d split into %d lines\n", i+1, len(linesMaterial))
 
 			cellH := float64(len(linesMaterial))*rowHeight + 2*padding
 			tableBodyH += cellH
+
+			fmt.Printf("[DEBUG] Material %d cell height: %.2f, total body height so far: %.2f\n", i+1, cellH, tableBodyH)
 		}
 
 		// ===== Total tinggi tabel =====
 		tableW := colWidthNo + colWidthMaterial
 		tableH := cellHHeader + tableBodyH
 
+		fmt.Printf("[DEBUG] Final table dimensions: %.2f x %.2f\n", tableW, tableH)
+
 		// ===== Hitung startX, startY agar tabel center =====
 		startX = (pageW - tableW) / 2
 		startY := (pageH - tableH) / 2
+
+		fmt.Printf("[DEBUG] Table position: (%.2f, %.2f)\n", startX, startY)
 
 		safeSetFont("Cambria", "B", 12)
 
@@ -232,8 +303,10 @@ func (s *CertificateService) generatePDF(userName string, batch *models.Batch, c
 		for i, m := range materials {
 			yStart := pdf.GetY()
 			fmt.Printf("[DEBUG] Render row %d: %q at Y=%.2f\n", i+1, m.Material, yStart)
-			linesMaterial := pdf.SplitLines([]byte(m.Material), colWidthMaterial-2*padding)
-			fmt.Printf("[DEBUG] Row %d has %d lines\n", i+1, len(linesMaterial))
+
+			linesMaterial := safeSplitLines(m.Material, safeColWidthMaterial)
+			fmt.Printf("[DEBUG] Row %d split into %d lines\n", i+1, len(linesMaterial))
+
 			cellH := float64(len(linesMaterial))*rowHeight + 2*padding
 
 			safeSetFont("Cambria", "", 12)
@@ -247,9 +320,11 @@ func (s *CertificateService) generatePDF(userName string, batch *models.Batch, c
 			pdf.MultiCell(colWidthMaterial-2*padding, rowHeight, m.Material, "1", "C", false)
 
 			pdf.SetY(yStart + cellH)
+			fmt.Printf("[DEBUG] Row %d completed, next Y: %.2f\n", i+1, pdf.GetY())
 		}
 	}
 
+	fmt.Println("[DEBUG] Starting PDF output generation")
 	buf := bytes.NewBuffer(nil)
 	if err := pdf.Output(buf); err != nil {
 		return "", fmt.Errorf("failed to generate PDF: %w", err)
@@ -259,12 +334,15 @@ func (s *CertificateService) generatePDF(userName string, batch *models.Batch, c
 		uuid.New().String()[:8],
 		time.Now().Format("20060102"))
 
+	fmt.Printf("[DEBUG] Saving file: %s, size: %d bytes\n", fileName, buf.Len())
+
 	// pakai FileService untuk simpan
 	publicURL, err := s.fileService.SaveGeneratedFile("certificates", fileName, buf.Bytes())
 	if err != nil {
 		return "", err
 	}
 
+	fmt.Printf("[DEBUG] File saved successfully: %s\n", publicURL)
 	return publicURL, nil
 }
 
