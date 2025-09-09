@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy Calibri fonts (pastikan ada di folder fonts/)
 COPY fonts/*.ttf /usr/share/fonts/truetype/msttcorefonts/
+COPY fonts/*.ttf ./fonts/
 RUN fc-cache -f -v
 
 WORKDIR /root/

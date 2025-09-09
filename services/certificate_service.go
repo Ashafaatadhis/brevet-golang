@@ -9,7 +9,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -81,50 +80,35 @@ func (s *CertificateService) generatePDF(userName string, batch *models.Batch, c
 		return "", fmt.Errorf("template file not found: %s", templatePath)
 	}
 
-	// Validasi font files sebelum digunakan
-	fonts := map[string]string{
-		"./fonts/lucida.ttf":    "Lucida",
-		"./fonts/cambriai.ttf":  "Cambria-I",
-		"./fonts/cambria.ttf":   "Cambria",
-		"./fonts/cambriaib.ttf": "Cambria-IB",
-		"./fonts/cambriab.ttf":  "Cambria-B",
-	}
-
 	pdf := gofpdf.New("L", "mm", "A4", "")
 
-	// Add fonts with error handling
-	for fontPath, fontName := range fonts {
-		if _, err := os.Stat(fontPath); os.IsNotExist(err) {
-			fmt.Printf("[WARNING] Font file not found: %s, using default font\n", fontPath)
-			continue
-		}
+	// Add fonts with proper error handling
+	pdf.AddUTF8Font("Lucida", "", "./fonts/lucida.ttf")
+	pdf.AddUTF8Font("Cambria", "I", "./fonts/cambriai.ttf")
+	pdf.AddUTF8Font("Cambria", "", "./fonts/cambria.ttf")
+	pdf.AddUTF8Font("Cambria", "IB", "./fonts/cambriaib.ttf")
+	pdf.AddUTF8Font("Cambria", "B", "./fonts/cambriab.ttf")
 
-		// Determine font style
-		var style string
-		if strings.Contains(fontName, "-IB") {
-			style = "IB"
-		} else if strings.Contains(fontName, "-I") {
-			style = "I"
-		} else if strings.Contains(fontName, "-B") {
-			style = "B"
-		} else {
-			style = ""
-		}
-
-		// Clean font name
-		cleanName := strings.Split(fontName, "-")[0]
-		pdf.AddUTF8Font(cleanName, style, fontPath)
+	// Helper function to safely set font with fallback
+	safeSetFont := func(fontFamily, style string, size float64) {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("[WARNING] Font setting failed (%s %s): %v, using Arial\n", fontFamily, style, r)
+				pdf.SetFont("Arial", style, size)
+			}
+		}()
+		pdf.SetFont(fontFamily, style, size)
 	}
 
 	importer := gofpdi.NewImporter()
 
-	// Validate template pages
+	// Import halaman 1 - halaman utama sertifikat
 	tpl1 := importer.ImportPage(pdf, templatePath, 1, "/MediaBox")
 
 	pdf.AddPage()
 	importer.UseImportedTemplate(pdf, tpl1, 0, 0, 297, 210)
 
-	// Add QR code with error handling
+	// Add QR code
 	if _, err := os.Stat(qrPath); err == nil {
 		pageW, pageH := pdf.GetPageSize()
 		qrSize := 40.0
@@ -136,44 +120,54 @@ func (s *CertificateService) generatePDF(userName string, batch *models.Batch, c
 		fmt.Printf("[WARNING] QR code file not found: %s\n", qrPath)
 	}
 
-	// Add text to page 1
+	// Tambahkan text di halaman 1
 	pdf.SetTextColor(0, 0, 0)
-	pdf.SetFont("Arial", "", 24) // Use default Arial if Lucida fails
+	safeSetFont("Lucida", "", 24)
 	pdf.SetXY(100, 95)
 	pdf.CellFormat(100, 10, userName, "", 0, "C", false, 0, "")
 
-	pdf.SetFont("Arial", "", 12)
-	pdf.Ln(11)
+	safeSetFont("Cambria", "", 12)
+	pdf.Ln(11) // jarak vertikal 10mm
 	pdf.CellFormat(0, 10, "No. "+certNumber, "", 1, "C", false, 0, "")
-	pdf.Ln(12.5)
-	pdf.SetFont("Arial", "I", 12)
+
+	// Pindah baris dulu (biar teks berikutnya di bawahnya)
+	pdf.Ln(12.5) // jarak vertikal 10mm
+	safeSetFont("Cambria", "I", 12)
+	// Tambahin teks di tengah
 	pdf.CellFormat(0, 10, "Training Programs of The Applied "+batch.Course.Title, "", 1, "C", false, 0, "")
+
+	// Pindah ke bawah
 	pdf.Ln(0.2)
 
-	// Format dates
+	// Format tanggal batch
 	startDate := batch.StartAt.Format("January 02, 2006")
 	endDate := batch.EndAt.Format("January 02, 2006")
+
 	period := fmt.Sprintf("%s – %s, Gunadarma University", startDate, endDate)
 	pdf.CellFormat(0, 10, period, "", 1, "C", false, 0, "")
 
-	// Print date
+	// Ambil tanggal cetak (sekarang)
 	printDate := time.Now()
+
+	// Format dengan suffix
 	day := printDate.Day()
 	suffix := helpers.OrdinalSuffix(day)
 	month := printDate.Format("January")
 	year := printDate.Format("2006")
+
 	formattedPrintDate := fmt.Sprintf("Jakarta, %s %d%s, %s", month, day, suffix, year)
-	pdf.Ln(0.3)
+
+	// Atur posisi (misalnya di tengah bawah halaman)
+	pdf.Ln(0.3) // jarak ke bawah
 	pdf.CellFormat(0, 10, formattedPrintDate, "", 1, "C", false, 0, "")
 
-	// Try to import page 2 with error handling
+	// Import halaman 2 - halaman tambahan (misal: terms & conditions, info tambahan, dll)
+	// Coba import halaman 2
 	tpl2 := importer.ImportPage(pdf, templatePath, 2, "/MediaBox")
 	if tpl2 == 0 {
-		fmt.Println("[WARNING] Failed to import page 2 from template, creating simple page")
-		// Create a simple second page instead
-		pdf.AddPage()
+		fmt.Println("[WARNING] Failed to import page 2 from template, skipping second page")
 	} else {
-		// Build materials data
+		// Bangun data materials dari listOfMeeting
 		materials := make([]LearningMaterial, 0, len(listOfMeeting))
 		for i, m := range listOfMeeting {
 			fmt.Printf("[DEBUG] Meeting %d raw: %q (len=%d)\n", i+1, m, len(m))
@@ -185,8 +179,6 @@ func (s *CertificateService) generatePDF(userName string, batch *models.Batch, c
 
 		pdf.AddPage()
 		importer.UseImportedTemplate(pdf, tpl2, 0, 0, 297, 210)
-
-		// Table configuration
 		startX := 25.0
 		rowHeight := 8.0
 		colWidthNo := 15.0
@@ -194,98 +186,63 @@ func (s *CertificateService) generatePDF(userName string, batch *models.Batch, c
 		padding := 1.0
 		pageW, pageH := pdf.GetPageSize()
 
-		// Calculate header height with safety check
+		// ===== Hitung tinggi header =====
 		headerNo := "No."
 		headerMateri := "Learning Materials"
-
-		// Safe SplitLines with validation
-		var linesHeaderNo, linesHeaderMateri [][]byte
-
-		// Use smaller width to avoid issues
-		safeColWidthNo := colWidthNo - 2*padding
-		safeColWidthMaterial := colWidthMaterial - 2*padding
-
-		if safeColWidthNo > 0 {
-			linesHeaderNo = pdf.SplitLines([]byte(headerNo), safeColWidthNo)
-		}
-		if safeColWidthMaterial > 0 {
-			linesHeaderMateri = pdf.SplitLines([]byte(headerMateri), safeColWidthMaterial)
-		}
-
-		// Validate results
-		if len(linesHeaderNo) == 0 {
-			linesHeaderNo = [][]byte{[]byte(headerNo)}
-		}
-		if len(linesHeaderMateri) == 0 {
-			linesHeaderMateri = [][]byte{[]byte(headerMateri)}
-		}
-
+		linesHeaderNo := pdf.SplitLines([]byte(headerNo), colWidthNo-2*padding)
+		linesHeaderMateri := pdf.SplitLines([]byte(headerMateri), colWidthMaterial-2*padding)
 		maxLinesHeader := len(linesHeaderNo)
 		if len(linesHeaderMateri) > maxLinesHeader {
 			maxLinesHeader = len(linesHeaderMateri)
 		}
 		cellHHeader := float64(maxLinesHeader)*rowHeight + 2*padding
 
-		// Calculate total body height with safety
+		// ===== Hitung total tinggi body =====
 		tableBodyH := 0.0
 		for i, m := range materials {
 			fmt.Printf("[DEBUG] SplitLines material %d: %q (len=%d)\n", i+1, m.Material, len(m.Material))
-
-			var linesMaterial [][]byte
-			if safeColWidthMaterial > 0 && len(m.Material) > 0 {
-				linesMaterial = pdf.SplitLines([]byte(m.Material), safeColWidthMaterial)
-			}
-
-			// Validate and ensure at least one line
-			if len(linesMaterial) == 0 {
-				linesMaterial = [][]byte{[]byte(m.Material)}
-			}
-
+			linesMaterial := pdf.SplitLines([]byte(m.Material), colWidthMaterial-2*padding)
 			fmt.Printf("[DEBUG] lines=%d\n", len(linesMaterial))
+
 			cellH := float64(len(linesMaterial))*rowHeight + 2*padding
 			tableBodyH += cellH
 		}
 
-		// Calculate table position
+		// ===== Total tinggi tabel =====
 		tableW := colWidthNo + colWidthMaterial
 		tableH := cellHHeader + tableBodyH
+
+		// ===== Hitung startX, startY agar tabel center =====
 		startX = (pageW - tableW) / 2
 		startY := (pageH - tableH) / 2
 
-		// Draw header
-		pdf.SetFont("Arial", "B", 12)
+		safeSetFont("Cambria", "B", 12)
+
+		// ===== Gambar header =====
 		pdf.SetXY(startX+padding, startY+padding)
 		pdf.MultiCell(colWidthNo-2*padding, rowHeight, headerNo, "1", "C", false)
 
-		pdf.SetFont("Arial", "I", 12)
+		safeSetFont("Cambria", "IB", 12)
 		pdf.SetXY(startX+colWidthNo+padding, startY+padding)
 		pdf.MultiCell(colWidthMaterial-2*padding, rowHeight, headerMateri, "1", "C", false)
 
-		// Draw data rows
+		// ===== Baris data =====
 		pdf.SetY(startY + cellHHeader)
+
 		for i, m := range materials {
 			yStart := pdf.GetY()
 			fmt.Printf("[DEBUG] Render row %d: %q at Y=%.2f\n", i+1, m.Material, yStart)
-
-			var linesMaterial [][]byte
-			if safeColWidthMaterial > 0 && len(m.Material) > 0 {
-				linesMaterial = pdf.SplitLines([]byte(m.Material), safeColWidthMaterial)
-			}
-
-			// Ensure at least one line
-			if len(linesMaterial) == 0 {
-				linesMaterial = [][]byte{[]byte(m.Material)}
-			}
-
+			linesMaterial := pdf.SplitLines([]byte(m.Material), colWidthMaterial-2*padding)
 			fmt.Printf("[DEBUG] Row %d has %d lines\n", i+1, len(linesMaterial))
 			cellH := float64(len(linesMaterial))*rowHeight + 2*padding
 
-			// Draw cells
-			pdf.SetFont("Arial", "", 12)
+			safeSetFont("Cambria", "", 12)
+			// No
 			pdf.SetXY(startX+padding, yStart+padding)
 			pdf.CellFormat(colWidthNo-2*padding, cellH-2*padding, m.No+".", "1", 0, "C", false, 0, "")
 
-			pdf.SetFont("Arial", "I", 12)
+			safeSetFont("Cambria", "I", 12)
+			// Materi
 			pdf.SetXY(startX+colWidthNo+padding, yStart+padding)
 			pdf.MultiCell(colWidthMaterial-2*padding, rowHeight, m.Material, "1", "C", false)
 
@@ -293,7 +250,6 @@ func (s *CertificateService) generatePDF(userName string, batch *models.Batch, c
 		}
 	}
 
-	// Generate PDF with error handling
 	buf := bytes.NewBuffer(nil)
 	if err := pdf.Output(buf); err != nil {
 		return "", fmt.Errorf("failed to generate PDF: %w", err)
@@ -303,7 +259,7 @@ func (s *CertificateService) generatePDF(userName string, batch *models.Batch, c
 		uuid.New().String()[:8],
 		time.Now().Format("20060102"))
 
-	// Save using FileService
+	// pakai FileService untuk simpan
 	publicURL, err := s.fileService.SaveGeneratedFile("certificates", fileName, buf.Bytes())
 	if err != nil {
 		return "", err
