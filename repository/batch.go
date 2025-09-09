@@ -27,6 +27,8 @@ type IBatchRepository interface {
 	GetBatchesByUserPurchaseFiltered(ctx context.Context, userID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error)
 	GetBatchesByGuruMeetingRelationFiltered(ctx context.Context, guruID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error)
 	GetBatchByMeetingID(ctx context.Context, meetingID uuid.UUID) (models.Batch, error)
+	CountMeetings(ctx context.Context, batchID uuid.UUID) (int64, error)
+	GetBatchWithCourse(ctx context.Context, batchID uuid.UUID) (*models.Batch, error)
 }
 
 // BatchRepository is a struct that represents a batch repository
@@ -150,6 +152,20 @@ func (r *BatchRepository) Create(ctx context.Context, batch *models.Batch) error
 // Update updates an existing batch
 func (r *BatchRepository) Update(ctx context.Context, batch *models.Batch) error {
 	return r.db.WithContext(ctx).Save(batch).Error
+}
+
+// GetBatchWithCourse returns the batch with course for a given batch ID
+func (r *BatchRepository) GetBatchWithCourse(ctx context.Context, batchID uuid.UUID) (*models.Batch, error) {
+	var batch models.Batch
+	err := r.db.WithContext(ctx).Preload("Course").First(&batch, "id = ?", batchID).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("batch tidak ditemukan")
+		}
+		return nil, err
+	}
+
+	return &batch, nil
 }
 
 // FindByID retrieves a batch by its ID
@@ -313,4 +329,17 @@ func (r *BatchRepository) GetBatchByMeetingID(ctx context.Context, meetingID uui
 	}
 
 	return meeting.Batch, nil
+}
+
+// CountMeetings returns total number of meetings for a batch
+func (r *BatchRepository) CountMeetings(ctx context.Context, batchID uuid.UUID) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&models.Meeting{}).
+		Where("batch_id = ?", batchID).
+		Count(&count).Error
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }

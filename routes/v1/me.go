@@ -53,6 +53,11 @@ func RegisterMeRoutes(r fiber.Router, db *gorm.DB) {
 	purchaseService := services.NewPurchaseService(purchaseRepo, userRepository, batchRepository, emailService, db)
 	purchaseController := controllers.NewPurchaseController(purchaseService, db)
 
+	certificateRepository := repository.NewCertificateRepository(db)
+	attendanceRepository := repository.NewAttendanceRepository(db)
+	certificateService := services.NewCertificateService(certificateRepository, userRepository, batchRepository, attendanceRepository, meetingRepository, purchaseService, batchService, fileService)
+	certificateController := controllers.NewCertificateController(certificateService)
+
 	r.Get("/", middlewares.RequireAuth(), userController.GetProfile)
 	r.Patch("/",
 		middlewares.RequireAuth(),
@@ -78,6 +83,9 @@ func RegisterMeRoutes(r fiber.Router, db *gorm.DB) {
 
 	r.Get("/batches/:batchID/progress", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"siswa"}), batchController.GetProgress)
+
+	r.Post("/batches/:batchID/certificate", middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"siswa"}), certificateController.GenerateCertificate)
 
 	// r.Get("/batches", middlewares.RequireAuth(),
 	// 	middlewares.RequireRole([]string{"guru", "siswa"}), batchController.GetMyBatchesByID)
