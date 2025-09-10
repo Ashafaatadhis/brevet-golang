@@ -76,6 +76,15 @@ func (r *TestimonialRepository) GetByBatchSlugFiltered(ctx context.Context, batc
 		Preload("User").
 		Preload("Batch")
 
+	joinConditions := map[string]string{}
+	joinedRelations := map[string]bool{}
+
+	db = utils.ApplyFiltersWithJoins(db, "testimonials", opts.Filters, validSortFields, joinConditions, joinedRelations)
+
+	if opts.Search != "" {
+		db = db.Where("title ILIKE ?", "%"+opts.Search+"%")
+	}
+
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -108,6 +117,11 @@ func (r *TestimonialRepository) GetAllFiltered(ctx context.Context, opts utils.Q
 		Model(&models.Testimonial{}).
 		Preload("User").
 		Preload("Batch")
+
+	joinConditions := map[string]string{}
+	joinedRelations := map[string]bool{}
+
+	db = utils.ApplyFiltersWithJoins(db, "testimonials", opts.Filters, validSortFields, joinConditions, joinedRelations)
 
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
