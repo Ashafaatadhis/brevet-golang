@@ -58,7 +58,7 @@ func main() {
 
 	// Purpose route for testing
 	app.Get("/hello", func(c *fiber.Ctx) error {
-		return utils.SuccessResponse(c, fiber.StatusOK, "Hello, JIDan!ss", nil)
+		return utils.SuccessResponse(c, fiber.StatusOK, "Hello, Test habis kena malware", nil)
 	})
 
 	// Register routes
