@@ -238,10 +238,12 @@ func (r *SubmissionRepository) UpsertGrade(ctx context.Context, grade models.Ass
 // CountCompletedByBatchUser for count completed submission by batch id and user id
 func (r *SubmissionRepository) CountCompletedByBatchUser(ctx context.Context, batchID, userID uuid.UUID) (int64, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&models.AssignmentSubmission{}).
+	err := r.db.WithContext(ctx).
+		Model(&models.AssignmentSubmission{}).
 		Joins("JOIN assignments ON assignments.id = assignment_submissions.assignment_id").
 		Joins("JOIN meetings ON meetings.id = assignments.meeting_id").
 		Where("meetings.batch_id = ? AND assignment_submissions.user_id = ?", batchID, userID).
+		Distinct("assignment_submissions.assignment_id").
 		Count(&count).Error
 	return count, err
 }
