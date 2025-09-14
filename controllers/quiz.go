@@ -235,16 +235,18 @@ func (ctrl *QuizController) GetListAttempt(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid quiz ID", err.Error())
 	}
 
-	attempt, err := ctrl.quizService.GetActiveAttempt(ctx, quizID, user)
+	attempt, err := ctrl.quizService.GetListAttempt(ctx, quizID, user)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch attempt", err.Error())
 	}
+
+	fmt.Println(attempt, "TAII")
 
 	if attempt == nil {
 		return utils.SuccessResponse(c, fiber.StatusOK, "No attempt yet", nil)
 	}
 
-	var quizAttemptResponse dto.QuizAttemptResponse
+	var quizAttemptResponse []dto.QuizAttemptResponse
 	if err := copier.CopyWithOption(&quizAttemptResponse, attempt, copier.Option{IgnoreEmpty: true}); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to map quiz attempt data", err.Error())
 	}
