@@ -197,6 +197,22 @@ func (s *PurchaseService) CreatePurchase(ctx context.Context, userID uuid.UUID, 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
 		purchaseRepo := s.purchaseRepo.WithTx(tx)
 		userRepo := s.userRepo.WithTx(tx)
+		batchRepoTx := s.batchRepo.WithTx(tx)
+
+		// 0. Ambil batch dan cek quota (pakai lock)
+		batch, err := batchRepoTx.WithLock().FindByID(ctx, batchID)
+		if err != nil {
+			return fmt.Errorf("Batch tidak ditemukan: %w", err)
+		}
+
+		used, err := batchRepoTx.CountStudents(ctx, batch.ID)
+		if err != nil {
+			return fmt.Errorf("gagal menghitung peserta batch: %w", err)
+		}
+
+		if used >= batch.Quota {
+			return errors.New("Kuota batch sudah penuh")
+		}
 
 		// 1. Cek apakah sudah pernah beli (pakai tx)
 		hasPaid, err := purchaseRepo.HasPurchaseWithStatus(ctx, userID, batchID,

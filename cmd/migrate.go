@@ -38,17 +38,17 @@ func main() {
 	// }
 
 	// fmt.Println("All tables dropped successfully.")
-	db.Migrator().DropTable(
-		// 	&models.Quiz{},
-		// 	&models.QuizOption{},
-		// 	&models.QuizQuestion{},
-		// 	&models.QuizAttempt{},
-		// 	&models.QuizResult{},
-		// 	&models.QuizSubmission{},
-		&models.Certificate{})
+	// db.Migrator().DropTable(
+	// 	&models.Quiz{},
+	// 	&models.QuizOption{},
+	// 	&models.QuizQuestion{},
+	// 	&models.QuizAttempt{},
+	// 	&models.QuizResult{},
+	// 	&models.QuizSubmission{},
+	// &models.Certificate{})
 	err := db.AutoMigrate(
 		// &models.Testimonial{},
-		&models.Certificate{},
+		// &models.Certificate{},
 		// &models.Quiz{},
 		// &models.QuizOption{},
 		// &models.QuizQuestion{},
@@ -56,12 +56,12 @@ func main() {
 		// &models.QuizResult{},
 		// &models.QuizSubmission{},
 		// &models.QuizTempSubmission{},
-	// &models.Meeting{},
-	// &models.User{},
-	// &models.MeetingTeacher{},
-	// &models.Course{},
-	// &models.CourseImage{},
-	// &models.Batch{},
+		// &models.Meeting{},
+		// &models.User{},
+		// &models.MeetingTeacher{},
+		// &models.Course{},
+		// &models.CourseImage{},
+		&models.Batch{},
 	// &models.BatchDay{},
 	// &models.Price{},
 	// &models.User{},

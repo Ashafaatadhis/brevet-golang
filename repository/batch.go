@@ -17,6 +17,7 @@ type IBatchRepository interface {
 	WithLock() IBatchRepository
 	GetAllFilteredBatches(ctx context.Context, opts utils.QueryOptions) ([]models.Batch, int64, error)
 	GetAllFilteredBatchesByCourseSlug(ctx context.Context, courseID uuid.UUID, opts utils.QueryOptions) ([]models.Batch, int64, error)
+	CountStudents(ctx context.Context, batchID uuid.UUID) (int, error)
 	GetBatchBySlug(ctx context.Context, slug string) (*models.Batch, error)
 	IsSlugExists(ctx context.Context, slug string) bool
 	Create(ctx context.Context, batch *models.Batch) error
@@ -137,6 +138,17 @@ func (r *BatchRepository) GetBatchBySlug(ctx context.Context, slug string) (*mod
 	return &batch, nil
 }
 
+// CountStudents count unique students who registered (paid)
+func (r *BatchRepository) CountStudents(ctx context.Context, batchID uuid.UUID) (int, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&models.Purchase{}).
+		Where("batch_id = ? AND payment_status = ?", batchID, models.Paid).
+		Distinct("user_id").
+		Count(&count).Error
+	return int(count), err
+}
+
 // IsSlugExists checks if a batch slug already exists in the database
 func (r *BatchRepository) IsSlugExists(ctx context.Context, slug string) bool {
 	var count int64
@@ -247,7 +259,7 @@ func (r *BatchRepository) GetBatchesByUserPurchaseFiltered(ctx context.Context, 
 		Preload("BatchDays").
 		Preload("BatchGroups").
 		Model(&models.Batch{}).
-		Where("purchases.user_id = ?", userID)
+		Where("purchases.user_id = ? AND purchases.payment_status = ?", userID, models.Paid)
 
 	joinConditions := map[string]string{}
 	joinedRelations := map[string]bool{}
