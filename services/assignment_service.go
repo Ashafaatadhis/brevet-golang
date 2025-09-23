@@ -20,6 +20,7 @@ import (
 type IAssignmentService interface {
 	GetAllFilteredAssignments(ctx context.Context, opts utils.QueryOptions) ([]models.Assignment, int64, error)
 	GetAllFilteredAssignmentsByMeetingID(ctx context.Context, meetingID uuid.UUID, user *utils.Claims, opts utils.QueryOptions) ([]models.Assignment, int64, error)
+	GetAllUpcomingAssignments(ctx context.Context, user *utils.Claims, opts utils.QueryOptions) ([]models.Assignment, int64, error)
 	GetAssignmentByID(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID) (*models.Assignment, error)
 	CreateAssignment(ctx context.Context, user *utils.Claims, meetingID uuid.UUID, body *dto.CreateAssignmentRequest) (*models.Assignment, error)
 	UpdateAssignment(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID, body *dto.UpdateAssignmentRequest) (*models.Assignment, error)
@@ -63,6 +64,15 @@ func (s *AssignmentService) GetAllFilteredAssignmentsByMeetingID(ctx context.Con
 	}
 
 	assignments, total, err := s.assignmentRepo.GetAllFilteredAssignmentsByMeetingID(ctx, meetingID, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	return assignments, total, nil
+}
+
+// GetAllUpcomingAssignments get all upcoming assignments for a user
+func (s *AssignmentService) GetAllUpcomingAssignments(ctx context.Context, user *utils.Claims, opts utils.QueryOptions) ([]models.Assignment, int64, error) {
+	assignments, total, err := s.assignmentRepo.GetAllUpcomingAssignments(ctx, user.UserID, opts)
 	if err != nil {
 		return nil, 0, err
 	}

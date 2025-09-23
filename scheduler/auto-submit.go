@@ -4,7 +4,6 @@ import (
 	"brevet-api/models"
 	"brevet-api/repository"
 	"brevet-api/services"
-	"brevet-api/utils"
 	"context"
 	"fmt"
 	"time"
@@ -62,8 +61,7 @@ func startAutoSubmitScheduler(db *gorm.DB, quizService services.IQuizService) {
 
 				if now.After(endTime) {
 					// Auto-submit pakai service biar logikanya sama dengan manual submit
-					user := &utils.Claims{UserID: attempt.UserID} // bikin claim dummy
-					if err := quizService.SubmitQuiz(context.Background(), user, attempt.ID); err != nil {
+					if err := quizService.AutoSubmitQuiz(context.Background(), attempt.ID); err != nil {
 						fmt.Println("Failed to auto-submit attempt:", attempt.ID, err)
 					} else {
 						fmt.Println("Auto-submitted attempt:", attempt.ID)

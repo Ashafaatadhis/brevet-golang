@@ -21,7 +21,9 @@ import (
 // IQuizService interface
 type IQuizService interface {
 	GetQuizByMeetingIDFiltered(ctx context.Context, meetingID uuid.UUID, opts utils.QueryOptions, user *utils.Claims) ([]models.Quiz, int64, error)
+	GetAllUpcomingQuizzes(ctx context.Context, user *utils.Claims, opts utils.QueryOptions) ([]models.Quiz, int64, error)
 	ImportQuestionsFromExcel(ctx context.Context, user *utils.Claims, quizID uuid.UUID, fileHeader *multipart.FileHeader) error
+	AutoSubmitQuiz(ctx context.Context, attemptID uuid.UUID) error
 	CreateQuizMetadata(ctx context.Context, user *utils.Claims, meetingID uuid.UUID, req *dto.ImportQuizzesRequest) (*models.Quiz, error)
 	SaveTempSubmission(ctx context.Context, user *utils.Claims, attemptID uuid.UUID, body *dto.SaveTempSubmissionRequest) error
 	StartQuiz(ctx context.Context, user *utils.Claims, quizID uuid.UUID) (*models.QuizAttempt, error)
@@ -70,6 +72,15 @@ func (s *QuizService) checkUserAccess(ctx context.Context, user *utils.Claims, m
 
 	// Role lain tidak diizinkan
 	return false, nil
+}
+
+// GetAllUpcomingQuizzes retrieves upcoming quizzes for the logged-in user
+func (s *QuizService) GetAllUpcomingQuizzes(ctx context.Context, user *utils.Claims, opts utils.QueryOptions) ([]models.Quiz, int64, error) {
+	quizzes, total, err := s.quizRepo.GetAllUpcomingQuizzes(ctx, user.UserID, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	return quizzes, total, nil
 }
 
 // StartQuiz start quiz
@@ -261,6 +272,86 @@ func (s *QuizService) CreateQuizMetadata(
 	}
 
 	return quiz, nil
+}
+
+// AutoSubmitQuiz submit quiz without checking, for scheduler purpose
+func (s *QuizService) AutoSubmitQuiz(ctx context.Context, attemptID uuid.UUID) error {
+	return utils.WithTransaction(s.db, func(tx *gorm.DB) error {
+
+		// 1️⃣ Ambil attempt berdasarkan attemptID
+		attempt, err := s.quizRepo.WithTx(tx).GetQuizAttemptByID(ctx, attemptID)
+		if err != nil {
+			return err
+		}
+
+		// 3️⃣ Pastikan attempt belum selesai
+		if attempt.EndedAt != nil {
+			return fmt.Errorf("quiz already submitted")
+		}
+
+		// 4️⃣ Ambil semua temp submission milik attempt ini
+		temps, err := s.quizRepo.WithTx(tx).GetTempSubmissionsByAttemptID(ctx, attemptID)
+		if err != nil {
+			return err
+		}
+
+		correctAnswers := 0
+		totalQuestions := len(temps)
+
+		// 5️⃣ Kalau ada jawaban sementara, proses simpan
+		if totalQuestions > 0 {
+			for _, temp := range temps {
+				score := 0
+				for _, opt := range temp.Question.Options {
+					if opt.ID == temp.SelectedOptionID && opt.IsCorrect {
+						score = 1
+						correctAnswers++
+						break
+					}
+				}
+
+				sub := &models.QuizSubmission{
+					AttemptID:        attempt.ID,
+					QuestionID:       temp.QuestionID,
+					SelectedOptionID: temp.SelectedOptionID,
+					Score:            score,
+				}
+
+				if err := s.quizRepo.WithTx(tx).SaveQuizSubmission(ctx, sub); err != nil {
+					return err
+				}
+			}
+		}
+
+		// 6️⃣ Hitung skor & simpan result
+		wrongAnswers := totalQuestions - correctAnswers
+		scorePercentage := 0.0
+		if totalQuestions > 0 {
+			scorePercentage = float64(correctAnswers*100) / float64(totalQuestions)
+		}
+
+		quizResult := &models.QuizResult{
+			ID:             uuid.New(),
+			AttemptID:      attempt.ID,
+			TotalQuestions: totalQuestions,
+			CorrectAnswers: correctAnswers,
+			WrongAnswers:   wrongAnswers,
+			ScorePercent:   scorePercentage,
+		}
+
+		if err := s.quizRepo.WithTx(tx).CreateQuizResult(ctx, quizResult); err != nil {
+			return err
+		}
+
+		// 7️⃣ Update attempt.EndedAt
+		now := time.Now()
+		attempt.EndedAt = &now
+		if err := s.quizRepo.WithTx(tx).UpdateQuizAttempt(ctx, attempt); err != nil {
+			return err
+		}
+
+		return nil
+	})
 }
 
 // SubmitQuiz submit quiz
