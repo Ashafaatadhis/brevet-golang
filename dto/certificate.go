@@ -16,4 +16,7 @@ type CertificateResponse struct {
 	QRCode    string    `json:"qr_code"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+
+	Batch *BatchResponse `json:"batch,omitempty"`
+	User  *UserResponse  `json:"user,omitempty"`
 }

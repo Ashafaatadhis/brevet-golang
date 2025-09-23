@@ -48,7 +48,7 @@ func main() {
 	// &models.Certificate{})
 	err := db.AutoMigrate(
 		// &models.Testimonial{},
-		// &models.Certificate{},
+		&models.Certificate{},
 		// &models.Quiz{},
 		// &models.QuizOption{},
 		// &models.QuizQuestion{},
@@ -61,7 +61,7 @@ func main() {
 		// &models.MeetingTeacher{},
 		// &models.Course{},
 		// &models.CourseImage{},
-		&models.Batch{},
+		// &models.Batch{},
 	// &models.BatchDay{},
 	// &models.Price{},
 	// &models.User{},
