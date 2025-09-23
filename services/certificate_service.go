@@ -32,6 +32,7 @@ type ICertificateService interface {
 	GetCertificatesByBatch(ctx context.Context, batchID uuid.UUID, user *utils.Claims) ([]*models.Certificate, error)
 	GetCertificateDetail(ctx context.Context, certID uuid.UUID, claims *utils.Claims) (*models.Certificate, error)
 	VerifyCertificate(ctx context.Context, certID uuid.UUID) (*models.Certificate, error)
+	GetByNumber(ctx context.Context, number string) (*models.Certificate, error)
 }
 
 // CertificateService provides methods for managing courses
@@ -579,4 +580,9 @@ func (s *CertificateService) GetCertificateDetail(ctx context.Context, certID uu
 // VerifyCertificate verifies certificate authenticity by ID (no auth required)
 func (s *CertificateService) VerifyCertificate(ctx context.Context, certID uuid.UUID) (*models.Certificate, error) {
 	return s.certRepo.GetByID(ctx, certID)
+}
+
+// GetByNumber get certificate by number
+func (s *CertificateService) GetByNumber(ctx context.Context, number string) (*models.Certificate, error) {
+	return s.certRepo.GetByNumber(ctx, number)
 }

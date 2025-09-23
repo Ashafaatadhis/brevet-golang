@@ -37,7 +37,7 @@ func RegisterCertificateRoutes(r fiber.Router, db *gorm.DB) {
 	attendanceRepository := repository.NewAttendanceRepository(db)
 	certificateService := services.NewCertificateService(certificateRepository, userRepository, batchRepository, attendanceRepository, meetingRepository, purchaseService, batchService, fileService)
 	certificateController := controllers.NewCertificateController(certificateService)
-
+	r.Get("/number/:number", certificateController.GetByNumber)
 	r.Get("/:certificateID",
 		middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin", "guru", "siswa"}),
