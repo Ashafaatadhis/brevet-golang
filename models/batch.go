@@ -21,6 +21,10 @@ type Batch struct {
 	StartTime string `gorm:"type:time without time zone;default:'08:00:00';not null"`
 	EndTime   string `gorm:"type:time without time zone;default:'10:00:00';not null"`
 
+	// Rentang pendaftaran
+	RegistrationStartAt time.Time `gorm:"type:timestamptz;not null;default:now()"`
+	RegistrationEndAt   time.Time `gorm:"type:timestamptz;not null;default:now()"`
+
 	Room      string    `gorm:"type:varchar(255);not null"`
 	Quota     int       `gorm:"not null"`
 	CreatedAt time.Time `gorm:"autoCreateTime"`

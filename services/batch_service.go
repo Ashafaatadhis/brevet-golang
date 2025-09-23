@@ -19,6 +19,7 @@ import (
 type IBatchService interface {
 	GetAllFilteredBatches(ctx context.Context, opts utils.QueryOptions) ([]models.Batch, int64, error)
 	GetBatchBySlug(ctx context.Context, slug string) (*models.Batch, error)
+	GetBatchQuota(ctx context.Context, slug string) (dto.QuotaResponse, error)
 	CreateBatch(ctx context.Context, courseID uuid.UUID, body *dto.CreateBatchRequest) (*models.Batch, error)
 	UpdateBatch(ctx context.Context, id uuid.UUID, body *dto.UpdateBatchRequest) (*models.Batch, error)
 	DeleteBatch(ctx context.Context, batchID uuid.UUID) error
@@ -63,6 +64,25 @@ func (s *BatchService) GetBatchBySlug(ctx context.Context, slug string) (*models
 		return nil, err
 	}
 	return batch, nil
+}
+
+// GetBatchQuota get quota
+func (s *BatchService) GetBatchQuota(ctx context.Context, slug string) (dto.QuotaResponse, error) {
+	batch, err := s.repo.GetBatchBySlug(ctx, slug)
+	if err != nil {
+		return dto.QuotaResponse{}, err
+	}
+
+	used, err := s.repo.CountStudents(ctx, batch.ID)
+	if err != nil {
+		return dto.QuotaResponse{}, err
+	}
+
+	return dto.QuotaResponse{
+		Quota:     batch.Quota,
+		Used:      used,
+		Remaining: batch.Quota - used,
+	}, nil
 }
 
 // CreateBatch creates a new batch with the provided details

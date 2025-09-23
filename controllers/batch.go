@@ -109,6 +109,23 @@ func (ctrl *BatchController) GetBatchBySlug(c *fiber.Ctx) error {
 	return utils.SuccessResponse(c, fiber.StatusOK, "Batch fetched", batchResponse)
 }
 
+// GetBatchQuota retrieves quota info for a batch
+func (ctrl *BatchController) GetBatchQuota(c *fiber.Ctx) error {
+	ctx := c.UserContext()
+	log := helpers.LoggerFromCtx(ctx)
+	log.Info("GetBatchQuota handler called")
+
+	slug := c.Params("batchSlug")
+
+	quotaInfo, err := ctrl.batchService.GetBatchQuota(ctx, slug)
+	if err != nil {
+		log.WithError(err).Error("Gagal mengambil kuota batch")
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch batch quota", err.Error())
+	}
+
+	return utils.SuccessResponse(c, fiber.StatusOK, "Batch quota fetched", quotaInfo)
+}
+
 // CreateBatch handles the creation of a new batch
 func (ctrl *BatchController) CreateBatch(c *fiber.Ctx) error {
 	ctx := c.UserContext()
