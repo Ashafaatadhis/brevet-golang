@@ -90,6 +90,26 @@ func (ctrl *QuizController) GetQuizByMeetingIDFiltered(c *fiber.Ctx) error {
 	return utils.SuccessWithMeta(c, fiber.StatusOK, "Quizzes fetched", quizzesResponse, meta)
 }
 
+// GetAllUpcomingQuizzes retrieves upcoming quizzes for the logged-in user
+func (ctrl *QuizController) GetAllUpcomingQuizzes(c *fiber.Ctx) error {
+	ctx := c.UserContext()
+	opts := utils.ParseQueryOptions(c)
+	user := c.Locals("user").(*utils.Claims)
+
+	quizzes, total, err := ctrl.quizService.GetAllUpcomingQuizzes(ctx, user, opts)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch upcoming quiz", err.Error())
+	}
+
+	var quizzesResponse []dto.QuizResponse
+	if copyErr := copier.Copy(&quizzesResponse, quizzes); copyErr != nil {
+		return utils.ErrorResponse(c, 500, "Failed to map quiz data", copyErr.Error())
+	}
+
+	meta := utils.BuildPaginationMeta(total, opts.Limit, opts.Page)
+	return utils.SuccessWithMeta(c, fiber.StatusOK, "Upcoming quiz fetched", quizzesResponse, meta)
+}
+
 // StartQuiz start
 func (ctrl *QuizController) StartQuiz(c *fiber.Ctx) error {
 	ctx := c.UserContext()

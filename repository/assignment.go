@@ -14,6 +14,7 @@ import (
 type IAssignmentRepository interface {
 	WithTx(tx *gorm.DB) IAssignmentRepository
 	GetAllFilteredAssignments(ctx context.Context, opts utils.QueryOptions) ([]models.Assignment, int64, error)
+	GetAllUpcomingAssignments(ctx context.Context, userID uuid.UUID, opts utils.QueryOptions) ([]models.Assignment, int64, error)
 	GetAllFilteredAssignmentsByMeetingID(ctx context.Context, meetingID uuid.UUID, opts utils.QueryOptions) ([]models.Assignment, int64, error)
 	Create(ctx context.Context, assignment *models.Assignment) error
 	Update(ctx context.Context, assignment *models.Assignment) error
@@ -66,6 +67,56 @@ func (r *AssignmentRepository) GetAllFilteredAssignments(ctx context.Context, op
 	if opts.Search != "" {
 		// Join ke meetings agar bisa search by meetings.title
 		db = db.Joins("LEFT JOIN meetings ON meetings.id = assignments.meeting_id")
+		db = db.Where("assignments.title ILIKE ? OR meetings.title ILIKE ?", "%"+opts.Search+"%", "%"+opts.Search+"%")
+	}
+
+	var total int64
+	db.Count(&total)
+
+	var assignments []models.Assignment
+	err := db.Order(fmt.Sprintf("%s %s", sort, order)).
+		Limit(opts.Limit).
+		Offset(opts.Offset).
+		Find(&assignments).Error
+
+	return assignments, total, err
+}
+
+// GetAllUpcomingAssignments retrieves upcoming assignments that the user hasn't submitted yet
+func (r *AssignmentRepository) GetAllUpcomingAssignments(ctx context.Context, userID uuid.UUID, opts utils.QueryOptions) ([]models.Assignment, int64, error) {
+	validSortFields := utils.GetValidColumnsFromStruct(&models.Assignment{})
+
+	sort := opts.Sort
+	if !validSortFields[sort] {
+		sort = "assignments.end_at"
+	}
+
+	order := opts.Order
+	if order != "asc" && order != "desc" {
+		order = "asc"
+	}
+
+	db := r.db.WithContext(ctx).
+		Model(&models.Assignment{}).
+		Preload("AssignmentFiles").
+		Joins("JOIN meetings ON meetings.id = assignments.meeting_id").
+		Joins("JOIN batches ON batches.id = meetings.batch_id").
+		Joins("JOIN purchases ON purchases.batch_id = batches.id").
+		// join submissions untuk filter sudah dikerjakan
+		Joins("LEFT JOIN assignment_submissions ON assignment_submissions.assignment_id = assignments.id AND assignment_submissions.user_id = ?", userID).
+		Where("purchases.user_id = ? AND purchases.payment_status = ?", userID, models.Paid).
+		// belum dikerjakan
+		Where("assignment_submissions.id IS NULL")
+		// assignment masih aktif
+		// Where("assignments.end_at > ?", time.Now())
+
+	// Apply filters (opsional)
+	joinConditions := map[string]string{}
+	joinedRelations := map[string]bool{}
+	db = utils.ApplyFiltersWithJoins(db, "assignments", opts.Filters, validSortFields, joinConditions, joinedRelations)
+
+	// Search by assignment title or meeting title
+	if opts.Search != "" {
 		db = db.Where("assignments.title ILIKE ? OR meetings.title ILIKE ?", "%"+opts.Search+"%", "%"+opts.Search+"%")
 	}
 

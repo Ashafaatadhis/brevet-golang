@@ -53,6 +53,15 @@ func RegisterMeRoutes(r fiber.Router, db *gorm.DB) {
 	purchaseService := services.NewPurchaseService(purchaseRepo, userRepository, batchRepository, emailService, db)
 	purchaseController := controllers.NewPurchaseController(purchaseService, db)
 
+	meetingRepo := repository.NewMeetingRepository(db)
+
+	assignmentService := services.NewAssignmentService(assignmentRepository, meetingRepo, purchaseRepo, fileService, db)
+
+	assignmentController := controllers.NewAssignmentController(assignmentService, db)
+
+	quizService := services.NewQuizService(quizRepository, batchRepository, meetingRepo, purchaseService, fileService, db)
+	quizController := controllers.NewQuizController(quizService, db)
+
 	certificateRepository := repository.NewCertificateRepository(db)
 	attendanceRepository := repository.NewAttendanceRepository(db)
 	certificateService := services.NewCertificateService(certificateRepository, userRepository, batchRepository, attendanceRepository, meetingRepository, purchaseService, batchService, fileService)
@@ -91,6 +100,16 @@ func RegisterMeRoutes(r fiber.Router, db *gorm.DB) {
 		middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"siswa"}),
 		certificateController.GetCertificate)
+
+	r.Get("/assignments/upcoming",
+		middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"siswa"}),
+		assignmentController.GetAllUpcomingAssignments)
+
+	r.Get("/quizzes/upcoming",
+		middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"siswa"}),
+		quizController.GetAllUpcomingQuizzes)
 
 	// r.Get("/batches", middlewares.RequireAuth(),
 	// 	middlewares.RequireRole([]string{"guru", "siswa"}), batchController.GetMyBatchesByID)

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -15,6 +16,7 @@ import (
 type IQuizRepository interface {
 	WithTx(tx *gorm.DB) IQuizRepository
 	GetQuizByID(ctx context.Context, quizID uuid.UUID) (*models.Quiz, error)
+	GetAllUpcomingQuizzes(ctx context.Context, userID uuid.UUID, opts utils.QueryOptions) ([]models.Quiz, int64, error)
 	GetQuizByMeetingIDFiltered(ctx context.Context, meetingID uuid.UUID, opts utils.QueryOptions) ([]models.Quiz, int64, error)
 	GetQuestionByID(ctx context.Context, questionID, quizID uuid.UUID) (*models.QuizQuestion, error)
 	Create(ctx context.Context, quiz *models.Quiz) error
@@ -75,6 +77,71 @@ func (r *QuizRepository) GetQuizByMeetingIDFiltered(ctx context.Context, meeting
 	joinedRelations := map[string]bool{}
 
 	db = utils.ApplyFiltersWithJoins(db, "quizzes", opts.Filters, validSortFields, joinConditions, joinedRelations)
+
+	var total int64
+	db.Count(&total)
+
+	var quizzes []models.Quiz
+	err := db.Order(fmt.Sprintf("%s %s", sort, order)).
+		Limit(opts.Limit).
+		Offset(opts.Offset).
+		Find(&quizzes).Error
+
+	return quizzes, total, err
+}
+
+// GetAllUpcomingQuizzes retrieves upcoming quizzes that the user hasn't attempted yet
+func (r *QuizRepository) GetAllUpcomingQuizzes(ctx context.Context, userID uuid.UUID, opts utils.QueryOptions) ([]models.Quiz, int64, error) {
+	validSortFields := utils.GetValidColumnsFromStruct(&models.Quiz{})
+
+	sort := opts.Sort
+	if !validSortFields[sort] {
+		sort = "quizzes.end_at"
+	}
+
+	order := opts.Order
+	if order != "asc" && order != "desc" {
+		order = "asc"
+	}
+
+	// db := r.db.WithContext(ctx).
+	// 	Model(&models.Quiz{}).
+
+	// 	Joins("JOIN meetings ON meetings.id = quizzes.meeting_id").
+	// 	Joins("JOIN batches ON batches.id = meetings.batch_id").
+	// 	Joins("JOIN purchases ON purchases.batch_id = batches.id").
+	// 	// relasi ke quiz_attempts
+	// 	Joins("LEFT JOIN quiz_attempts ON quiz_attempts.quiz_id = quizzes.id AND quiz_attempts.user_id = ?", userID).
+	// 	// relasi ke quiz_submissions dari attempt tsb
+	// 	Joins("LEFT JOIN quiz_submissions ON quiz_submissions.attempt_id = quiz_attempts.id").
+	// 	Where("purchases.user_id = ? AND purchases.payment_status = ?", userID, models.Paid).
+	// 	// belum pernah attempt, atau sudah attempt tapi belum submit
+	// 	Where("(quiz_attempts.id IS NULL OR quiz_submissions.id IS NULL)").
+	// 	// quiz masih aktif
+	// 	Where("quizzes.end_time > ?", time.Now())
+
+	db := r.db.WithContext(ctx).
+		Model(&models.Quiz{}).
+		Joins("JOIN meetings ON meetings.id = quizzes.meeting_id").
+		Joins("JOIN batches ON batches.id = meetings.batch_id").
+		Joins("JOIN purchases ON purchases.batch_id = batches.id").
+		// cek attempt
+		Joins("LEFT JOIN quiz_attempts ON quiz_attempts.quiz_id = quizzes.id AND quiz_attempts.user_id = ?", userID).
+		Where("purchases.user_id = ? AND purchases.payment_status = ?", userID, models.Paid).
+		// belum pernah attempt atau attempt belum selesai
+		Where("quiz_attempts.id IS NULL OR quiz_attempts.ended_at IS NULL").
+		// quiz masih aktif
+		Where("quizzes.end_time > ?", time.Now())
+
+	// Apply filters
+	joinConditions := map[string]string{}
+	joinedRelations := map[string]bool{}
+	db = utils.ApplyFiltersWithJoins(db, "quizzes", opts.Filters, validSortFields, joinConditions, joinedRelations)
+
+	// Search by quiz title or meeting title
+	if opts.Search != "" {
+		db = db.Where("quizzes.title ILIKE ? OR meetings.title ILIKE ?", "%"+opts.Search+"%", "%"+opts.Search+"%")
+	}
 
 	var total int64
 	db.Count(&total)
