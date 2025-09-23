@@ -18,6 +18,7 @@ type ICertificateRepository interface {
 	GetLastSequenceByBatch(ctx context.Context, batchID uuid.UUID) (int, error)
 	GetByIDAndBatch(ctx context.Context, certID, batchID uuid.UUID) (*models.Certificate, error)
 	GetByID(ctx context.Context, certID uuid.UUID) (*models.Certificate, error)
+	GetByNumber(ctx context.Context, number string) (*models.Certificate, error)
 }
 
 // CertificateRepository is a struct that represents a certificate repository
@@ -109,6 +110,20 @@ func (r *CertificateRepository) GetByID(ctx context.Context, certID uuid.UUID) (
 		Preload("Batch").
 		Preload("User").
 		Where("id = ?", certID).
+		First(&cert).Error
+	if err != nil {
+		return nil, err
+	}
+	return &cert, nil
+}
+
+// GetByNumber get certificate by number with preload
+func (r *CertificateRepository) GetByNumber(ctx context.Context, number string) (*models.Certificate, error) {
+	var cert models.Certificate
+	err := r.db.WithContext(ctx).
+		Preload("Batch").
+		Preload("User").
+		Where("number = ?", number).
 		First(&cert).Error
 	if err != nil {
 		return nil, err

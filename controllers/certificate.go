@@ -5,6 +5,7 @@ import (
 	"brevet-api/services"
 	"brevet-api/utils"
 	"errors"
+	"net/url"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -187,4 +188,36 @@ func (ctrl *CertificateController) VerifyCertificate(c *fiber.Ctx) error {
 	}
 
 	return utils.SuccessWithMeta(c, fiber.StatusOK, "Certificate is valid", certResponse, nil)
+}
+
+// GetByNumber finds certificate by its number (public)
+func (ctrl *CertificateController) GetByNumber(c *fiber.Ctx) error {
+	ctx := c.UserContext()
+
+	number := c.Params("number")
+	if number == "" {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "certificate number is required", "")
+	}
+
+	// decode URL (biar %20 jadi spasi)
+	decodedNumber, err := url.QueryUnescape(number)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "invalid certificate number", err.Error())
+	}
+
+	cert, err := ctrl.certificateService.GetByNumber(ctx, decodedNumber)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return utils.ErrorResponse(c, fiber.StatusNotFound, "Certificate not found", "")
+		}
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to get certificate", err.Error())
+	}
+
+	// mapping ke DTO
+	var certResponse dto.CertificateResponse
+	if copyErr := copier.Copy(&certResponse, cert); copyErr != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to map certificate data", copyErr.Error())
+	}
+
+	return utils.SuccessWithMeta(c, fiber.StatusOK, "Certificate found", certResponse, nil)
 }
