@@ -205,6 +205,15 @@ func (s *PurchaseService) CreatePurchase(ctx context.Context, userID uuid.UUID, 
 			return fmt.Errorf("Batch tidak ditemukan: %w", err)
 		}
 
+		// Cek periode registrasi
+		now := time.Now()
+		if now.Before(batch.RegistrationStartAt) {
+			return errors.New("Pendaftaran batch belum dibuka")
+		}
+		if now.After(batch.RegistrationEndAt) {
+			return errors.New("Pendaftaran batch sudah ditutup")
+		}
+
 		used, err := batchRepoTx.CountStudents(ctx, batch.ID)
 		if err != nil {
 			return fmt.Errorf("gagal menghitung peserta batch: %w", err)
