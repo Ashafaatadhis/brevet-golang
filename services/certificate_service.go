@@ -366,7 +366,7 @@ func (s *CertificateService) generateQRCode(certID uuid.UUID) (string, error) {
 	filePath := fmt.Sprintf("./qrcodes/%s.png", uuid.New().String())
 
 	baseURL := config.GetEnv("FRONTEND_URL", "http://localhost")
-	url := fmt.Sprintf("%s/certificates/%s", baseURL, certID.String())
+	url := fmt.Sprintf("%s/sertifikat/%s", baseURL, certID.String())
 
 	err = qrcode.WriteFile(url, qrcode.Medium, 256, filePath)
 	if err != nil {
