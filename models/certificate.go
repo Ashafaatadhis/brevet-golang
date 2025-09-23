@@ -16,4 +16,7 @@ type Certificate struct {
 	QRCode    string    `gorm:"type:text;not null"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
+
+	Batch *Batch `gorm:"foreignKey:BatchID;references:ID"`
+	User  *User  `gorm:"foreignKey:UserID;references:ID"`
 }

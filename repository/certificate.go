@@ -92,6 +92,8 @@ func (r *CertificateRepository) GetLastSequenceByBatch(ctx context.Context, batc
 func (r *CertificateRepository) GetByIDAndBatch(ctx context.Context, certID, batchID uuid.UUID) (*models.Certificate, error) {
 	var cert models.Certificate
 	err := r.db.WithContext(ctx).
+		Preload("Batch").
+		Preload("User").
 		Where("id = ? AND batch_id = ?", certID, batchID).
 		First(&cert).Error
 	if err != nil {
@@ -100,10 +102,12 @@ func (r *CertificateRepository) GetByIDAndBatch(ctx context.Context, certID, bat
 	return &cert, nil
 }
 
-// GetByID get certificate by id
+// GetByID get certificate by id with preload batch & user
 func (r *CertificateRepository) GetByID(ctx context.Context, certID uuid.UUID) (*models.Certificate, error) {
 	var cert models.Certificate
 	err := r.db.WithContext(ctx).
+		Preload("Batch").
+		Preload("User").
 		Where("id = ?", certID).
 		First(&cert).Error
 	if err != nil {
