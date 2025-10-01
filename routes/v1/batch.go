@@ -50,6 +50,8 @@ func RegisterBatchRoute(r fiber.Router, db *gorm.DB) {
 	certificateService := services.NewCertificateService(certificateRepository, userRepository, batchRepository, attendanceRepository, meetingRepository, purchaseService, batchService, fileService)
 	certificateController := controllers.NewCertificateController(certificateService)
 
+	scoreController := controllers.NewScoreController(services.NewScoreService(db, batchRepository, meetingRepository, purchaseService, quizRepository, submissionRepository), db)
+
 	r.Get("/", batchController.GetAllBatches)
 	r.Get("/:slug", batchController.GetBatchBySlug)
 	// POST /v1/courses/:courseId/batches
@@ -77,6 +79,12 @@ func RegisterBatchRoute(r fiber.Router, db *gorm.DB) {
 	r.Get("/:batchSlug/students", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin", "guru"}),
 		batchController.GetAllStudents)
+
+	// routes.go
+	r.Get("/:batchSlug/students/:studentID/scores",
+		middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"admin", "guru"}),
+		scoreController.GetStudentScores)
 
 	r.Get("/:batchSlug/quota", batchController.GetBatchQuota)
 

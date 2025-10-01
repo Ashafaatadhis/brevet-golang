@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"brevet-api/dto"
 	"brevet-api/models"
 	"brevet-api/utils"
 	"context"
@@ -40,6 +41,7 @@ type IQuizRepository interface {
 	GetQuizResultByAttemptID(ctx context.Context, attemptID uuid.UUID) (*models.QuizResult, error)
 	CountByBatchID(ctx context.Context, batchID uuid.UUID) (int64, error)
 	CountCompletedByBatchUser(ctx context.Context, batchID, userID uuid.UUID) (int64, error)
+	GetQuizzesWithScoresByBatchUser(ctx context.Context, batchID, userID uuid.UUID) ([]dto.QuizScore, error)
 }
 
 // QuizRepository is a struct that represents a quiz repository
@@ -153,6 +155,30 @@ func (r *QuizRepository) GetAllUpcomingQuizzes(ctx context.Context, userID uuid.
 		Find(&quizzes).Error
 
 	return quizzes, total, err
+}
+
+// GetQuizzesWithScoresByBatchUser retrieves quiz scores of a user in a batch
+func (r *QuizRepository) GetQuizzesWithScoresByBatchUser(ctx context.Context, batchID, userID uuid.UUID) ([]dto.QuizScore, error) {
+	var results []dto.QuizScore
+
+	err := r.db.WithContext(ctx).
+		Table("quizzes").
+		Select(`
+			quizzes.*,
+			COALESCE(MAX(qr.score_percent), 0) AS score
+		`).
+		Joins("JOIN meetings m ON m.id = quizzes.meeting_id").
+		Joins("LEFT JOIN quiz_attempts qa ON qa.quiz_id = quizzes.id AND qa.user_id = ?", userID).
+		Joins("LEFT JOIN quiz_results qr ON qr.attempt_id = qa.id").
+		Where("m.batch_id = ?", batchID).
+		Group("quizzes.id").
+		Scan(&results).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
 }
 
 // CountQuestionsByQuizID menghitung jumlah soal di quiz tertentu
