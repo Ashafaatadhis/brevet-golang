@@ -42,6 +42,8 @@ type IQuizRepository interface {
 	CountByBatchID(ctx context.Context, batchID uuid.UUID) (int64, error)
 	CountCompletedByBatchUser(ctx context.Context, batchID, userID uuid.UUID) (int64, error)
 	GetQuizzesWithScoresByBatchUser(ctx context.Context, batchID, userID uuid.UUID) ([]dto.QuizScore, error)
+	GetAllByMeetingID(ctx context.Context, meetingID uuid.UUID) ([]models.Quiz, error)
+	GetQuizSubmissionByQuizAndUser(ctx context.Context, quizID, userID uuid.UUID) (*models.QuizSubmission, error)
 }
 
 // QuizRepository is a struct that represents a quiz repository
@@ -90,6 +92,28 @@ func (r *QuizRepository) GetQuizByMeetingIDFiltered(ctx context.Context, meeting
 		Find(&quizzes).Error
 
 	return quizzes, total, err
+}
+
+// GetAllByMeetingID ambil semua quiz di meeting tertentu
+func (r *QuizRepository) GetAllByMeetingID(ctx context.Context, meetingID uuid.UUID) ([]models.Quiz, error) {
+	var quizzes []models.Quiz
+	if err := r.db.WithContext(ctx).
+		Where("meeting_id = ?", meetingID).
+		Find(&quizzes).Error; err != nil {
+		return nil, err
+	}
+	return quizzes, nil
+}
+
+// GetByQuizAndUser ambil submission quiz berdasarkan quiz_id & user_id
+func (r *QuizRepository) GetQuizSubmissionByQuizAndUser(ctx context.Context, quizID, userID uuid.UUID) (*models.QuizSubmission, error) {
+	var sub models.QuizSubmission
+	if err := r.db.WithContext(ctx).
+		Where("quiz_id = ? AND user_id = ?", quizID, userID).
+		First(&sub).Error; err != nil {
+		return nil, err
+	}
+	return &sub, nil
 }
 
 // GetAllUpcomingQuizzes retrieves upcoming quizzes that the user hasn't attempted yet

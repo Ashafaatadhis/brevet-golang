@@ -24,8 +24,9 @@ type User struct {
 	LastSentAt sql.NullTime `gorm:"default:NULL"`
 
 	// Foreign Key
-	Profile  *Profile `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE;"`
-	RoleType RoleType `gorm:"type:role_type;not null"`
+	Profile     *Profile     `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE;"`
+	RoleType    RoleType     `gorm:"type:role_type;not null"`
+	Attendances []Attendance `gorm:"foreignKey:UserID" json:"attendances"`
 
 	// many2many
 	Meetings []Meeting `gorm:"many2many:meeting_teachers"`

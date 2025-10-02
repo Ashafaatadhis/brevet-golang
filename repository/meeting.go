@@ -5,6 +5,7 @@ import (
 	"brevet-api/utils"
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -30,6 +31,7 @@ type IMeetingRepository interface {
 	IsMeetingTaughtByUser(ctx context.Context, meetingID, userID uuid.UUID) (bool, error)
 	IsUserTeachingInMeeting(ctx context.Context, userID, meetingID uuid.UUID) (bool, error)
 	GetMeetingNamesByBatchID(ctx context.Context, batchID uuid.UUID) ([]string, error)
+	GetPrevMeeting(ctx context.Context, batchID uuid.UUID, startAt time.Time) (*models.Meeting, error)
 }
 
 // MeetingRepository is a struct that represents a meeting repository
@@ -139,6 +141,17 @@ func (r *MeetingRepository) GetMeetingsByBatchID(ctx context.Context, batchID uu
 		return nil, err
 	}
 	return meetings, nil
+}
+
+func (r *MeetingRepository) GetPrevMeeting(ctx context.Context, batchID uuid.UUID, startAt time.Time) (*models.Meeting, error) {
+	var meeting models.Meeting
+	if err := r.db.WithContext(ctx).
+		Where("batch_id = ? AND start_at < ?", batchID, startAt).
+		Order("start_at DESC").
+		First(&meeting).Error; err != nil {
+		return nil, err
+	}
+	return &meeting, nil
 }
 
 // FindByID retrieves a meeting by its ID

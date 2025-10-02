@@ -37,6 +37,8 @@ type SubmissionService struct {
 	submissionRepo  repository.ISubmisssionRepository
 	assignmentRepo  repository.IAssignmentRepository
 	meetingRepo     repository.IMeetingRepository
+	attendanceRepo  repository.IAttendanceRepository
+	quizRepo        repository.IQuizRepository
 	purchaseService IPurchaseService
 	fileService     IFileService
 	db              *gorm.DB
@@ -44,8 +46,10 @@ type SubmissionService struct {
 
 // NewSubmissionService creates a new instance of SubmissionService
 func NewSubmissionService(submissionRepo repository.ISubmisssionRepository, assignmentRepo repository.IAssignmentRepository,
-	meetingRepo repository.IMeetingRepository, purchaseService IPurchaseService, fileService IFileService, db *gorm.DB) ISubmissionService {
-	return &SubmissionService{submissionRepo: submissionRepo, assignmentRepo: assignmentRepo, meetingRepo: meetingRepo, purchaseService: purchaseService, fileService: fileService, db: db}
+	meetingRepo repository.IMeetingRepository, attendanceRepo repository.IAttendanceRepository,
+	quizRepo repository.IQuizRepository, purchaseService IPurchaseService,
+	fileService IFileService, db *gorm.DB) ISubmissionService {
+	return &SubmissionService{submissionRepo: submissionRepo, assignmentRepo: assignmentRepo, attendanceRepo: attendanceRepo, quizRepo: quizRepo, meetingRepo: meetingRepo, purchaseService: purchaseService, fileService: fileService, db: db}
 }
 
 func (s *SubmissionService) checkUserAccess(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID) (bool, error) {
@@ -119,11 +123,85 @@ func (s *SubmissionService) GetSubmissionDetail(ctx context.Context, submissionI
 }
 
 // CreateSubmission is for create submission
-func (s *SubmissionService) CreateSubmission(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID, req *dto.CreateSubmissionRequest, fileURLs []string) (*models.AssignmentSubmission, error) {
+// func (s *SubmissionService) CreateSubmission(ctx context.Context, user *utils.Claims, assignmentID uuid.UUID, req *dto.CreateSubmissionRequest, fileURLs []string) (*models.AssignmentSubmission, error) {
+// 	var submission models.AssignmentSubmission
+
+// 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
+// 		// Cek apakah user sudah bayar batch terkait assignment
+// 		allowed, err := s.checkUserAccess(ctx, user, assignmentID)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		if !allowed {
+// 			return fmt.Errorf("user is not authorized to submit this assignment")
+// 		}
+
+// 		// Cek apakah user sudah submit sebelumnya
+// 		existing, err := s.submissionRepo.GetByAssignmentUser(ctx, assignmentID, user.UserID)
+// 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+// 			return err
+// 		}
+// 		if existing.ID != uuid.Nil {
+// 			return fmt.Errorf("submission already exists")
+// 		}
+
+// 		submission = models.AssignmentSubmission{
+// 			ID:           uuid.New(),
+// 			AssignmentID: assignmentID,
+// 			UserID:       user.UserID,
+// 			Note:         req.Note,
+// 			EssayText:    req.EssayText,
+// 		}
+
+// 		if err := s.submissionRepo.WithTx(tx).Create(ctx, &submission); err != nil {
+// 			return err
+// 		}
+
+// 		// Simpan file URLs sebagai SubmissionFile records
+// 		var submissionFiles []models.SubmissionFile
+// 		for _, url := range fileURLs {
+// 			submissionFiles = append(submissionFiles, models.SubmissionFile{
+// 				ID:                     uuid.New(),
+// 				AssignmentSubmissionID: submission.ID,
+// 				FileURL:                url,
+// 			})
+// 		}
+
+// 		if len(submissionFiles) > 0 {
+// 			if err := s.submissionRepo.WithTx(tx).CreateSubmissionFiles(ctx, submissionFiles); err != nil {
+// 				return err
+// 			}
+// 		}
+
+// 		return nil
+// 	})
+
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	// Ambil submission lengkap dengan files
+// 	submission, err = s.submissionRepo.FindByID(ctx, submission.ID)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	return &submission, nil
+// }
+
+// CreateSubmission is for create submission
+func (s *SubmissionService) CreateSubmission(
+	ctx context.Context,
+	user *utils.Claims,
+	assignmentID uuid.UUID,
+	req *dto.CreateSubmissionRequest,
+	fileURLs []string,
+) (*models.AssignmentSubmission, error) {
 	var submission models.AssignmentSubmission
 
 	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
-		// Cek apakah user sudah bayar batch terkait assignment
+
+		// --- 1. Cek apakah user punya akses ke batch ---
 		allowed, err := s.checkUserAccess(ctx, user, assignmentID)
 		if err != nil {
 			return err
@@ -132,7 +210,7 @@ func (s *SubmissionService) CreateSubmission(ctx context.Context, user *utils.Cl
 			return fmt.Errorf("user is not authorized to submit this assignment")
 		}
 
-		// Cek apakah user sudah submit sebelumnya
+		// --- 2. Cek apakah user sudah pernah submit ---
 		existing, err := s.submissionRepo.GetByAssignmentUser(ctx, assignmentID, user.UserID)
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
@@ -141,6 +219,12 @@ func (s *SubmissionService) CreateSubmission(ctx context.Context, user *utils.Cl
 			return fmt.Errorf("submission already exists")
 		}
 
+		// --- 3. Validasi Meeting Rules ---
+		if err := s.validateMeetingRules(ctx, tx, assignmentID, user.UserID); err != nil {
+			return err
+		}
+
+		// --- 4. Simpan submission utama ---
 		submission = models.AssignmentSubmission{
 			ID:           uuid.New(),
 			AssignmentID: assignmentID,
@@ -153,7 +237,7 @@ func (s *SubmissionService) CreateSubmission(ctx context.Context, user *utils.Cl
 			return err
 		}
 
-		// Simpan file URLs sebagai SubmissionFile records
+		// --- 5. Simpan file submissions ---
 		var submissionFiles []models.SubmissionFile
 		for _, url := range fileURLs {
 			submissionFiles = append(submissionFiles, models.SubmissionFile{
@@ -183,6 +267,76 @@ func (s *SubmissionService) CreateSubmission(ctx context.Context, user *utils.Cl
 	}
 
 	return &submission, nil
+}
+
+func (s *SubmissionService) validateMeetingRules(
+	ctx context.Context,
+	tx *gorm.DB,
+	assignmentID, userID uuid.UUID,
+) error {
+	assignment, err := s.assignmentRepo.WithTx(tx).FindByID(ctx, assignmentID)
+	if err != nil {
+		return fmt.Errorf("assignment not found")
+	}
+
+	currentMeeting, err := s.meetingRepo.FindByID(ctx, assignment.MeetingID)
+	if err != nil {
+		return fmt.Errorf("meeting not found")
+	}
+
+	if currentMeeting.StartAt.After(currentMeeting.EndAt) {
+		return fmt.Errorf("invalid meeting schedule")
+	}
+
+	fmt.Println(currentMeeting.IsOpen, "MTest testes")
+	if !currentMeeting.IsOpen {
+		return fmt.Errorf("meeting is not open yet")
+	}
+
+	prevMeeting, err := s.meetingRepo.WithTx(tx).GetPrevMeeting(ctx, currentMeeting.BatchID, currentMeeting.StartAt)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		// Meeting pertama, langsung boleh submit
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	att, err := s.attendanceRepo.GetByMeetingAndUser(ctx, prevMeeting.ID, userID)
+	if err != nil {
+		return fmt.Errorf("anda belum absen di meeting sebelumnya")
+	}
+	if !att.IsPresent {
+		return fmt.Errorf("anda tidak hadir di meeting sebelumnya")
+	}
+
+	prevAssignment, err := s.assignmentRepo.GetByMeetingID(ctx, prevMeeting.ID)
+	if err != nil {
+		return fmt.Errorf("assignment pada meeting sebelumnya tidak ditemukan")
+	}
+
+	// --- Validasi semua quiz sebelumnya ---
+	prevQuizzes, err := s.quizRepo.WithTx(tx).GetAllByMeetingID(ctx, prevMeeting.ID)
+	if err != nil {
+		return fmt.Errorf("gagal mengambil quiz meeting sebelumnya")
+	}
+
+	for _, q := range prevQuizzes {
+		_, err := s.quizRepo.WithTx(tx).GetQuizSubmissionByQuizAndUser(ctx, q.ID, userID)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("anda belum mengerjakan quiz '%s' di meeting sebelumnya", q.Title)
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = s.submissionRepo.GetByIDUser(ctx, prevAssignment.ID, userID)
+	if err != nil {
+		return fmt.Errorf("anda belum mengumpulkan submission di meeting sebelumnya")
+	}
+
+	return nil
 }
 
 // UpdateSubmission for update
