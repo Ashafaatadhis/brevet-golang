@@ -58,7 +58,7 @@ func (ctrl *AttendanceController) GetAllAttendancesByBatchSlug(c *fiber.Ctx) err
 	var attendanceResponses []dto.UserResponse
 	// var attendanceResponses []dto.AttendanceResponse
 	if copyErr := copier.CopyWithOption(&attendanceResponses, &attendances, copier.Option{
-		IgnoreEmpty: true, // field kosong / nil tidak akan disalin
+		IgnoreEmpty: true,
 	}); copyErr != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to map attendance data", copyErr.Error())
 	}

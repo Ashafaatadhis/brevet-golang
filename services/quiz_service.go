@@ -43,14 +43,23 @@ type QuizService struct {
 	quizRepo        repository.IQuizRepository
 	batchRepo       repository.IBatchRepository
 	meetingRepo     repository.IMeetingRepository
+	attendanceRepo  repository.IAttendanceRepository
+	assignmentRepo  repository.IAssignmentRepository
+	submissionRepo  repository.ISubmisssionRepository
 	purchaseService IPurchaseService
 	fileService     IFileService
 	db              *gorm.DB
 }
 
 // NewQuizService creates a new instance of QuizService
-func NewQuizService(quizRepo repository.IQuizRepository, batchRepo repository.IBatchRepository, meetingRepo repository.IMeetingRepository, purchaseService IPurchaseService, fileService IFileService, db *gorm.DB) IQuizService {
-	return &QuizService{quizRepo: quizRepo, batchRepo: batchRepo, meetingRepo: meetingRepo, purchaseService: purchaseService, fileService: fileService, db: db}
+func NewQuizService(quizRepo repository.IQuizRepository, batchRepo repository.IBatchRepository, meetingRepo repository.IMeetingRepository,
+	attendanceRepo repository.IAttendanceRepository,
+	assignmentRepo repository.IAssignmentRepository,
+	submissionRepo repository.ISubmisssionRepository,
+	purchaseService IPurchaseService, fileService IFileService, db *gorm.DB) IQuizService {
+	return &QuizService{quizRepo: quizRepo, batchRepo: batchRepo, meetingRepo: meetingRepo,
+		attendanceRepo: attendanceRepo, assignmentRepo: assignmentRepo, submissionRepo: submissionRepo,
+		purchaseService: purchaseService, fileService: fileService, db: db}
 }
 
 func (s *QuizService) checkUserAccess(ctx context.Context, user *utils.Claims, meetingID uuid.UUID) (bool, error) {
@@ -85,74 +94,128 @@ func (s *QuizService) GetAllUpcomingQuizzes(ctx context.Context, user *utils.Cla
 
 // StartQuiz start quiz
 func (s *QuizService) StartQuiz(ctx context.Context, user *utils.Claims, quizID uuid.UUID) (*models.QuizAttempt, error) {
-	quiz, err := s.quizRepo.GetQuizByID(ctx, quizID)
+	var attempt *models.QuizAttempt
+
+	err := utils.WithTransaction(s.db, func(tx *gorm.DB) error {
+		// --- 1. Ambil quiz ---
+		quiz, err := s.quizRepo.WithTx(tx).GetQuizByID(ctx, quizID)
+		if err != nil {
+			return err
+		}
+
+		// --- 2. Cek akses user ke quiz ---
+		allowed, err := s.checkUserAccess(ctx, user, quiz.MeetingID)
+		if err != nil {
+			return err
+		}
+		if !allowed {
+			return fmt.Errorf("forbidden")
+		}
+
+		// --- 3. Cek jadwal quiz ---
+		now := time.Now()
+		if !quiz.IsOpen || now.Before(quiz.StartTime) || (!quiz.EndTime.IsZero() && now.After(quiz.EndTime)) {
+			return fmt.Errorf("quiz tidak bisa diikuti saat ini")
+		}
+
+		// --- 4. Validasi meeting rules (mirip submission) ---
+		if err := s.validateMeetingRulesForQuiz(ctx, tx, quiz.MeetingID, user.UserID); err != nil {
+			return err
+		}
+
+		// --- 5. Cek jumlah attempt ---
+		attempts, err := s.quizRepo.WithTx(tx).GetAttemptsByQuizAndUser(ctx, quizID, user.UserID)
+		if err != nil {
+			return err
+		}
+		if quiz.MaxAttempts > 0 && len(attempts) >= quiz.MaxAttempts {
+			return fmt.Errorf("maximum attempts reached")
+		}
+
+		// --- 6. Cek apakah ada attempt aktif ---
+		activeAttempt, err := s.quizRepo.WithTx(tx).GetActiveAttemptByQuizAndUser(ctx, quizID, user.UserID)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if activeAttempt != nil {
+			return fmt.Errorf("quiz attempt masih berlangsung")
+		}
+
+		// --- 7. Buat attempt baru ---
+		attempt = &models.QuizAttempt{
+			ID:        uuid.New(),
+			UserID:    user.UserID,
+			QuizID:    quizID,
+			StartedAt: now,
+		}
+
+		if err := s.quizRepo.WithTx(tx).CreateQuizAttempt(ctx, attempt); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
 	if err != nil {
 		return nil, err
 	}
 
-	// cek akses user ke quiz
-	allowed, err := s.checkUserAccess(ctx, user, quiz.MeetingID)
-
-	if err != nil {
-		return nil, err
-	}
-	if !allowed {
-		return nil, fmt.Errorf("forbidden")
-	}
-
-	// cek apakah quiz sedang dibuka
-	now := time.Now()
-	if !quiz.IsOpen {
-		return nil, fmt.Errorf("quiz is not open")
-	}
-	if now.Before(quiz.StartTime) {
-		return nil, fmt.Errorf("quiz has not started yet")
-	}
-	if !quiz.EndTime.IsZero() && now.After(quiz.EndTime) {
-		return nil, fmt.Errorf("quiz has ended")
-	}
-
-	// ambil semua attempt user untuk quiz ini
-	attempts, err := s.quizRepo.GetAttemptsByQuizAndUser(ctx, quizID, user.UserID)
-	if err != nil {
-		return nil, err
-	}
-
-	// cek jumlah attempt
-	if quiz.MaxAttempts > 0 && len(attempts) >= quiz.MaxAttempts {
-		return nil, fmt.Errorf("maximum attempts reached")
-	}
-
-	// cek apakah ada attempt aktif
-	activeAttempt, err := s.quizRepo.GetActiveAttemptByQuizAndUser(ctx, quizID, user.UserID)
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
-	}
-	if activeAttempt != nil {
-		return nil, fmt.Errorf("quiz attempt still ongoing")
-	}
-
-	// buat attempt baru
-	attempt := &models.QuizAttempt{
-		UserID:    user.UserID,
-		QuizID:    quizID,
-		StartedAt: now,
-	}
-
-	if err := s.quizRepo.CreateQuizAttempt(ctx, attempt); err != nil {
-		return nil, err
-	}
-
-	// ambil ulang attempt lengkap
+	// --- Ambil attempt lengkap ---
 	attempt, err = s.quizRepo.GetAttemptByID(ctx, attempt.ID)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("attempt not found")
-		}
 		return nil, err
 	}
 
 	return attempt, nil
+}
+
+// validateMeetingRulesForQuiz mirip validateMeetingRules tapi untuk quiz
+func (s *QuizService) validateMeetingRulesForQuiz(ctx context.Context, tx *gorm.DB, meetingID, userID uuid.UUID) error {
+	currentMeeting, err := s.meetingRepo.FindByID(ctx, meetingID)
+	if err != nil {
+		return fmt.Errorf("meeting not found")
+	}
+
+	// Cek meeting sebelumnya
+	prevMeeting, err := s.meetingRepo.WithTx(tx).GetPrevMeeting(ctx, currentMeeting.BatchID, currentMeeting.StartAt)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil // tidak ada meeting sebelumnya, langsung boleh
+	}
+	if err != nil {
+		return err
+	}
+
+	// --- Validasi kehadiran ---
+	att, err := s.attendanceRepo.GetByMeetingAndUser(ctx, prevMeeting.ID, userID)
+	if err != nil || !att.IsPresent {
+		return fmt.Errorf("anda belum hadir di meeting sebelumnya")
+	}
+
+	// --- Validasi assignment ---
+	prevAssignment, err := s.assignmentRepo.GetByMeetingID(ctx, prevMeeting.ID)
+	if err == nil {
+		_, err = s.submissionRepo.FindByAssignmentAndUserID(ctx, prevAssignment.ID, userID)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("anda belum mengumpulkan submission di meeting sebelumnya")
+		}
+	}
+
+	// --- Validasi quiz sebelumnya ---
+	prevQuizzes, err := s.quizRepo.WithTx(tx).GetAllByMeetingID(ctx, prevMeeting.ID)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("gagal mengambil quiz meeting sebelumnya")
+	}
+	for _, q := range prevQuizzes {
+		subs, err := s.quizRepo.WithTx(tx).GetQuizSubmissionByQuizAndUser(ctx, q.ID, userID)
+		if errors.Is(err, gorm.ErrRecordNotFound) || len(subs) == 0 {
+			return fmt.Errorf("anda belum mengerjakan quiz '%s' di meeting sebelumnya", q.Title)
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // ImportQuestionsFromExcel excel

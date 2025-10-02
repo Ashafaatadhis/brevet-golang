@@ -43,7 +43,7 @@ type IQuizRepository interface {
 	CountCompletedByBatchUser(ctx context.Context, batchID, userID uuid.UUID) (int64, error)
 	GetQuizzesWithScoresByBatchUser(ctx context.Context, batchID, userID uuid.UUID) ([]dto.QuizScore, error)
 	GetAllByMeetingID(ctx context.Context, meetingID uuid.UUID) ([]models.Quiz, error)
-	GetQuizSubmissionByQuizAndUser(ctx context.Context, quizID, userID uuid.UUID) (*models.QuizSubmission, error)
+	GetQuizSubmissionByQuizAndUser(ctx context.Context, quizID, userID uuid.UUID) ([]models.QuizSubmission, error)
 }
 
 // QuizRepository is a struct that represents a quiz repository
@@ -106,14 +106,18 @@ func (r *QuizRepository) GetAllByMeetingID(ctx context.Context, meetingID uuid.U
 }
 
 // GetByQuizAndUser ambil submission quiz berdasarkan quiz_id & user_id
-func (r *QuizRepository) GetQuizSubmissionByQuizAndUser(ctx context.Context, quizID, userID uuid.UUID) (*models.QuizSubmission, error) {
-	var sub models.QuizSubmission
-	if err := r.db.WithContext(ctx).
-		Where("quiz_id = ? AND user_id = ?", quizID, userID).
-		First(&sub).Error; err != nil {
+func (r *QuizRepository) GetQuizSubmissionByQuizAndUser(ctx context.Context, quizID, userID uuid.UUID) ([]models.QuizSubmission, error) {
+	var subs []models.QuizSubmission
+
+	err := r.db.WithContext(ctx).
+		Joins("JOIN quiz_attempts ON quiz_attempts.id = quiz_submissions.attempt_id").
+		Where("quiz_attempts.quiz_id = ? AND quiz_attempts.user_id = ?", quizID, userID).
+		Find(&subs).Error
+
+	if err != nil {
 		return nil, err
 	}
-	return &sub, nil
+	return subs, nil
 }
 
 // GetAllUpcomingQuizzes retrieves upcoming quizzes that the user hasn't attempted yet

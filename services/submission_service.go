@@ -288,52 +288,54 @@ func (s *SubmissionService) validateMeetingRules(
 		return fmt.Errorf("invalid meeting schedule")
 	}
 
-	fmt.Println(currentMeeting.IsOpen, "MTest testes")
 	if !currentMeeting.IsOpen {
 		return fmt.Errorf("meeting is not open yet")
 	}
 
+	// Cek meeting sebelumnya
 	prevMeeting, err := s.meetingRepo.WithTx(tx).GetPrevMeeting(ctx, currentMeeting.BatchID, currentMeeting.StartAt)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		// Meeting pertama, langsung boleh submit
+		// Tidak ada meeting sebelumnya → langsung boleh submit
 		return nil
 	}
 	if err != nil {
 		return err
 	}
 
-	att, err := s.attendanceRepo.GetByMeetingAndUser(ctx, prevMeeting.ID, userID)
+	// --- Validasi kehadiran di meeting sebelumnya ---
+	_, err = s.attendanceRepo.GetByMeetingAndUser(ctx, prevMeeting.ID, userID)
 	if err != nil {
+		// Tidak ada attendance → artinya user tidak hadir, tolak
 		return fmt.Errorf("anda belum absen di meeting sebelumnya")
 	}
-	if !att.IsPresent {
-		return fmt.Errorf("anda tidak hadir di meeting sebelumnya")
-	}
+	// if !att.IsPresent {
+	// 	return fmt.Errorf("anda tidak hadir di meeting sebelumnya")
+	// }
 
+	// --- Validasi assignment di meeting sebelumnya ---
 	prevAssignment, err := s.assignmentRepo.GetByMeetingID(ctx, prevMeeting.ID)
-	if err != nil {
-		return fmt.Errorf("assignment pada meeting sebelumnya tidak ditemukan")
-	}
+	if err == nil {
+		// Ada assignment sebelumnya, cek apakah sudah submit
+		_, err = s.submissionRepo.FindByAssignmentAndUserID(ctx, prevAssignment.ID, userID)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("anda belum mengumpulkan submission di meeting sebelumnya")
+		}
+	} // jika assignment tidak ada, skip → boleh submit
 
-	// --- Validasi semua quiz sebelumnya ---
+	// --- Validasi semua quiz di meeting sebelumnya ---
 	prevQuizzes, err := s.quizRepo.WithTx(tx).GetAllByMeetingID(ctx, prevMeeting.ID)
-	if err != nil {
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return fmt.Errorf("gagal mengambil quiz meeting sebelumnya")
 	}
 
 	for _, q := range prevQuizzes {
-		_, err := s.quizRepo.WithTx(tx).GetQuizSubmissionByQuizAndUser(ctx, q.ID, userID)
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		subs, err := s.quizRepo.WithTx(tx).GetQuizSubmissionByQuizAndUser(ctx, q.ID, userID)
+		if errors.Is(err, gorm.ErrRecordNotFound) || len(subs) == 0 {
 			return fmt.Errorf("anda belum mengerjakan quiz '%s' di meeting sebelumnya", q.Title)
 		}
 		if err != nil {
 			return err
 		}
-	}
-
-	_, err = s.submissionRepo.GetByIDUser(ctx, prevAssignment.ID, userID)
-	if err != nil {
-		return fmt.Errorf("anda belum mengumpulkan submission di meeting sebelumnya")
 	}
 
 	return nil

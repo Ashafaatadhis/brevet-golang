@@ -54,12 +54,15 @@ func RegisterMeRoutes(r fiber.Router, db *gorm.DB) {
 	purchaseController := controllers.NewPurchaseController(purchaseService, db)
 
 	meetingRepo := repository.NewMeetingRepository(db)
+	assignmentRepo := repository.NewAssignmentRepository(db)
+	attendanceRepo := repository.NewAttendanceRepository(db)
+	submissionRepo := repository.NewSubmissionRepository(db)
 
 	assignmentService := services.NewAssignmentService(assignmentRepository, meetingRepo, purchaseRepo, fileService, db)
 
 	assignmentController := controllers.NewAssignmentController(assignmentService, db)
 
-	quizService := services.NewQuizService(quizRepository, batchRepository, meetingRepo, purchaseService, fileService, db)
+	quizService := services.NewQuizService(quizRepository, batchRepository, meetingRepo, attendanceRepo, assignmentRepo, submissionRepo, purchaseService, fileService, db)
 	quizController := controllers.NewQuizController(quizService, db)
 
 	certificateRepository := repository.NewCertificateRepository(db)

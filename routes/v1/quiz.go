@@ -23,11 +23,15 @@ func RegisterQuizRoutes(r fiber.Router, db *gorm.DB) {
 	batchRepository := repository.NewBatchRepository(db)
 	meetingRepo := repository.NewMeetingRepository(db)
 
+	assignmentRepo := repository.NewAssignmentRepository(db)
+	attendanceRepo := repository.NewAttendanceRepository(db)
+	submissionRepo := repository.NewSubmissionRepository(db)
+
 	purchaseRepo := repository.NewPurchaseRepository(db)
 	purchaseService := services.NewPurchaseService(purchaseRepo, userRepository, batchRepository, emailService, db)
 
 	quizRepository := repository.NewQuizRepository(db)
-	quizService := services.NewQuizService(quizRepository, batchRepository, meetingRepo, purchaseService, fileService, db)
+	quizService := services.NewQuizService(quizRepository, batchRepository, meetingRepo, attendanceRepo, assignmentRepo, submissionRepo, purchaseService, fileService, db)
 	quizController := controllers.NewQuizController(quizService, db)
 
 	r.Post("/attempts/:attemptID/temp-submissions",
