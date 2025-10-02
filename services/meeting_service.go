@@ -90,6 +90,9 @@ func (s *MeetingService) CreateMeeting(ctx context.Context, batchID uuid.UUID, b
 			Title:       body.Title,
 			Description: body.Description,
 			Type:        models.MeetingType(body.Type),
+			StartAt:     body.StartAt,
+			EndAt:       body.EndAt,
+			IsOpen:      utils.Safe(body.IsOpen, false),
 		}
 
 		if err := s.meetingRepo.WithTx(tx).Create(ctx, meeting); err != nil {

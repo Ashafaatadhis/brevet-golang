@@ -15,6 +15,12 @@ type Meeting struct {
 	Description string      `gorm:"type:text"`
 	Type        MeetingType `gorm:"type:meeting_type;not null"`
 
+	// default: StartAt = NOW()
+	StartAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	// default: EndAt = NOW() + interval '2 hours'
+	EndAt  time.Time `gorm:"not null;default:CURRENT_TIMESTAMP + interval '2 hours'"`
+	IsOpen bool      `gorm:"default:false"`
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 

@@ -14,7 +14,8 @@ import (
 type IAttendanceRepository interface {
 	WithTx(tx *gorm.DB) IAttendanceRepository
 	GetAllFilteredAttendances(ctx context.Context, opts utils.QueryOptions) ([]models.Attendance, int64, error)
-	GetAllFilteredAttendancesByBatchSlug(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.Attendance, int64, error)
+	// GetAllFilteredAttendancesByBatchSlug(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.Attendance, int64, error)
+	GetAllFilteredAttendancesByBatchSlug(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.User, int64, error)
 	Create(ctx context.Context, attendance *models.Attendance) error
 	FindByID(ctx context.Context, id uuid.UUID) (*models.Attendance, error)
 	GetByMeetingAndUser(ctx context.Context, meetingID, userID uuid.UUID) (*models.Attendance, error)
@@ -70,9 +71,45 @@ func (r *AttendanceRepository) GetAllFilteredAttendances(ctx context.Context, op
 	return attendances, total, err
 }
 
-// GetAllFilteredAttendancesByBatchSlug retrieves all attendances with pagination and filtering options
-func (r *AttendanceRepository) GetAllFilteredAttendancesByBatchSlug(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.Attendance, int64, error) {
-	validSortFields := utils.GetValidColumnsFromStruct(&models.Attendance{})
+// // GetAllFilteredAttendancesByBatchSlug retrieves all attendances with pagination and filtering options
+// func (r *AttendanceRepository) GetAllFilteredAttendancesByBatchSlug(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.Attendance, int64, error) {
+// 	validSortFields := utils.GetValidColumnsFromStruct(&models.Attendance{})
+
+// 	sort := opts.Sort
+// 	if !validSortFields[sort] {
+// 		sort = "id"
+// 	}
+
+// 	order := opts.Order
+// 	if order != "asc" && order != "desc" {
+// 		order = "asc"
+// 	}
+
+// 	db := r.db.WithContext(ctx).Preload("User").Model(&models.Attendance{}).
+// 		Joins("JOIN meetings ON meetings.id = attendances.meeting_id").
+// 		Joins("JOIN batches ON batches.id = meetings.batch_id").
+// 		Where("batches.slug = ?", batchSlug)
+
+// 	joinConditions := map[string]string{}
+// 	joinedRelations := map[string]bool{}
+
+// 	db = utils.ApplyFiltersWithJoins(db, "attendances", opts.Filters, validSortFields, joinConditions, joinedRelations)
+
+// 	var total int64
+// 	db.Count(&total)
+
+// 	var attendances []models.Attendance
+// 	err := db.Order(fmt.Sprintf("%s %s", sort, order)).
+// 		Limit(opts.Limit).
+// 		Offset(opts.Offset).
+// 		Find(&attendances).Error
+
+// 	return attendances, total, err
+// }
+
+// GetAllFilteredAttendancesByBatchSlug retrieves all students in a batch with their attendance status
+func (r *AttendanceRepository) GetAllFilteredAttendancesByBatchSlug(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.User, int64, error) {
+	validSortFields := utils.GetValidColumnsFromStruct(&models.User{})
 
 	sort := opts.Sort
 	if !validSortFields[sort] {
@@ -84,26 +121,51 @@ func (r *AttendanceRepository) GetAllFilteredAttendancesByBatchSlug(ctx context.
 		order = "asc"
 	}
 
-	db := r.db.WithContext(ctx).Preload("User").Model(&models.Attendance{}).
-		Joins("JOIN meetings ON meetings.id = attendances.meeting_id").
+	// Ambil meeting IDs dari batch slug
+	var meetingIDs []uuid.UUID
+	if err := r.db.WithContext(ctx).
+		Model(&models.Meeting{}).
+		Select("meetings.id").
 		Joins("JOIN batches ON batches.id = meetings.batch_id").
-		Where("batches.slug = ?", batchSlug)
+		Where("batches.slug = ?", batchSlug).
+		Find(&meetingIDs).Error; err != nil {
+		return nil, 0, err
+	}
 
+	db := r.db.WithContext(ctx).
+		Model(&models.User{}).
+		Joins("JOIN purchases ON purchases.user_id = users.id").
+		Joins("JOIN batches ON batches.id = purchases.batch_id").
+		Where("batches.slug = ?", batchSlug).
+		Where("users.role_type = ?", models.RoleTypeSiswa)
+
+	// Apply filters & search
 	joinConditions := map[string]string{}
 	joinedRelations := map[string]bool{}
+	db = utils.ApplyFiltersWithJoins(db, "users", opts.Filters, validSortFields, joinConditions, joinedRelations)
 
-	db = utils.ApplyFiltersWithJoins(db, "attendances", opts.Filters, validSortFields, joinConditions, joinedRelations)
+	if opts.Search != "" {
+		q := "%" + opts.Search + "%"
+		db = db.Where("users.name ILIKE ? OR users.email ILIKE ?", q, q)
+	}
 
 	var total int64
-	db.Count(&total)
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
 
-	var attendances []models.Attendance
-	err := db.Order(fmt.Sprintf("%s %s", sort, order)).
+	var results []models.User
+	err := db.
+		Preload("Attendances", "meeting_id IN ?", meetingIDs). // preload attendances by meeting IDs
+		Order(fmt.Sprintf("users.%s %s", sort, order)).
 		Limit(opts.Limit).
 		Offset(opts.Offset).
-		Find(&attendances).Error
+		Find(&results).Error
+	if err != nil {
+		return nil, 0, err
+	}
 
-	return attendances, total, err
+	return results, total, nil
 }
 
 // Create for create new attendance

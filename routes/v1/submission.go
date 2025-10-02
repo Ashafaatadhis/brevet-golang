@@ -17,6 +17,8 @@ func RegisterSubmissionRoutes(r fiber.Router, db *gorm.DB) {
 	userRepo := repository.NewUserRepository(db)
 	submissionRepository := repository.NewSubmissionRepository(db)
 	assignmentRepository := repository.NewAssignmentRepository(db)
+	attendanceRepository := repository.NewAttendanceRepository(db)
+	quizRepository := repository.NewQuizRepository(db)
 	meetingRepository := repository.NewMeetingRepository(db)
 	fileService := services.NewFileService()
 	emailService, err := services.NewEmailServiceFromEnv()
@@ -25,7 +27,7 @@ func RegisterSubmissionRoutes(r fiber.Router, db *gorm.DB) {
 	}
 	batchRepository := repository.NewBatchRepository(db)
 	purchaseService := services.NewPurchaseService(purchaseRepo, userRepo, batchRepository, emailService, db)
-	submissionService := services.NewSubmissionService(submissionRepository, assignmentRepository, meetingRepository, purchaseService, fileService, db)
+	submissionService := services.NewSubmissionService(submissionRepository, assignmentRepository, meetingRepository, attendanceRepository, quizRepository, purchaseService, fileService, db)
 	submissionController := controllers.NewSubmissionController(submissionService, db)
 	r.Get("/:submissionID", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"siswa", "guru"}), submissionController.GetDetailSubmission)

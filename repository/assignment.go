@@ -26,6 +26,7 @@ type IAssignmentRepository interface {
 	GetBatchIDByAssignmentID(ctx context.Context, assignmentID uuid.UUID) (uuid.UUID, error)
 	GetBatchByAssignmentID(ctx context.Context, assignmentID uuid.UUID) (models.Batch, error)
 	CountByBatchID(ctx context.Context, batchID uuid.UUID) (int64, error)
+	GetByMeetingID(ctx context.Context, meetingID uuid.UUID) (*models.Assignment, error)
 }
 
 // AssignmentRepository provides methods for managing assignments
@@ -170,6 +171,16 @@ func (r *AssignmentRepository) GetAllFilteredAssignmentsByMeetingID(ctx context.
 		Find(&assignments).Error
 
 	return assignments, total, err
+}
+
+func (r *AssignmentRepository) GetByMeetingID(ctx context.Context, meetingID uuid.UUID) (*models.Assignment, error) {
+	var assignment models.Assignment
+	if err := r.db.WithContext(ctx).
+		Where("meeting_id = ?", meetingID).
+		First(&assignment).Error; err != nil {
+		return nil, err
+	}
+	return &assignment, nil
 }
 
 // Create creates a new assignment

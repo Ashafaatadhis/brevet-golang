@@ -55,13 +55,16 @@ func (ctrl *AttendanceController) GetAllAttendancesByBatchSlug(c *fiber.Ctx) err
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch attendances", err.Error())
 	}
 
-	var attendanceResponses []dto.AttendanceResponse
-	if copyErr := copier.Copy(&attendanceResponses, attendances); copyErr != nil {
+	var attendanceResponses []dto.UserResponse
+	// var attendanceResponses []dto.AttendanceResponse
+	if copyErr := copier.CopyWithOption(&attendanceResponses, &attendances, copier.Option{
+		IgnoreEmpty: true, // field kosong / nil tidak akan disalin
+	}); copyErr != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to map attendance data", copyErr.Error())
 	}
 
 	meta := utils.BuildPaginationMeta(total, opts.Limit, opts.Page)
-	return utils.SuccessWithMeta(c, fiber.StatusOK, "Attendances fetched", attendanceResponses, meta)
+	return utils.SuccessWithMeta(c, fiber.StatusOK, "Attendances fetchesssd", attendanceResponses, meta)
 }
 
 // GetAttendanceByID retrieves a single attendance record by its ID

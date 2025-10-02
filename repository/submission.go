@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"brevet-api/dto"
 	"brevet-api/models"
 	"brevet-api/utils"
 	"context"
@@ -31,6 +32,7 @@ type ISubmisssionRepository interface {
 	GetGradeBySubmissionID(ctx context.Context, submissionID uuid.UUID) (*models.AssignmentGrade, error)
 	UpsertGrade(ctx context.Context, grade models.AssignmentGrade) (models.AssignmentGrade, error)
 	CountCompletedByBatchUser(ctx context.Context, batchID, userID uuid.UUID) (int64, error)
+	GetAssignmentsWithScoresByBatchUser(ctx context.Context, batchID, userID uuid.UUID) ([]dto.AssignmentScore, error)
 }
 
 // SubmissionRepository provides methods for managing submissions
@@ -107,6 +109,27 @@ func (r *SubmissionRepository) FindByAssignmentAndUserID(ctx context.Context, as
 		return nil, err
 	}
 	return &submission, nil
+}
+
+// GetAssignmentsWithScoresByBatchUser get scores by batch id and user id
+func (r *SubmissionRepository) GetAssignmentsWithScoresByBatchUser(ctx context.Context, batchID, userID uuid.UUID) ([]dto.AssignmentScore, error) {
+	var results []dto.AssignmentScore
+
+	err := r.db.WithContext(ctx).
+		Model(&models.Assignment{}).
+		Select("assignments.*, COALESCE(MAX(ag.grade), 0) as score").
+		Joins("JOIN meetings m ON m.id = assignments.meeting_id").
+		Joins("LEFT JOIN assignment_submissions s ON s.assignment_id = assignments.id AND s.user_id = ?", userID).
+		Joins("LEFT JOIN assignment_grades ag ON ag.assignment_submission_id = s.id").
+		Where("m.batch_id = ?", batchID).
+		Group("assignments.id").
+		Scan(&results).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
 }
 
 // Create is for create assignment_submissions

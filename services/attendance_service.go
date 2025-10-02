@@ -15,7 +15,8 @@ import (
 // IAttendanceServices interface
 type IAttendanceServices interface {
 	GetAllFilteredAttendances(ctx context.Context, opts utils.QueryOptions) ([]models.Attendance, int64, error)
-	GetAllFilteredAttendancesByBatchSlug(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.Attendance, int64, error)
+	GetAllFilteredAttendancesByBatchSlug(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.User, int64, error)
+	// GetAllFilteredAttendancesByBatchSlug(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.Attendance, int64, error)
 	GetAttendanceByID(ctx context.Context, attendanceID uuid.UUID) (*models.Attendance, error)
 	BulkUpsertAttendance(ctx context.Context, user *utils.Claims, batchID uuid.UUID, req *dto.BulkAttendanceRequest) ([]models.Attendance, error)
 }
@@ -44,13 +45,22 @@ func (s *AttendanceServices) GetAllFilteredAttendances(ctx context.Context, opts
 }
 
 // GetAllFilteredAttendancesByBatchSlug retrieves all attendances with pagination and filtering options
-func (s *AttendanceServices) GetAllFilteredAttendancesByBatchSlug(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.Attendance, int64, error) {
+func (s *AttendanceServices) GetAllFilteredAttendancesByBatchSlug(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.User, int64, error) {
 	attendances, total, err := s.attendanceRepo.GetAllFilteredAttendancesByBatchSlug(ctx, batchSlug, opts)
 	if err != nil {
 		return nil, 0, err
 	}
 	return attendances, total, nil
 }
+
+// // GetAllFilteredAttendancesByBatchSlug retrieves all attendances with pagination and filtering options
+// func (s *AttendanceServices) GetAllFilteredAttendancesByBatchSlug(ctx context.Context, batchSlug string, opts utils.QueryOptions) ([]models.Attendance, int64, error) {
+// 	attendances, total, err := s.attendanceRepo.GetAllFilteredAttendancesByBatchSlug(ctx, batchSlug, opts)
+// 	if err != nil {
+// 		return nil, 0, err
+// 	}
+// 	return attendances, total, nil
+// }
 
 // GetAttendanceByID retrieves a single attendance by its ID
 func (s *AttendanceServices) GetAttendanceByID(ctx context.Context, attendanceID uuid.UUID) (*models.Attendance, error) {
