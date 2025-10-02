@@ -23,6 +23,10 @@ func RegisterMeetingRoutes(r fiber.Router, db *gorm.DB) {
 	userRepository := repository.NewUserRepository(db)
 	batchRepository := repository.NewBatchRepository(db)
 
+	assignmentRepo := repository.NewAssignmentRepository(db)
+	attendanceRepo := repository.NewAttendanceRepository(db)
+	submissionRepo := repository.NewSubmissionRepository(db)
+
 	meetingRepo := repository.NewMeetingRepository(db)
 	purchaseRepo := repository.NewPurchaseRepository(db)
 	purchaseService := services.NewPurchaseService(purchaseRepo, userRepository, batchRepository, emailService, db)
@@ -38,7 +42,7 @@ func RegisterMeetingRoutes(r fiber.Router, db *gorm.DB) {
 	materialController := controllers.NewMaterialController(materialService, db)
 
 	quizRepository := repository.NewQuizRepository(db)
-	quizService := services.NewQuizService(quizRepository, batchRepository, meetingRepo, purchaseService, fileService, db)
+	quizService := services.NewQuizService(quizRepository, batchRepository, meetingRepo, attendanceRepo, assignmentRepo, submissionRepo, purchaseService, fileService, db)
 	quizController := controllers.NewQuizController(quizService, db)
 
 	r.Get("/", middlewares.RequireAuth(),

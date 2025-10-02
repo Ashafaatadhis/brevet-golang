@@ -22,6 +22,9 @@ func InitQuizScheduler(db *gorm.DB) {
 	fileService := services.NewFileService()
 	batchRepository := repository.NewBatchRepository(db)
 	meetingRepo := repository.NewMeetingRepository(db)
+	assignmentRepo := repository.NewAssignmentRepository(db)
+	attendanceRepo := repository.NewAttendanceRepository(db)
+	submissionRepo := repository.NewSubmissionRepository(db)
 
 	purchaseRepo := repository.NewPurchaseRepository(db)
 	purchaseService := services.NewPurchaseService(
@@ -29,9 +32,7 @@ func InitQuizScheduler(db *gorm.DB) {
 	)
 
 	quizRepository := repository.NewQuizRepository(db)
-	quizService := services.NewQuizService(
-		quizRepository, batchRepository, meetingRepo, purchaseService, fileService, db,
-	)
+	quizService := services.NewQuizService(quizRepository, batchRepository, meetingRepo, attendanceRepo, assignmentRepo, submissionRepo, purchaseService, fileService, db)
 
 	go startAutoSubmitScheduler(db, quizService)
 }
