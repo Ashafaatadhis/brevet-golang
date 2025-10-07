@@ -98,7 +98,7 @@ func (s *UserService) CreateUserWithProfile(ctx context.Context, body *dto.Creat
 			return err
 		}
 
-		user.RoleType = models.RoleTypeSiswa
+		user.RoleType = body.RoleType
 		user.IsVerified = true
 		user.Password = hashedPassword
 
