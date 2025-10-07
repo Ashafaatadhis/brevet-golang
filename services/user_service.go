@@ -7,6 +7,7 @@ import (
 	"brevet-api/utils"
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jinzhu/copier"
@@ -84,12 +85,10 @@ func (s *UserService) CreateUserWithProfile(ctx context.Context, body *dto.Creat
 			return err
 		}
 
+		fmt.Println("Hashed Password:", hashedPassword)
+
 		// Mapping ke model
-		user := &models.User{
-			RoleType:   models.RoleTypeSiswa,
-			IsVerified: true,
-			Password:   hashedPassword,
-		}
+		user := &models.User{}
 		if err := copier.CopyWithOption(user, body, copier.Option{IgnoreEmpty: true}); err != nil {
 			return err
 		}
@@ -98,6 +97,10 @@ func (s *UserService) CreateUserWithProfile(ctx context.Context, body *dto.Creat
 		if err := copier.CopyWithOption(profile, body, copier.Option{IgnoreEmpty: true}); err != nil {
 			return err
 		}
+
+		user.RoleType = models.RoleTypeSiswa
+		user.IsVerified = true
+		user.Password = hashedPassword
 
 		// Simpan user
 		if err := s.userRepo.WithTx(tx).Create(ctx, user); err != nil {
