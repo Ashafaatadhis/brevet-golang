@@ -459,6 +459,24 @@ func (s *CertificateService) EnsureCertificate(ctx context.Context, batchID uuid
 		return nil, fmt.Errorf("murid belum hadir di semua pertemuan (%d/%d)", attendedMeetings, totalMeetings)
 	}
 
+	// ✅ 3. ambil data batch untuk cek end_at
+	batch, err := s.batchRepo.GetBatchWithCourse(ctx, batchID)
+	fmt.Println("[DEBUG] batch:", batch, "err:", err)
+	if err != nil {
+		return nil, err
+	}
+	if batch == nil {
+		return nil, fmt.Errorf("batch tidak ditemukan")
+	}
+
+	// ✅ 4. validasi periode cetak sertifikat (H+1 setelah end_at)
+	now := time.Now()
+	allowedPrintDate := batch.EndAt.Add(24 * time.Hour) // H+1
+	fmt.Println("[DEBUG] now:", now, "end_at:", batch.EndAt, "allowedPrintDate:", allowedPrintDate)
+	if now.Before(allowedPrintDate) {
+		return nil, fmt.Errorf("periode cetak sertifikat dimulai H+1 setelah tanggal selesai batch (%s)", batch.EndAt.Format("2006-01-02"))
+	}
+
 	// cek sertifikat existing
 	_, err = s.certRepo.GetByBatchUser(ctx, batchID, user.UserID)
 	fmt.Println("[DEBUG] GetByBatchUser err:", err)
@@ -493,12 +511,6 @@ func (s *CertificateService) EnsureCertificate(ctx context.Context, batchID uuid
 	}
 	defer os.Remove(qrPath)
 
-	batch, err := s.batchRepo.GetBatchWithCourse(ctx, batchID)
-	fmt.Println("[DEBUG] batch:", batch, "err:", err)
-	if err != nil || batch == nil {
-		return nil, err
-	}
-
 	listOfMeeting, err := s.meetingRepo.GetMeetingNamesByBatchID(ctx, batch.ID)
 	fmt.Println("[DEBUG] listOfMeeting:", listOfMeeting, "err:", err)
 	if err != nil {
@@ -523,6 +535,109 @@ func (s *CertificateService) EnsureCertificate(ctx context.Context, batchID uuid
 	fmt.Println("[DEBUG] Sukses generate certificate", "certID:", cert.ID, "URL:", cert.URL)
 	return cert, nil
 }
+
+// func (s *CertificateService) EnsureCertificate(ctx context.Context, batchID uuid.UUID, user *utils.Claims) (*models.Certificate, error) {
+// 	fmt.Println("[DEBUG] Mulai EnsureCertificate", "batchID:", batchID, "userID:", user.UserID)
+
+// 	// bayar dulu bos
+// 	allowed, err := s.checkUserAccess(ctx, user, batchID)
+// 	fmt.Println("[DEBUG] isPaid:", allowed, "err:", err)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	if !allowed {
+// 		return nil, fmt.Errorf("forbidden")
+// 	}
+
+// 	// 1. cek progress assignment & quiz
+// 	progress, err := s.batchService.CalculateProgress(ctx, batchID, user.UserID)
+// 	fmt.Println("[DEBUG] progress:", progress, "err:", err)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	if progress < 100 {
+// 		return nil, fmt.Errorf("progress belum 100%%")
+// 	}
+
+// 	// 2. cek attendance
+// 	totalMeetings, err := s.batchRepo.CountMeetings(ctx, batchID)
+// 	fmt.Println("[DEBUG] totalMeetings:", totalMeetings, "err:", err)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	attendedMeetings, err := s.attendanceRepo.CountByBatchUser(ctx, batchID, user.UserID)
+// 	fmt.Println("[DEBUG] attendedMeetings:", attendedMeetings, "err:", err)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	if totalMeetings > 0 && attendedMeetings < totalMeetings {
+// 		return nil, fmt.Errorf("murid belum hadir di semua pertemuan (%d/%d)", attendedMeetings, totalMeetings)
+// 	}
+
+// 	// cek sertifikat existing
+// 	_, err = s.certRepo.GetByBatchUser(ctx, batchID, user.UserID)
+// 	fmt.Println("[DEBUG] GetByBatchUser err:", err)
+// 	if err != nil && err != gorm.ErrRecordNotFound {
+// 		return nil, err
+// 	}
+// 	if err == nil {
+// 		return nil, fmt.Errorf("sertifikat sudah ada untuk user %s di batch %s", user.UserID, batchID)
+// 	}
+
+// 	certNumber, err := s.generateCertificateNumber(ctx, batchID)
+// 	fmt.Println("[DEBUG] certNumber:", certNumber, "err:", err)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	cert := &models.Certificate{
+// 		BatchID: batchID,
+// 		Number:  certNumber,
+// 		UserID:  user.UserID,
+// 	}
+// 	err = s.certRepo.Create(ctx, cert)
+// 	fmt.Println("[DEBUG] Insert Certificate err:", err, "certID:", cert.ID)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	qrPath, err := s.generateQRCode(cert.ID)
+// 	fmt.Println("[DEBUG] QR generated at:", qrPath, "err:", err)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	defer os.Remove(qrPath)
+
+// 	batch, err := s.batchRepo.GetBatchWithCourse(ctx, batchID)
+// 	fmt.Println("[DEBUG] batch:", batch, "err:", err)
+// 	if err != nil || batch == nil {
+// 		return nil, err
+// 	}
+
+// 	listOfMeeting, err := s.meetingRepo.GetMeetingNamesByBatchID(ctx, batch.ID)
+// 	fmt.Println("[DEBUG] listOfMeeting:", listOfMeeting, "err:", err)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	pdfURL, err := s.generatePDF(user.Name, batch, certNumber, listOfMeeting, qrPath)
+// 	fmt.Println("[DEBUG] pdfURL:", pdfURL, "err:", err)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	cert.URL = pdfURL
+// 	cert.QRCode = fmt.Sprintf("/certificates/%s", cert.ID)
+
+// 	err = s.certRepo.Update(ctx, cert)
+// 	fmt.Println("[DEBUG] Update certificate err:", err)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	fmt.Println("[DEBUG] Sukses generate certificate", "certID:", cert.ID, "URL:", cert.URL)
+// 	return cert, nil
+// }
 
 // GetCertificateByBatchUser get certificate by batch id & user id
 func (s *CertificateService) GetCertificateByBatchUser(ctx context.Context, batchID uuid.UUID, user *utils.Claims) (*models.Certificate, error) {
