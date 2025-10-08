@@ -69,6 +69,10 @@ func (s *SubmissionService) checkUserAccess(ctx context.Context, user *utils.Cla
 		return s.purchaseService.HasPaid(ctx, user.UserID, batch.ID)
 	}
 
+	if user.Role == string(models.RoleTypeAdmin) {
+		return true, nil
+	}
+
 	// Role lain tidak diizinkan
 	return false, nil
 }

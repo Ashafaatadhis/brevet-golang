@@ -39,9 +39,9 @@ func RegisterSubmissionRoutes(r fiber.Router, db *gorm.DB) {
 		submissionController.DeleteSubmission)
 
 	r.Get("/:submissionID/grade", middlewares.RequireAuth(),
-		middlewares.RequireRole([]string{"siswa", "guru"}), submissionController.GetSubmissionGrade)
+		middlewares.RequireRole([]string{"siswa", "guru", "admin"}), submissionController.GetSubmissionGrade)
 	r.Put("/:submissionID/grade", middlewares.RequireAuth(),
-		middlewares.RequireRole([]string{"guru"}), middlewares.ValidateBody[dto.GradeSubmissionRequest](),
+		middlewares.RequireRole([]string{"guru", "admin"}), middlewares.ValidateBody[dto.GradeSubmissionRequest](),
 		submissionController.GradeSubmission)
 
 }
