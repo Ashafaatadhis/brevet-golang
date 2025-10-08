@@ -323,7 +323,7 @@ func (s *QuizService) CreateQuizMetadata(
 		Title:          req.Title,
 		Description:    req.Description,
 		Type:           req.Type,
-		IsOpen:         false,
+		IsOpen:         req.IsOpen,
 		MaxAttempts:    req.MaxAttempts,
 		DurationMinute: req.DurationMinute,
 		StartTime:      req.StartTime,

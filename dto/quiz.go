@@ -14,6 +14,7 @@ type ImportQuizzesRequest struct {
 	Type           models.QuizType `json:"quiz_type" validate:"required,quiz_type"`
 	DurationMinute int             `json:"duration_minute" validate:"required,min=1"`
 	MaxAttempts    int             `json:"max_attempts" validate:"required"`
+	IsOpen         bool            `json:"is_open" validate:"required"`
 	StartTime      time.Time       `json:"start_time"`
 	EndTime        time.Time       `json:"end_time"`
 }
