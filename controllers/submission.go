@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"brevet-api/dto"
-	"brevet-api/models"
 	"brevet-api/services"
 	"brevet-api/utils"
 	"errors"
@@ -185,9 +184,9 @@ func (ctrl *SubmissionController) GradeSubmission(c *fiber.Ctx) error {
 	ctx := c.UserContext()
 	user := c.Locals("user").(*utils.Claims)
 	body := c.Locals("body").(*dto.GradeSubmissionRequest)
-	if user.Role != string(models.RoleTypeGuru) {
-		return utils.ErrorResponse(c, fiber.StatusForbidden, "Only teachers can grade submissions", nil)
-	}
+	// if user.Role != string(models.RoleTypeGuru) {
+	// 	return utils.ErrorResponse(c, fiber.StatusForbidden, "Only teachers can grade submissions", nil)
+	// }
 
 	submissionID, err := uuid.Parse(c.Params("submissionID"))
 	if err != nil {
