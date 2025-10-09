@@ -86,7 +86,7 @@ func (s *SubmissionService) GetAllSubmissionsByAssignmentUser(ctx context.Contex
 	if !allowed {
 		return nil, 0, errors.New("user not authorized to access this assignment")
 	}
-	if user.Role == string(models.RoleTypeGuru) {
+	if user.Role == string(models.RoleTypeGuru) || user.Role == string(models.RoleTypeAdmin) {
 		return s.submissionRepo.GetAllByAssignment(ctx, assignmentID, nil, opts)
 	}
 	return s.submissionRepo.GetAllByAssignment(ctx, assignmentID, &user.UserID, opts)
