@@ -52,17 +52,17 @@ func RegisterAssignmentRoutes(r fiber.Router, db *gorm.DB) {
 	submissionService := services.NewSubmissionService(submissionRepository, assignmentRepository, meetingRepository, attendanceRepository, quizRepository, purchaseService, fileService, db)
 	submissionController := controllers.NewSubmissionController(submissionService, db)
 	r.Get("/:assignmentID/submissions", middlewares.RequireAuth(),
-		middlewares.RequireRole([]string{"siswa", "guru"}), submissionController.GetAllSubmissionByAssignmentID)
+		middlewares.RequireRole([]string{"siswa", "guru", "admin"}), submissionController.GetAllSubmissionByAssignmentID)
 
 	r.Post("/:assignmentID/submissions", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"siswa"}), middlewares.ValidateBody[dto.CreateSubmissionRequest](),
 		submissionController.CreateSubmission)
 
 	r.Get("/:assignmentID/grades/excel", middlewares.RequireAuth(),
-		middlewares.RequireRole([]string{"guru"}), submissionController.GenerateGradesExcel,
+		middlewares.RequireRole([]string{"guru", "admin"}), submissionController.GenerateGradesExcel,
 	)
 	r.Put("/:assignmentID/grades/import", middlewares.RequireAuth(),
-		middlewares.RequireRole([]string{"guru"}), submissionController.ImportGradesFromExcel,
+		middlewares.RequireRole([]string{"guru", "admin"}), submissionController.ImportGradesFromExcel,
 	)
 
 }
