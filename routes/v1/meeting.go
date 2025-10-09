@@ -47,7 +47,7 @@ func RegisterMeetingRoutes(r fiber.Router, db *gorm.DB) {
 
 	r.Get("/", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin"}), meetingController.GetAllMeetings)
-	r.Get("/:id", middlewares.RequireAuth(), middlewares.RequireRole([]string{"admin"}), meetingController.GetMeetingByID)
+	r.Get("/:id", middlewares.RequireAuth(), middlewares.RequireRole([]string{"admin", "guru"}), meetingController.GetMeetingByID)
 
 	r.Patch("/:id", middlewares.RequireAuth(),
 		middlewares.RequireRole([]string{"admin"}),
