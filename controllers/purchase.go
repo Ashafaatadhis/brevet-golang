@@ -56,7 +56,7 @@ func (ctrl *PurchaseController) GetMyPurchase(c *fiber.Ctx) error {
 		opts.Filters["user_id"] = user.UserID.String()
 	}
 
-	purchases, total, err := ctrl.purchaseService.GetAllFilteredPurchases(ctx, opts)
+	purchases, total, err := ctrl.purchaseService.GetMyFilteredPurchases(ctx, opts, user)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to fetch purchases", err.Error())
 	}
