@@ -14,6 +14,7 @@ import (
 type IPurchaseRepository interface {
 	WithTx(tx *gorm.DB) IPurchaseRepository
 	GetAllFilteredPurchases(ctx context.Context, opts utils.QueryOptions) ([]models.Purchase, int64, error)
+	GetMyFilteredPurchases(ctx context.Context, opts utils.QueryOptions, userID uuid.UUID) ([]models.Purchase, int64, error)
 	GetPurchaseByID(ctx context.Context, id uuid.UUID) (*models.Purchase, error)
 	HasPaid(ctx context.Context, userID uuid.UUID, batchID uuid.UUID) (bool, error)
 	CountPaidByBatchID(ctx context.Context, batchID uuid.UUID) (int64, error)
@@ -67,6 +68,50 @@ func (r *PurchaseRepository) GetAllFilteredPurchases(ctx context.Context, opts u
 
 	var purchases []models.Purchase
 	err := db.Order(fmt.Sprintf("%s %s", sort, order)).
+		Limit(opts.Limit).
+		Offset(opts.Offset).
+		Preload("User").
+		Preload("Batch").
+		Preload("Price").
+		Find(&purchases).Error
+
+	return purchases, total, err
+}
+
+// GetMyFilteredPurchases retrieves all purchases with pagination and filtering options
+func (r *PurchaseRepository) GetMyFilteredPurchases(ctx context.Context, opts utils.QueryOptions, userID uuid.UUID) ([]models.Purchase, int64, error) {
+	validSortFields := utils.GetValidColumnsFromStruct(&models.Purchase{}, &models.User{}, &models.Batch{}, &models.Price{})
+
+	sort := opts.Sort
+	if !validSortFields[sort] {
+		sort = "id"
+	}
+
+	order := opts.Order
+	if order != "asc" && order != "desc" {
+		order = "asc"
+	}
+
+	db := r.db.WithContext(ctx).Model(&models.Purchase{})
+
+	joinConditions := map[string]string{}
+	joinedRelations := map[string]bool{}
+
+	// filter dinamis (misal berdasarkan batch name, price, dll)
+	db = utils.ApplyFiltersWithJoins(db, "purchases", opts.Filters, validSortFields, joinConditions, joinedRelations)
+
+	// ✅ filter khusus untuk user_id
+	db = db.Where("purchases.user_id = ?", userID)
+
+	// hitung total setelah semua filter diterapkan
+	var total int64
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var purchases []models.Purchase
+	err := db.
+		Order(fmt.Sprintf("%s %s", sort, order)).
 		Limit(opts.Limit).
 		Offset(opts.Offset).
 		Preload("User").

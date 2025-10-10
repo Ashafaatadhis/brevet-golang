@@ -26,6 +26,7 @@ import (
 // IPurchaseService interface
 type IPurchaseService interface {
 	GetAllFilteredPurchases(ctx context.Context, opts utils.QueryOptions) ([]models.Purchase, int64, error)
+	GetMyFilteredPurchases(ctx context.Context, opts utils.QueryOptions, user *utils.Claims) ([]models.Purchase, int64, error)
 	GetPurchaseByID(ctx context.Context, id uuid.UUID) (*models.Purchase, error)
 	HasPaid(ctx context.Context, userID uuid.UUID, batchID uuid.UUID) (bool, error)
 	generateAndSendReceipt(purchase *models.Purchase) error
@@ -55,6 +56,15 @@ func NewPurchaseService(purchaseRepository repository.IPurchaseRepository, userR
 // GetAllFilteredPurchases retrieves all purchases with pagination and filtering options
 func (s *PurchaseService) GetAllFilteredPurchases(ctx context.Context, opts utils.QueryOptions) ([]models.Purchase, int64, error) {
 	purchases, total, err := s.purchaseRepo.GetAllFilteredPurchases(ctx, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	return purchases, total, nil
+}
+
+// GetMyFilteredPurchases retrieves all purchases with pagination and filtering options
+func (s *PurchaseService) GetMyFilteredPurchases(ctx context.Context, opts utils.QueryOptions, user *utils.Claims) ([]models.Purchase, int64, error) {
+	purchases, total, err := s.purchaseRepo.GetMyFilteredPurchases(ctx, opts, user.UserID)
 	if err != nil {
 		return nil, 0, err
 	}
