@@ -40,11 +40,12 @@ func RegisterMeRoutes(r fiber.Router, db *gorm.DB) {
 	quizRepository := repository.NewQuizRepository(db)
 	assignmentRepository := repository.NewAssignmentRepository(db)
 	submissionRepository := repository.NewSubmissionRepository(db)
+	attendanceRepository := repository.NewAttendanceRepository(db)
+	meetingRepository := repository.NewMeetingRepository(db)
 	fileService := services.NewFileService()
 	courseService := services.NewCourseService(courseRepository, db, fileService)
 
-	batchService := services.NewBatchService(batchRepository, userRepository, quizRepository, courseRepository, assignmentRepository, submissionRepository, db, fileService)
-	meetingRepository := repository.NewMeetingRepository(db)
+	batchService := services.NewBatchService(batchRepository, userRepository, quizRepository, courseRepository, assignmentRepository, submissionRepository, attendanceRepository, meetingRepository, db, fileService)
 	purchaseRepo := repository.NewPurchaseRepository(db)
 	meetingService := services.NewMeetingService(meetingRepository, batchRepository, purchaseRepo, userRepository, db)
 
@@ -53,20 +54,14 @@ func RegisterMeRoutes(r fiber.Router, db *gorm.DB) {
 	purchaseService := services.NewPurchaseService(purchaseRepo, userRepository, batchRepository, emailService, db)
 	purchaseController := controllers.NewPurchaseController(purchaseService, db)
 
-	meetingRepo := repository.NewMeetingRepository(db)
-	assignmentRepo := repository.NewAssignmentRepository(db)
-	attendanceRepo := repository.NewAttendanceRepository(db)
-	submissionRepo := repository.NewSubmissionRepository(db)
-
-	assignmentService := services.NewAssignmentService(assignmentRepository, meetingRepo, purchaseRepo, fileService, db)
+	assignmentService := services.NewAssignmentService(assignmentRepository, meetingRepository, purchaseRepo, fileService, db)
 
 	assignmentController := controllers.NewAssignmentController(assignmentService, db)
 
-	quizService := services.NewQuizService(quizRepository, batchRepository, meetingRepo, attendanceRepo, assignmentRepo, submissionRepo, purchaseService, fileService, db)
+	quizService := services.NewQuizService(quizRepository, batchRepository, meetingRepository, attendanceRepository, assignmentRepository, submissionRepository, purchaseService, fileService, db)
 	quizController := controllers.NewQuizController(quizService, db)
 
 	certificateRepository := repository.NewCertificateRepository(db)
-	attendanceRepository := repository.NewAttendanceRepository(db)
 	certificateService := services.NewCertificateService(certificateRepository, userRepository, batchRepository, attendanceRepository, meetingRepository, purchaseService, batchService, fileService)
 	certificateController := controllers.NewCertificateController(certificateService)
 

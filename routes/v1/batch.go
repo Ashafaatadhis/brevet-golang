@@ -22,6 +22,8 @@ func RegisterBatchRoute(r fiber.Router, db *gorm.DB) {
 	assignmentRepository := repository.NewAssignmentRepository(db)
 	purchaseRepository := repository.NewPurchaseRepository(db)
 	submissionRepository := repository.NewSubmissionRepository(db)
+	attendanceRepository := repository.NewAttendanceRepository(db)
+	meetingRepository := repository.NewMeetingRepository(db)
 
 	emailService, err := services.NewEmailServiceFromEnv()
 	if err != nil {
@@ -29,20 +31,17 @@ func RegisterBatchRoute(r fiber.Router, db *gorm.DB) {
 	}
 	fileService := services.NewFileService()
 	courseService := services.NewCourseService(courseRepository, db, fileService)
-	batchService := services.NewBatchService(batchRepository, userRepository, quizRepository, courseRepository, assignmentRepository, submissionRepository, db, fileService)
+	batchService := services.NewBatchService(batchRepository, userRepository, quizRepository, courseRepository, assignmentRepository, submissionRepository, attendanceRepository, meetingRepository, db, fileService)
 	purchaseService := services.NewPurchaseService(purchaseRepository, userRepository, batchRepository, emailService, db)
 	testimonialService := services.NewTestimonialService(testimonialRepository, purchaseService, batchRepository)
 
-	meetingRepository := repository.NewMeetingRepository(db)
-	purchaseRepo := repository.NewPurchaseRepository(db)
-	meetingService := services.NewMeetingService(meetingRepository, batchRepository, purchaseRepo, userRepository, db)
+	meetingService := services.NewMeetingService(meetingRepository, batchRepository, purchaseRepository, userRepository, db)
 
 	batchController := controllers.NewBatchController(batchService, meetingService, courseService, db)
 	testimonialController := controllers.NewTestimonialController(testimonialService)
 
 	meetingController := controllers.NewMeetingController(meetingService, db)
 
-	attendanceRepository := repository.NewAttendanceRepository(db)
 	attendanceService := services.NewAttendanceService(attendanceRepository, meetingRepository, purchaseRepository, db)
 	attendanceController := controllers.NewAttendanceController(attendanceService, db)
 

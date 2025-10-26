@@ -32,6 +32,7 @@ type IMeetingRepository interface {
 	IsUserTeachingInMeeting(ctx context.Context, userID, meetingID uuid.UUID) (bool, error)
 	GetMeetingNamesByBatchID(ctx context.Context, batchID uuid.UUID) ([]string, error)
 	GetPrevMeeting(ctx context.Context, batchID uuid.UUID, startAt time.Time) (*models.Meeting, error)
+	CountByBatchID(ctx context.Context, batchID uuid.UUID) (int64, error)
 }
 
 // MeetingRepository is a struct that represents a meeting repository
@@ -407,4 +408,14 @@ func (r *MeetingRepository) IsMeetingTaughtByUser(ctx context.Context, meetingID
 		Where("meeting_id = ? AND user_id = ?", meetingID, userID).
 		Count(&count).Error
 	return count > 0, err
+}
+
+// CountByBatchID returns total number of meetings in a batch
+func (r *MeetingRepository) CountByBatchID(ctx context.Context, batchID uuid.UUID) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&models.Meeting{}).
+		Where("batch_id = ?", batchID).
+		Count(&count).Error
+	return count, err
 }

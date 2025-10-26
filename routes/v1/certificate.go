@@ -25,16 +25,16 @@ func RegisterCertificateRoutes(r fiber.Router, db *gorm.DB) {
 	quizRepository := repository.NewQuizRepository(db)
 	assignmentRepository := repository.NewAssignmentRepository(db)
 	submissionRepository := repository.NewSubmissionRepository(db)
+	attendanceRepository := repository.NewAttendanceRepository(db)
+	meetingRepository := repository.NewMeetingRepository(db)
 	fileService := services.NewFileService()
 
-	batchService := services.NewBatchService(batchRepository, userRepository, quizRepository, courseRepository, assignmentRepository, submissionRepository, db, fileService)
-	meetingRepository := repository.NewMeetingRepository(db)
+	batchService := services.NewBatchService(batchRepository, userRepository, quizRepository, courseRepository, assignmentRepository, submissionRepository, attendanceRepository, meetingRepository, db, fileService)
 	purchaseRepo := repository.NewPurchaseRepository(db)
 
 	purchaseService := services.NewPurchaseService(purchaseRepo, userRepository, batchRepository, emailService, db)
 
 	certificateRepository := repository.NewCertificateRepository(db)
-	attendanceRepository := repository.NewAttendanceRepository(db)
 	certificateService := services.NewCertificateService(certificateRepository, userRepository, batchRepository, attendanceRepository, meetingRepository, purchaseService, batchService, fileService)
 	certificateController := controllers.NewCertificateController(certificateService)
 	r.Get("/number/:number", certificateController.GetByNumber)

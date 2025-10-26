@@ -23,9 +23,9 @@ func RegisterCourseRoutes(r fiber.Router, db *gorm.DB) {
 	quizRepository := repository.NewQuizRepository(db)
 	assignmentRepository := repository.NewAssignmentRepository(db)
 	submissionRepository := repository.NewSubmissionRepository(db)
-	batchService := services.NewBatchService(batchRepository, userRepository, quizRepository, courseRepository, assignmentRepository, submissionRepository, db, fileService)
-
+	attendanceRepository := repository.NewAttendanceRepository(db)
 	meetingRepository := repository.NewMeetingRepository(db)
+	batchService := services.NewBatchService(batchRepository, userRepository, quizRepository, courseRepository, assignmentRepository, submissionRepository, attendanceRepository, meetingRepository, db, fileService)
 	purchaseRepo := repository.NewPurchaseRepository(db)
 	meetingService := services.NewMeetingService(meetingRepository, batchRepository, purchaseRepo, userRepository, db)
 

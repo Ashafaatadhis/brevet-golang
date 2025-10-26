@@ -1,5 +1,6 @@
 # Binary output
 /bin/
+brevet-api
 *.exe
 *.exe~
 *.dll
