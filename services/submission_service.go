@@ -307,14 +307,14 @@ func (s *SubmissionService) validateMeetingRules(
 	}
 
 	// --- Validasi kehadiran di meeting sebelumnya ---
-	_, err = s.attendanceRepo.GetByMeetingAndUser(ctx, prevMeeting.ID, userID)
+	att, err := s.attendanceRepo.GetByMeetingAndUser(ctx, prevMeeting.ID, userID)
 	if err != nil {
 		// Tidak ada attendance → artinya user tidak hadir, tolak
 		return fmt.Errorf("anda belum absen di meeting sebelumnya")
 	}
-	// if !att.IsPresent {
-	// 	return fmt.Errorf("anda tidak hadir di meeting sebelumnya")
-	// }
+	if !att.IsPresent {
+		return fmt.Errorf("anda tidak hadir di meeting sebelumnya")
+	}
 
 	// --- Validasi assignment di meeting sebelumnya ---
 	prevAssignment, err := s.assignmentRepo.GetByMeetingID(ctx, prevMeeting.ID)

@@ -31,21 +31,23 @@ type IBatchService interface {
 
 // BatchService provides methods for managing batches
 type BatchService struct {
-	repo           repository.IBatchRepository
-	userRepo       repository.IUserRepository
-	quizRepo       repository.IQuizRepository
-	courseRepo     repository.ICourseRepository
-	assignmentRepo repository.IAssignmentRepository
-	submissionRepo repository.ISubmisssionRepository
-	db             *gorm.DB
-	fileService    IFileService
+	repo             repository.IBatchRepository
+	userRepo         repository.IUserRepository
+	quizRepo         repository.IQuizRepository
+	courseRepo       repository.ICourseRepository
+	assignmentRepo   repository.IAssignmentRepository
+	submissionRepo   repository.ISubmisssionRepository
+	attendanceRepo   repository.IAttendanceRepository
+	meetingRepo      repository.IMeetingRepository
+	db               *gorm.DB
+	fileService      IFileService
 }
 
 // NewBatchService creates a new instance of BatchService
 func NewBatchService(repo repository.IBatchRepository, userRepo repository.IUserRepository, quizRepo repository.IQuizRepository, courseRepo repository.ICourseRepository,
 	assignmentRepo repository.IAssignmentRepository,
-	submissionRepo repository.ISubmisssionRepository, db *gorm.DB, fileService IFileService) IBatchService {
-	return &BatchService{repo: repo, userRepo: userRepo, quizRepo: quizRepo, courseRepo: courseRepo, assignmentRepo: assignmentRepo, submissionRepo: submissionRepo, db: db, fileService: fileService}
+	submissionRepo repository.ISubmisssionRepository, attendanceRepo repository.IAttendanceRepository, meetingRepo repository.IMeetingRepository, db *gorm.DB, fileService IFileService) IBatchService {
+	return &BatchService{repo: repo, userRepo: userRepo, quizRepo: quizRepo, courseRepo: courseRepo, assignmentRepo: assignmentRepo, submissionRepo: submissionRepo, attendanceRepo: attendanceRepo, meetingRepo: meetingRepo, db: db, fileService: fileService}
 }
 
 // GetAllFilteredBatches retrieves all batches with pagination and filtering options
@@ -307,7 +309,7 @@ func (s *BatchService) GetBatchesTaughtByGuru(ctx context.Context, guruID uuid.U
 
 // CalculateProgress service calculate progress
 func (s *BatchService) CalculateProgress(ctx context.Context, batchID, userID uuid.UUID) (float64, error) {
-	// Hitung total assignment & quiz di batch
+	// Hitung total assignment, quiz, & meetings di batch
 	totalAssignments, err := s.assignmentRepo.CountByBatchID(ctx, batchID)
 	if err != nil {
 		return 0, err
@@ -318,12 +320,17 @@ func (s *BatchService) CalculateProgress(ctx context.Context, batchID, userID uu
 		return 0, err
 	}
 
-	totalItems := totalAssignments + totalQuizzes
+	totalMeetings, err := s.meetingRepo.CountByBatchID(ctx, batchID)
+	if err != nil {
+		return 0, err
+	}
+
+	totalItems := totalAssignments + totalQuizzes + totalMeetings
 	if totalItems == 0 {
 		return 0, nil // biar ga bagi nol
 	}
 
-	// Hitung total submission assignment & quiz user yang sudah selesai
+	// Hitung total submission assignment, quiz, & attendance user yang sudah selesai
 	completedAssignments, err := s.submissionRepo.CountCompletedByBatchUser(ctx, batchID, userID)
 	if err != nil {
 		return 0, err
@@ -334,7 +341,12 @@ func (s *BatchService) CalculateProgress(ctx context.Context, batchID, userID uu
 		return 0, err
 	}
 
-	completedItems := completedAssignments + completedQuizzes
+	completedAttendances, err := s.attendanceRepo.CountByBatchUser(ctx, batchID, userID)
+	if err != nil {
+		return 0, err
+	}
+
+	completedItems := completedAssignments + completedQuizzes + completedAttendances
 
 	progress := (float64(completedItems) / float64(totalItems)) * 100
 	return progress, nil
