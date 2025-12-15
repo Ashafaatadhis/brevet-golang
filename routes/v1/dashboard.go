@@ -26,6 +26,27 @@ func RegisterDashboardRoutes(r fiber.Router, db *gorm.DB) {
 		dashboardController.GetAdminDashboard,
 	)
 
+	// Teacher dashboard
+	r.Get("/teacher",
+		middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"guru"}),
+		dashboardController.GetTeacherDashboard,
+	)
+
+	// Student score progress per meeting (by batch slug)
+	r.Get("/student/score-progress",
+		middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"siswa"}),
+		dashboardController.GetStudentScoreProgress,
+	)
+
+	// Student dashboard
+	r.Get("/student",
+		middlewares.RequireAuth(),
+		middlewares.RequireRole([]string{"siswa"}),
+		dashboardController.GetStudentDashboard,
+	)
+
 	// Revenue chart
 	r.Get("/admin/revenue-chart",
 		middlewares.RequireAuth(),

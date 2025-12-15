@@ -152,9 +152,9 @@ type StudentScoreProgressResponse struct {
 
 // StudentDashboardResponse represents dashboard metrics for a student
 type StudentDashboardResponse struct {
-	TotalCourses      int64   `json:"total_courses"`
-	ActiveCourses     int64   `json:"active_courses"`
-	AvgProgress       float64 `json:"avg_progress"`
-	TotalCertificates int64   `json:"total_certificates"`
-	UpcomingTasks     int64   `json:"upcoming_tasks"`
+	TotalCourses     int64   `json:"total_courses"`
+	ActiveCourses    int64   `json:"active_courses"`
+	AvgProgress      float64 `json:"avg_progress"`
+	TotalCertificates int64  `json:"total_certificates"`
+	UpcomingTasks    int64   `json:"upcoming_tasks"`
 }

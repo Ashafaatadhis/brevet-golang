@@ -24,9 +24,9 @@ func NewDashboardController(service services.IDashboardService, db *gorm.DB) *Da
 
 // GetAdminDashboard returns admin dashboard statistics
 func (c *DashboardController) GetAdminDashboard(ctx *fiber.Ctx) error {
- 
+
 	period := ctx.Query("period", "30d")
- 
+
 	if period != "7d" && period != "30d" && period != "90d" {
 		return utils.ErrorResponse(ctx, fiber.StatusBadRequest, "Invalid period. Must be 7d, 30d, or 90d", nil)
 	}
@@ -38,6 +38,59 @@ func (c *DashboardController) GetAdminDashboard(ctx *fiber.Ctx) error {
 	}
 
 	return utils.SuccessResponse(ctx, fiber.StatusOK, "Dashboard data retrieved successfully", dashboard)
+}
+
+// GetTeacherDashboard returns dashboard statistics for a teacher
+func (c *DashboardController) GetTeacherDashboard(ctx *fiber.Ctx) error {
+	userRaw := ctx.Locals("user")
+	claims, ok := userRaw.(*utils.Claims)
+	if !ok || claims == nil {
+		return utils.ErrorResponse(ctx, fiber.StatusUnauthorized, "Unauthorized: invalid user data", nil)
+	}
+
+	dashboard, err := c.service.GetTeacherDashboard(ctx.Context(), claims.UserID)
+	if err != nil {
+		return utils.ErrorResponse(ctx, fiber.StatusInternalServerError, err.Error(), nil)
+	}
+
+	return utils.SuccessResponse(ctx, fiber.StatusOK, "Dashboard data retrieved successfully", dashboard)
+}
+
+// GetStudentScoreProgress returns score progress per meeting for a student in a batch
+func (c *DashboardController) GetStudentScoreProgress(ctx *fiber.Ctx) error {
+	userRaw := ctx.Locals("user")
+	claims, ok := userRaw.(*utils.Claims)
+	if !ok || claims == nil {
+		return utils.ErrorResponse(ctx, fiber.StatusUnauthorized, "Unauthorized: invalid user data", nil)
+	}
+
+	batchSlug := ctx.Query("batch_slug", "")
+	if batchSlug == "" {
+		return utils.ErrorResponse(ctx, fiber.StatusBadRequest, "batch_slug is required", nil)
+	}
+
+	data, err := c.service.GetStudentScoreProgress(ctx.Context(), batchSlug, claims.UserID)
+	if err != nil {
+		return utils.ErrorResponse(ctx, fiber.StatusInternalServerError, err.Error(), nil)
+	}
+
+	return utils.SuccessResponse(ctx, fiber.StatusOK, "Score progress retrieved successfully", data)
+}
+
+// GetStudentDashboard returns dashboard stats for a student
+func (c *DashboardController) GetStudentDashboard(ctx *fiber.Ctx) error {
+	userRaw := ctx.Locals("user")
+	claims, ok := userRaw.(*utils.Claims)
+	if !ok || claims == nil {
+		return utils.ErrorResponse(ctx, fiber.StatusUnauthorized, "Unauthorized: invalid user data", nil)
+	}
+
+	data, err := c.service.GetStudentDashboard(ctx.Context(), claims.UserID)
+	if err != nil {
+		return utils.ErrorResponse(ctx, fiber.StatusInternalServerError, err.Error(), nil)
+	}
+
+	return utils.SuccessResponse(ctx, fiber.StatusOK, "Dashboard data retrieved successfully", data)
 }
 
 // GetRevenueChart returns revenue chart data per day
