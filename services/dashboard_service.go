@@ -4,9 +4,11 @@ import (
 	"brevet-api/dto"
 	"brevet-api/repository"
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -19,6 +21,9 @@ type IDashboardService interface {
 	GetTeacherWorkload(ctx context.Context, period string) (*dto.TeacherWorkloadResponse, error)
 	GetCertificateStats(ctx context.Context, period string) (*dto.CertificateStatsResponse, error)
 	GetRecentActivities(ctx context.Context, period string, limit int) (*dto.RecentActivitiesResponse, error)
+	GetTeacherDashboard(ctx context.Context, teacherID uuid.UUID) (*dto.TeacherDashboardResponse, error)
+	GetStudentScoreProgress(ctx context.Context, batchSlug string, studentID uuid.UUID) (*dto.StudentScoreProgressResponse, error)
+	GetStudentDashboard(ctx context.Context, studentID uuid.UUID) (*dto.StudentDashboardResponse, error)
 }
 
 // DashboardService provides methods for dashboard statistics
@@ -42,6 +47,381 @@ func NewDashboardService(
 		certificateRepo: certificateRepo,
 		db:              db,
 	}
+}
+
+// GetTeacherDashboard returns dashboard statistics for a teacher
+func (s *DashboardService) GetTeacherDashboard(ctx context.Context, teacherID uuid.UUID) (*dto.TeacherDashboardResponse, error) {
+	now := time.Now()
+
+	// Total courses (distinct batches taught by this teacher)
+	var totalCourses int64
+	if err := s.db.WithContext(ctx).
+		Table("batches").
+		Select("COUNT(DISTINCT batches.id)").
+		Joins("JOIN meetings ON meetings.batch_id = batches.id").
+		Joins("JOIN meeting_teachers mt ON mt.meeting_id = meetings.id").
+		Where("mt.user_id = ?", teacherID).
+		Scan(&totalCourses).Error; err != nil {
+		return nil, fmt.Errorf("failed to count total courses: %w", err)
+	}
+
+	// Active courses (batches not yet ended)
+	var activeCourses int64
+	if err := s.db.WithContext(ctx).
+		Table("batches").
+		Select("COUNT(DISTINCT batches.id)").
+		Joins("JOIN meetings ON meetings.batch_id = batches.id").
+		Joins("JOIN meeting_teachers mt ON mt.meeting_id = meetings.id").
+		Where("mt.user_id = ? AND batches.end_at >= ?", teacherID, now).
+		Scan(&activeCourses).Error; err != nil {
+		return nil, fmt.Errorf("failed to count active courses: %w", err)
+	}
+
+	// Active students (distinct paid users in teacher's batches)
+	var activeStudents int64
+	if err := s.db.WithContext(ctx).
+		Table("purchases").
+		Select("COUNT(DISTINCT purchases.user_id)").
+		Joins("JOIN batches ON batches.id = purchases.batch_id").
+		Joins("JOIN meetings ON meetings.batch_id = batches.id").
+		Joins("JOIN meeting_teachers mt ON mt.meeting_id = meetings.id").
+		Where("mt.user_id = ? AND purchases.payment_status = ?", teacherID, "paid").
+		Scan(&activeStudents).Error; err != nil {
+		return nil, fmt.Errorf("failed to count active students: %w", err)
+	}
+
+	// Ongoing tasks: assignments and quizzes that have not ended yet
+	var ongoingAssignments int64
+	if err := s.db.WithContext(ctx).
+		Table("assignments").
+		Joins("JOIN meetings ON meetings.id = assignments.meeting_id").
+		Joins("JOIN meeting_teachers mt ON mt.meeting_id = meetings.id").
+		Where("mt.user_id = ? AND assignments.end_at >= ?", teacherID, now).
+		Count(&ongoingAssignments).Error; err != nil {
+		return nil, fmt.Errorf("failed to count ongoing assignments: %w", err)
+	}
+
+	var ongoingQuizzes int64
+	if err := s.db.WithContext(ctx).
+		Table("quizzes").
+		Joins("JOIN meetings ON meetings.id = quizzes.meeting_id").
+		Joins("JOIN meeting_teachers mt ON mt.meeting_id = meetings.id").
+		Where("mt.user_id = ? AND quizzes.end_time >= ?", teacherID, now).
+		Count(&ongoingQuizzes).Error; err != nil {
+		return nil, fmt.Errorf("failed to count ongoing quizzes: %w", err)
+	}
+
+	ongoingTasks := ongoingAssignments + ongoingQuizzes
+
+	// Pending grading: assignment submissions without grades in teacher's batches
+	var pendingGrading int64
+	if err := s.db.WithContext(ctx).
+		Table("assignment_submissions").
+		Joins("JOIN assignments ON assignments.id = assignment_submissions.assignment_id").
+		Joins("JOIN meetings ON meetings.id = assignments.meeting_id").
+		Joins("JOIN meeting_teachers mt ON mt.meeting_id = meetings.id").
+		Where("mt.user_id = ? AND assignment_submissions.id NOT IN (SELECT assignment_submission_id FROM assignment_grades)", teacherID).
+		Count(&pendingGrading).Error; err != nil {
+		return nil, fmt.Errorf("failed to count pending grading: %w", err)
+	}
+
+	// Upcoming schedules: next two meetings taught by the teacher
+	type UpcomingMeeting struct {
+		ID          string
+		Title       string
+		StartAt     time.Time
+		EndAt       time.Time
+		BatchSlug   string
+		BatchTitle  string
+		CourseTitle *string
+	}
+
+	var upcoming []UpcomingMeeting
+	if err := s.db.WithContext(ctx).
+		Table("meetings").
+		Select(`
+			meetings.id,
+			meetings.title,
+			meetings.start_at,
+			meetings.end_at,
+			batches.slug as batch_slug,
+			batches.title as batch_title,
+			courses.title as course_title
+		`).
+		Joins("JOIN meeting_teachers mt ON mt.meeting_id = meetings.id").
+		Joins("JOIN batches ON batches.id = meetings.batch_id").
+		Joins("LEFT JOIN courses ON courses.id = batches.course_id").
+		Where("mt.user_id = ? AND meetings.start_at > ?", teacherID, now).
+		Order("meetings.start_at ASC").
+		Scan(&upcoming).Error; err != nil {
+		return nil, fmt.Errorf("failed to get upcoming schedules: %w", err)
+	}
+
+	var upcomingItems []dto.UpcomingScheduleItem
+	for _, m := range upcoming {
+		item := dto.UpcomingScheduleItem{
+			MeetingID:    m.ID,
+			MeetingTitle: m.Title,
+			BatchSlug:    m.BatchSlug,
+			BatchTitle:   m.BatchTitle,
+			StartAt:      m.StartAt,
+			EndAt:        m.EndAt,
+		}
+		if m.CourseTitle != nil {
+			item.CourseTitle = *m.CourseTitle
+		}
+		upcomingItems = append(upcomingItems, item)
+	}
+
+	if upcomingItems == nil {
+		upcomingItems = []dto.UpcomingScheduleItem{}
+	}
+
+	return &dto.TeacherDashboardResponse{
+		TotalCourses:      totalCourses,
+		ActiveCourses:     activeCourses,
+		ActiveStudents:    activeStudents,
+		OngoingTasks:      ongoingTasks,
+		PendingGrading:    pendingGrading,
+		TotalUpcoming:     len(upcomingItems),
+		UpcomingSchedules: upcomingItems,
+	}, nil
+}
+
+// GetStudentDashboard returns dashboard metrics for a student
+func (s *DashboardService) GetStudentDashboard(ctx context.Context, studentID uuid.UUID) (*dto.StudentDashboardResponse, error) {
+	now := time.Now()
+	sevenDays := now.AddDate(0, 0, 7)
+
+	// Total courses (paid purchases)
+	var totalCourses int64
+	if err := s.db.WithContext(ctx).
+		Table("purchases").
+		Select("COUNT(DISTINCT batch_id)").
+		Where("user_id = ? AND payment_status = ?", studentID, "paid").
+		Scan(&totalCourses).Error; err != nil {
+		return nil, fmt.Errorf("failed to count total courses: %w", err)
+	}
+
+	// Active courses (paid and batch not ended)
+	var activeCourses int64
+	if err := s.db.WithContext(ctx).
+		Table("purchases").
+		Select("COUNT(DISTINCT purchases.batch_id)").
+		Joins("JOIN batches ON batches.id = purchases.batch_id").
+		Where("purchases.user_id = ? AND purchases.payment_status = ? AND batches.end_at >= ?", studentID, "paid", now).
+		Scan(&activeCourses).Error; err != nil {
+		return nil, fmt.Errorf("failed to count active courses: %w", err)
+	}
+
+	// Batch IDs the student has paid
+	var batchIDs []string
+	if err := s.db.WithContext(ctx).
+		Table("purchases").
+		Select("DISTINCT batch_id").
+		Where("user_id = ? AND payment_status = ?", studentID, "paid").
+		Pluck("batch_id", &batchIDs).Error; err != nil {
+		return nil, fmt.Errorf("failed to get batch list: %w", err)
+	}
+
+	// Average progress across batches
+	var totalProgress float64
+	for _, batchID := range batchIDs {
+		progress, err := s.calculateStudentProgress(ctx, batchID, studentID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to calculate progress: %w", err)
+		}
+		totalProgress += progress
+	}
+	var avgProgress float64
+	if len(batchIDs) > 0 {
+		avgProgress = totalProgress / float64(len(batchIDs))
+	}
+
+	// Certificates count
+	var certificateCount int64
+	if err := s.db.WithContext(ctx).
+		Table("certificates").
+		Where("user_id = ?", studentID).
+		Count(&certificateCount).Error; err != nil {
+		return nil, fmt.Errorf("failed to count certificates: %w", err)
+	}
+
+	// Upcoming tasks/quizzes in next 7 days for student's batches
+	var upcomingAssignments int64
+	if len(batchIDs) > 0 {
+		if err := s.db.WithContext(ctx).
+			Table("assignments").
+			Joins("JOIN meetings ON meetings.id = assignments.meeting_id").
+			Where("meetings.batch_id IN ? AND assignments.end_at BETWEEN ? AND ?", batchIDs, now, sevenDays).
+			Count(&upcomingAssignments).Error; err != nil {
+			return nil, fmt.Errorf("failed to count upcoming assignments: %w", err)
+		}
+	}
+
+	var upcomingQuizzes int64
+	if len(batchIDs) > 0 {
+		if err := s.db.WithContext(ctx).
+			Table("quizzes").
+			Joins("JOIN meetings ON meetings.id = quizzes.meeting_id").
+			Where("meetings.batch_id IN ? AND quizzes.start_time BETWEEN ? AND ?", batchIDs, now, sevenDays).
+			Count(&upcomingQuizzes).Error; err != nil {
+			return nil, fmt.Errorf("failed to count upcoming quizzes: %w", err)
+		}
+	}
+
+	return &dto.StudentDashboardResponse{
+		TotalCourses:      totalCourses,
+		ActiveCourses:     activeCourses,
+		AvgProgress:       avgProgress,
+		TotalCertificates: certificateCount,
+		UpcomingTasks:     upcomingAssignments + upcomingQuizzes,
+	}, nil
+}
+
+// GetStudentScoreProgress returns score progress per meeting for a student in a batch
+func (s *DashboardService) GetStudentScoreProgress(ctx context.Context, batchSlug string, studentID uuid.UUID) (*dto.StudentScoreProgressResponse, error) {
+	// Get batch id and title
+	var batch struct {
+		ID    string
+		Title string
+	}
+
+	if err := s.db.WithContext(ctx).
+		Table("batches").
+		Select("id, title").
+		Where("slug = ?", batchSlug).
+		Scan(&batch).Error; err != nil {
+		return nil, fmt.Errorf("failed to get batch: %w", err)
+	}
+
+	if batch.ID == "" {
+		return nil, fmt.Errorf("batch not found")
+	}
+
+	// Get meetings for the batch ordered by start time
+	var meetings []struct {
+		ID      string
+		Title   string
+		StartAt time.Time
+	}
+
+	if err := s.db.WithContext(ctx).
+		Table("meetings").
+		Select("id, title, start_at").
+		Where("batch_id = ?", batch.ID).
+		Order("start_at ASC").
+		Scan(&meetings).Error; err != nil {
+		return nil, fmt.Errorf("failed to get meetings: %w", err)
+	}
+
+	var items []dto.StudentMeetingScoreItem
+	for _, m := range meetings {
+		var assignmentAvg sql.NullFloat64
+		if err := s.db.WithContext(ctx).
+			Table("assignment_grades").
+			Select("AVG(assignment_grades.grade)").
+			Joins("JOIN assignment_submissions ON assignment_submissions.id = assignment_grades.assignment_submission_id").
+			Joins("JOIN assignments ON assignments.id = assignment_submissions.assignment_id").
+			Where("assignments.meeting_id = ? AND assignment_submissions.user_id = ?", m.ID, studentID).
+			Scan(&assignmentAvg).Error; err != nil {
+			return nil, fmt.Errorf("failed to calculate assignment average: %w", err)
+		}
+
+		var quizAvg sql.NullFloat64
+		if err := s.db.WithContext(ctx).
+			Table("quiz_results").
+			Select("AVG(quiz_results.score_percent)").
+			Joins("JOIN quiz_attempts ON quiz_attempts.id = quiz_results.attempt_id").
+			Joins("JOIN quizzes ON quizzes.id = quiz_attempts.quiz_id").
+			Where("quizzes.meeting_id = ? AND quiz_attempts.user_id = ?", m.ID, studentID).
+			Scan(&quizAvg).Error; err != nil {
+			return nil, fmt.Errorf("failed to calculate quiz average: %w", err)
+		}
+
+		var assignmentPtr *float64
+		if assignmentAvg.Valid {
+			assignmentPtr = &assignmentAvg.Float64
+		}
+
+		var quizPtr *float64
+		if quizAvg.Valid {
+			quizPtr = &quizAvg.Float64
+		}
+
+		items = append(items, dto.StudentMeetingScoreItem{
+			MeetingID:     m.ID,
+			MeetingTitle:  m.Title,
+			MeetingDate:   m.StartAt,
+			AssignmentAvg: assignmentPtr,
+			QuizAvg:       quizPtr,
+		})
+	}
+
+	if items == nil {
+		items = []dto.StudentMeetingScoreItem{}
+	}
+
+	return &dto.StudentScoreProgressResponse{
+		BatchSlug:  batchSlug,
+		BatchTitle: batch.Title,
+		Data:       items,
+	}, nil
+}
+
+// calculateStudentProgress calculates progress for a student in a batch
+// Progress = (completed assignments + quizzes + attendances) / total items
+func (s *DashboardService) calculateStudentProgress(ctx context.Context, batchID string, studentID uuid.UUID) (float64, error) {
+	// Count total items
+	var totalAssignments, totalQuizzes, totalMeetings int64
+	s.db.WithContext(ctx).
+		Table("assignments").
+		Joins("JOIN meetings ON meetings.id = assignments.meeting_id").
+		Where("meetings.batch_id = ?", batchID).
+		Count(&totalAssignments)
+
+	s.db.WithContext(ctx).
+		Table("quizzes").
+		Joins("JOIN meetings ON meetings.id = quizzes.meeting_id").
+		Where("meetings.batch_id = ?", batchID).
+		Count(&totalQuizzes)
+
+	s.db.WithContext(ctx).
+		Table("meetings").
+		Where("batch_id = ?", batchID).
+		Count(&totalMeetings)
+
+	totalItems := totalAssignments + totalQuizzes + totalMeetings
+	if totalItems == 0 {
+		return 0, nil
+	}
+
+	// Count completed items
+	var completedAssignments, completedQuizzes, completedAttendances int64
+	s.db.WithContext(ctx).
+		Table("assignment_submissions").
+		Joins("JOIN assignments ON assignments.id = assignment_submissions.assignment_id").
+		Joins("JOIN meetings ON meetings.id = assignments.meeting_id").
+		Where("meetings.batch_id = ? AND assignment_submissions.user_id = ?", batchID, studentID).
+		Count(&completedAssignments)
+
+	s.db.WithContext(ctx).
+		Table("quiz_results").
+		Joins("JOIN quiz_attempts ON quiz_attempts.id = quiz_results.attempt_id").
+		Joins("JOIN quizzes ON quizzes.id = quiz_attempts.quiz_id").
+		Joins("JOIN meetings ON meetings.id = quizzes.meeting_id").
+		Where("meetings.batch_id = ? AND quiz_attempts.user_id = ?", batchID, studentID).
+		Count(&completedQuizzes)
+
+	s.db.WithContext(ctx).
+		Table("attendances").
+		Joins("JOIN meetings ON meetings.id = attendances.meeting_id").
+		Where("meetings.batch_id = ? AND attendances.user_id = ? AND attendances.is_present = ?", batchID, studentID, true).
+		Count(&completedAttendances)
+
+	completedItems := completedAssignments + completedQuizzes + completedAttendances
+	progress := (float64(completedItems) / float64(totalItems)) * 100
+	return progress, nil
 }
 
 // GetAdminDashboard returns admin dashboard statistics based on period
@@ -446,7 +826,7 @@ func (s *DashboardService) getNextActivity(ctx context.Context, batchSlug string
 		Select("id").
 		Where("slug = ?", batchSlug).
 		Scan(&batchID).Error
-	 
+
 	if err != nil {
 		return "", "", nil
 	}
@@ -614,9 +994,8 @@ func (s *DashboardService) GetCertificateStats(ctx context.Context, period strin
 		Count(&issuedCount)
 
 	return &dto.CertificateStatsResponse{
-		Period:           period,
-		IssuedCount:      issuedCount,
-	 
+		Period:      period,
+		IssuedCount: issuedCount,
 	}, nil
 }
 
