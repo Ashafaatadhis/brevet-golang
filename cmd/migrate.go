@@ -6,83 +6,70 @@ import (
 
 	"brevet-api/config"
 	"brevet-api/models"
+	"gorm.io/gorm"
 )
+
+func ensureDBPrerequisites(db *gorm.DB) error {
+	statements := []string{
+		`CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`,
+		`DO $$ BEGIN CREATE TYPE role_type AS ENUM ('siswa', 'guru', 'admin'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+		`DO $$ BEGIN CREATE TYPE group_type AS ENUM ('mahasiswa_gunadarma', 'mahasiswa_non_gunadarma', 'umum'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+		`DO $$ BEGIN CREATE TYPE payment_status AS ENUM ('pending', 'waiting_confirmation', 'paid', 'rejected', 'expired', 'cancelled'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+		`DO $$ BEGIN CREATE TYPE meeting_type AS ENUM ('basic', 'exam'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+		`DO $$ BEGIN CREATE TYPE assignment_type AS ENUM ('essay', 'file'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+		`DO $$ BEGIN CREATE TYPE quiz_type AS ENUM ('tf', 'mc'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+		`DO $$ BEGIN CREATE TYPE course_type AS ENUM ('online', 'offline'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+		`DO $$ BEGIN CREATE TYPE day_type AS ENUM ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+	}
+
+	for _, stmt := range statements {
+		if err := db.Exec(stmt).Error; err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
 
 func main() {
 	db := config.ConnectDB()
 
-	// db.Migrator().DropTable(&models.User{})
-	// db.Migrator().DropTable(&models.Profile{})
+	if err := ensureDBPrerequisites(db); err != nil {
+		log.Fatal("Failed preparing DB prerequisites:", err)
+	}
 
-	// DROP semua tabel secara eksplisit, urutkan dari yang tidak punya FK → punya FK
-	// err := db.Migrator().DropTable(
-	// 	&models.SubmissionFile{},
-	// 	&models.Purchase{},
-	// 	&models.Meeting{},
-	// 	&models.GroupDaysBatch{},
-	// 	&models.BatchTeacher{},
-	// 	&models.BatchGroup{},
-	// 	&models.Attendance{},
-	// 	&models.AssignmentSubmission{},
-	// 	&models.AssignmentGrade{},
-	// 	&models.Assignment{},
-	// 	&models.Batch{},
-	// 	&models.Course{},
-	// 	&models.Profile{},
-	// 	&models.UserSession{},
-	// 	&models.User{},
-	// 	&models.Price{},
-	// )
-	// if err != nil {
-	// 	log.Fatal("Failed to drop tables:", err)
-	// }
-
-	// fmt.Println("All tables dropped successfully.")
-	// db.Migrator().DropTable(
-	// 	&models.Quiz{},
-	// 	&models.QuizOption{},
-	// 	&models.QuizQuestion{},
-	// 	&models.QuizAttempt{},
-	// 	&models.QuizResult{},
-	// 	&models.QuizSubmission{},
-	// &models.Certificate{})
-	err := db.AutoMigrate(
-		// &models.Testimonial{},
-		// &models.Certificate{},
-		// &models.Quiz{},
-		// &models.QuizOption{},
-		// &models.QuizQuestion{},
-		// &models.QuizAttempt{},
-		// &models.QuizResult{},
-		// &models.QuizSubmission{},
-		// &models.QuizTempSubmission{},
-		// &models.Meeting{},
-		// &models.User{},
-		// &models.MeetingTeacher{},
-		// &models.Course{},
-		// &models.CourseImage{},
-		// &models.Batch{},
-		// &models.BatchDay{},
-		// &models.Price{},
+	if err := db.AutoMigrate(
 		&models.User{},
-		// &models.UserSession{},
-		// &models.Profile{},
-		// &models.Course{},
-		// &models.Batch{},
-		// &models.Assignment{},
-		// &models.AssignmentFiles{},
-		// &models.AssignmentGrade{},
-		// &models.AssignmentSubmission{},
+		&models.Profile{},
+		&models.UserSession{},
+		&models.Course{},
+		&models.CourseImage{},
+		&models.Batch{},
+		&models.BatchDay{},
+		&models.BatchGroup{},
+		&models.GroupDaysBatch{},
+		&models.Meeting{},
+		&models.MeetingTeacher{},
 		&models.Attendance{},
-		// &models.BatchGroup{},
-		// &models.BatchTeacher{},
-		// &models.GroupDaysBatch{},
-		// &models.Meeting{},
-	// &models.Purchase{},
-	// &models.SubmissionFile{},
-	// &models.Material{},
-	)
-	if err != nil {
+		&models.Material{},
+		&models.Assignment{},
+		&models.AssignmentFiles{},
+		&models.AssignmentSubmission{},
+		&models.SubmissionFile{},
+		&models.AssignmentGrade{},
+		&models.Quiz{},
+		&models.QuizQuestion{},
+		&models.QuizOption{},
+		&models.QuizAttempt{},
+		&models.QuizSubmission{},
+		&models.QuizTempSubmission{},
+		&models.QuizResult{},
+		&models.Price{},
+		&models.Purchase{},
+		&models.Certificate{},
+		&models.Testimonial{},
+		&models.Blog{},
+	); err != nil {
 		log.Fatal("Migration failed:", err)
 	}
 
