@@ -1,4 +1,23 @@
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: be-brevet2-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   redis:
     image: redis:7-alpine
     container_name: be-brevet2-redis
@@ -25,6 +44,9 @@ services:
       UPLOAD_DIR: /root/public/uploads
     command: >
       sh -c "go run ./cmd/migrate.go && go run ./seed/main.go"
+    depends_on:
+      db:
+        condition: service_healthy
     restart: "no"
 
   api:
@@ -43,6 +65,8 @@ services:
     volumes:
       - uploads_data:/root/public/uploads
     depends_on:
+      db:
+        condition: service_healthy
       redis:
         condition: service_healthy
       migrate:
@@ -50,5 +74,6 @@ services:
     restart: unless-stopped
 
 volumes:
+  postgres_data:
   redis_data:
   uploads_data:
