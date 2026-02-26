@@ -1,0 +1,54 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: be-brevet2-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  migrate:
+    build:
+      context: .
+      dockerfile: DockerFile
+      target: builder
+    container_name: be-brevet2-migrate
+    env_file:
+      - .env
+    environment:
+      REDIS_ADDR: redis:6379
+      UPLOAD_DIR: /root/public/uploads
+    command: >
+      sh -c "go run ./cmd/migrate.go && go run ./seed/main.go"
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: DockerFile
+    container_name: be-brevet2-api
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      REDIS_ADDR: redis:6379
+      UPLOAD_DIR: /root/public/uploads
+    ports:
+      - "${APP_PORT:-8080}:${APP_PORT:-8080}"
+    volumes:
+      - uploads_data:/root/public/uploads
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  uploads_data:
